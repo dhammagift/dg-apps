@@ -219,6 +219,46 @@ function capacitorStub() {
             await ctx.close();
         }
 
+        // 4a0. iOS: the same page, the reminders go to DgNotify (with the sound of the channel) and quick actions to DgShortcuts.
+        {
+            const ctx = await ctxOf('light', 'en');
+            await ctx.addInitScript(capacitorStub);
+            await ctx.addInitScript(() => {
+                window.Capacitor.getPlatform = () => 'ios';
+                window.__ios = { notify: [], cancel: [], listeners: {} };
+                const P = window.Capacitor.Plugins;
+                delete P.DgIcon; delete P.DgAlarm; delete P.DgSound;
+                P.DgNotify = {
+                    schedule: (o) => { window.__ios.notify = window.__ios.notify.concat(o.items); return Promise.resolve({ count: o.items.length }); },
+                    cancel: (o) => { window.__ios.cancel = window.__ios.cancel.concat(o.ids); return Promise.resolve(); },
+                    getPending: () => Promise.resolve({ notifications: [] }),
+                };
+                P.DgShortcuts.launchRoute = () => Promise.resolve({ route: '' });
+                P.DgShortcuts.addListener = (n, cb) => { window.__ios.listeners[n] = cb; return { remove() {} }; };
+            });
+            await ctx.addInitScript(BRIDGE);
+            const page = await ctx.newPage();
+            await page.goto(PAGE, { waitUntil: 'load' });
+            await page.waitForTimeout(2000);
+            const got = await page.evaluate(async () => {
+                const LN = window.Capacitor.Plugins.LocalNotifications;
+                const at = new Date(Date.now() + 90000);
+                await LN.createChannel({ id: 'uposatha-gong-v1', name: 'x', sound: 'gong.mp3' });
+                await LN.schedule({ notifications: [
+                    { id: 7000, title: 'T', body: 'B', channelId: 'uposatha-gong-v1', schedule: { at } },
+                    { id: 7001, title: 'T2', body: 'B2', channelId: 'uposatha-part-pubbanha-v1', schedule: { at } },
+                    { id: 7002, title: 'T3', body: 'B3', channelId: 'uposatha-own-9', schedule: { at } },
+                    { id: 7003, title: 'T4', body: 'B4', channelId: 'uposatha-vikala-v1', schedule: { at: new Date(Date.now() - 1000) } }] });
+                await LN.cancel({ notifications: [{ id: 7000 }] });
+                return { notify: window.__ios.notify.map((n) => [n.id, n.title, n.sound]), cancel: window.__ios.cancel, android: (window.__calls.scheduled || []).length, channels: (window.__calls.channels || []).length,
+                    shortcuts: (window.__calls.shortcuts.slice(-1)[0] || []).map((i) => i.id), listener: typeof window.__ios.listeners.shortcut };
+            });
+            check('ios: reminders go to DgNotify with the sound of their channel (the reader\'s own sound is the default one; a past reminder is dropped by the native side)', got.notify, [[7000, 'T', 'gong'], [7001, 'T2', 'pubbanha'], [7002, 'T3', ''], [7003, 'T4', 'vikala']]);
+            check('ios: cancel goes to DgNotify; nothing goes to the Android paths', [got.cancel, got.android, got.channels], [[7000], 0, 0]);
+            check('ios: quick actions are pushed and a tap is listened for', [got.shortcuts.length, got.listener], [4, 'function']);
+            await ctx.close();
+        }
+
         // 4a1. The launcher icon of the day: a schedule of the next weeks, a phase index for each day.
         {
             const ctx = await ctxOf('light', 'en');

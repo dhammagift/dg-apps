@@ -83,9 +83,9 @@ def compose(i, px, kind):
     return out.resize((px, px), Image.LANCZOS)
 
 
-def moon_only(i, px):
+def moon_only(i, px, fill=0.66):
     size = px * SS
-    scale = size * 0.66 / (2 * R)   # the visible middle of an adaptive icon's canvas is 72 of 108 (0.667): the moon fills it
+    scale = size * fill / (2 * R)   # the visible middle of an adaptive icon's canvas is 72 of 108 (0.667): the moon fills it (fill=0.66); iOS quick actions use 0.96
     ox, oy = size / 2 - CX * scale, size / 2 - CY * scale
     lit = lit_mask(i, size, scale, ox, oy)
     whole = disc_mask(size, scale, ox, oy, R)

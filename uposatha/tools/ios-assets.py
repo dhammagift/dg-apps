@@ -3,6 +3,7 @@
 
   ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png   1024x1024, the mark on the navy plate, no transparency (App Store rule)
   ios/App/App/Assets.xcassets/Splash.imageset/splash-{light,dark}.png  the mark, centred, on the launch screen's plain page colour
+  ios/App/App/Assets.xcassets/shortcut_moon_0..7.imageset            the moon of each phase for the Home Screen quick actions (template images: the system colours them)
 """
 import importlib.util, os
 from PIL import Image
@@ -33,7 +34,26 @@ def splash(name, page, moon, cloud):
     bg.convert('RGB').save(os.path.join(ASSETS, 'Splash.imageset', name))
 
 
+def shortcuts():
+    for i in range(8):
+        d = os.path.join(ASSETS, 'shortcut_moon_%d.imageset' % i)
+        os.makedirs(d, exist_ok=True)
+        for k in (1, 2, 3):
+            mi.moon_only(i, 35 * k, 0.96).save(os.path.join(d, 'shortcut_moon_%d@%dx.png' % (i, k)))
+        open(os.path.join(d, 'Contents.json'), 'w').write('''{
+  "images" : [
+    { "idiom" : "universal", "filename" : "shortcut_moon_%d@1x.png", "scale" : "1x" },
+    { "idiom" : "universal", "filename" : "shortcut_moon_%d@2x.png", "scale" : "2x" },
+    { "idiom" : "universal", "filename" : "shortcut_moon_%d@3x.png", "scale" : "3x" }
+  ],
+  "info" : { "version" : 1, "author" : "xcode" },
+  "properties" : { "template-rendering-intent" : "template" }
+}
+''' % (i, i, i))
+
+
 if __name__ == '__main__':
+    shortcuts()
     icon()
     splash('splash-light.png', (255, 255, 255), (47, 74, 99), (110, 113, 106))     # the page's light colours (dg_splash_art.xml)
     splash('splash-dark.png', (17, 17, 17), (169, 196, 220), (124, 124, 124))       # ...and dark

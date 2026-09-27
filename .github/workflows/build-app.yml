@@ -1172,6 +1172,17 @@ jobs:
         working-directory: uposatha
         run: npm ci
 
+      # A notification's sound on iOS is a file of the app in a format Apple names (Core Audio, at most 30 s), not an mp3: the
+      # same sounds as the Android app's res/raw, converted here, and shipped inside the page bundle (www/ios-sounds/).
+      - name: Make the reminders' sounds
+        run: |
+          mkdir -p uposatha/www/ios-sounds
+          for f in uposatha/android/app/src/main/res/raw/*.mp3; do
+            n=$(basename "$f" .mp3)
+            afconvert -f caff -d ima4 -c 1 "$f" "uposatha/www/ios-sounds/$n.caf"
+          done
+          ls -la uposatha/www/ios-sounds
+
       - name: Select the newest Xcode 26
         run: |
           XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)

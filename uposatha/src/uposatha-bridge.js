@@ -15,7 +15,10 @@
   'use strict';
 
   var Cap = window.Capacitor;
-  if (!Cap || typeof Cap.getPlatform !== 'function' || Cap.getPlatform() !== 'android') return;
+  if (!Cap || typeof Cap.getPlatform !== 'function') return;
+  var PLATFORM = Cap.getPlatform();
+  if (PLATFORM !== 'android' && PLATFORM !== 'ios') return;
+  var IOS = PLATFORM === 'ios';   // on iOS: no Back button, no notification channels or streams, no launcher icon change, the bundle is not updated from the site (yet)
 
   // The launch splash is native on Android (the animated mark of the system splash screen, res/drawable/
   // dg_splash_icon.xml), so nothing is drawn here: a web splash on top of it made the app slower to open and
@@ -392,6 +395,52 @@
     });
   }
 
+  // ---- iOS: the reminders ----------------------------------------------------------------------
+  //
+  // iOS has no notification channels: a sound is a property of each notification, a file in the app (the .caf made from the same
+  // sounds, www/ios-sounds/). DgNotify (DgApp.swift) sets the notifications itself, as Time Sensitive ones, so that they get through
+  // a Focus; the page keeps calling LocalNotifications as it does on Android and this turns its calls into DgNotify's.
+  function wrapIosNotifications() {
+    var plugins = Cap.Plugins;
+    var LN = plugins && plugins.LocalNotifications;
+    if (!LN || LN.__dgWrapped) return;
+    var N = function () { var p = plugins.DgNotify; return p && typeof p.schedule === 'function' ? p : null; };
+    plugins.LocalNotifications = new Proxy(LN, {
+      get: function (target, key) {
+        if (key === '__dgWrapped') return true;
+        if (!N()) { var v0 = target[key]; return typeof v0 === 'function' ? v0.bind(target) : v0; }
+        if (key === 'createChannel') return function (ch) { lastChannels[ch.id] = ch; return Promise.resolve(); };
+        if (key === 'schedule') {
+          return function (o) {
+            lastSchedule = o;
+            var items = ((o && o.notifications) || []).map(function (n) {
+              var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
+              return { id: n.id, title: n.title || '', body: n.body || '', at: at, sound: rawSoundOf(n.channelId) === 'own' ? '' : rawSoundOf(n.channelId) };
+            }).filter(function (i) { return i.at > 0; });
+            return N().schedule({ items: items }).then(function () { return { notifications: items.map(function (i) { return { id: i.id }; }) }; });
+          };
+        }
+        if (key === 'cancel') return function (o) { return N().cancel({ ids: ((o && o.notifications) || []).map(function (n) { return n.id; }) }); };
+        if (key === 'getPending') return function () { return N().getPending(); };
+        var v = target[key];
+        return typeof v === 'function' ? v.bind(target) : v;
+      }
+    });
+  }
+
+  // A Home Screen quick action opens a route: at a cold start the plugin has it waiting, while the app runs it tells the page.
+  function wireIosShortcutTaps() {
+    var S = Cap.Plugins && Cap.Plugins.DgShortcuts;
+    if (!S) return;
+    function go(route) {
+      if (!route) return;
+      try { var u = new URL(route, location.href); if (u.pathname + u.search === location.pathname + location.search) return; } catch (e) { /* a route the URL parser refuses is still tried */ }
+      location.href = route;
+    }
+    if (typeof S.addListener === 'function') S.addListener('shortcut', function (ev) { go(ev && ev.route); });
+    if (typeof S.launchRoute === 'function') Promise.resolve(S.launchRoute()).then(function (r) { go(r && r.route); }).catch(function () { /* none waiting */ });
+  }
+
   // The source changed: make the channels of the other stream, take back the reminders that are set and set them again on
   // those channels — no reload of the page. (The page schedules only when its own reminders change, so it would never do
   // this itself.) What the page has asked of the plugin since it started is what is replayed; it asks at every start.
@@ -409,7 +458,7 @@
   }
 
   // At once, before the page's own scripts reach for the plugin (start() below tries again should Capacitor not have registered it yet).
-  if (onCalendar) wrapLocalNotifications();
+  if (onCalendar) { if (IOS) wrapIosNotifications(); else wrapLocalNotifications(); }   // at once: the page schedules at its own start
 
   // The setting itself, in the settings drawer under the page's own sound row. Changing it moves the reminders
   // to the other channels at once (restream above), without reloading the page.
@@ -519,21 +568,20 @@
   // @rate-prompt (inlined from src/native-bridge.js by uposatha/build.js)
 
   function start() {
-    if (!onCalendar) { wireBackButton(); return; }
-    wireBackButton();
-    wrapLocalNotifications();
-    watchStreamRow();
+    if (!onCalendar) { if (!IOS) wireBackButton(); return; }
+    if (IOS) { wrapIosNotifications(); wireIosShortcutTaps(); }
+    else { wireBackButton(); wrapLocalNotifications(); watchStreamRow(); }
     // The page's own Rate Us row: note the tap, so the invitation never asks someone who has been.
     document.addEventListener('click', function (e) {
       var a = e.target && e.target.closest && e.target.closest('#up-rate');
       if (a) { try { localStorage.setItem(RATE_FLAG, '1'); } catch (err) { /* no storage */ } }
     }, true);
     // UposathaCore is loaded by the page: give it until the page has finished loading.
-    function afterLoad() { pushShortcuts(); pushLauncherIcon(); setTimeout(updateSite, 6000); }
+    function afterLoad() { pushShortcuts(); if (!IOS) { pushLauncherIcon(); setTimeout(updateSite, 6000); } }
     if (document.readyState === 'complete') afterLoad();
     else window.addEventListener('load', afterLoad, { once: true });
-    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { pushShortcuts(); pushLauncherIcon(); } });
-    maybeAskForRating();
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { pushShortcuts(); if (!IOS) pushLauncherIcon(); } });
+    if (!IOS) maybeAskForRating();   // (iOS: when the App Store listing exists and has its address)
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);

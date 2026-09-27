@@ -40,13 +40,19 @@
     });
   }
 
-  function stage(name, ready) {
+  function stage(name, ready, beforeShot) {
     return waitFor(ready).then(function () { return wait(SETTLE_MS); }).then(function () {
+      // Right before the screenshot, not right after the ready-check: whatever beforeShot undoes (the
+      // keyboard, for 'home') can come back on its own during the settle wait, since the site's own JS
+      // keeps running the whole time.
+      if (beforeShot) beforeShot();
       var P = plugin();
       if (!P || typeof P.stage !== 'function') { console.log('dg-tour: no stage plugin, stopping'); return false; }
       return Promise.resolve(P.stage({ name: name })).then(function () { return wait(SHOT_HOLD_MS); }).then(function () { return true; });
     });
   }
+
+  function blurActive() { var ae = document.activeElement; if (ae && ae.blur) ae.blur(); }
 
   function count(sel) { return document.querySelectorAll(sel).length; }
   function $(sel) { return document.querySelector(sel); }
@@ -59,9 +65,10 @@
 
   function run() {
     return waitFor(function () { return $('#search-box') && $('.dictlist'); }, 30000)
-      // 1. The start screen itself: what a reader sees before typing anything. Blur first: the search box
-      // auto-focuses on load, and a screenshot with the keyboard up hides half the hero copy behind it.
-      .then(function () { var ae = document.activeElement; if (ae && ae.blur) ae.blur(); return stage('home', function () { return document.body.dataset.screen === 'start' && count('.dictlist li') > 0; }); })
+      // 1. The start screen itself: what a reader sees before typing anything. Blur right before the shot,
+      // not just here: the search box auto-focuses on load, sometimes on a delay this stage's own settle
+      // wait doesn't outlast, and a screenshot with the keyboard up hides half the hero copy behind it.
+      .then(function () { blurActive(); return stage('home', function () { return document.body.dataset.screen === 'start' && count('.dictlist li') > 0; }, blurActive); })
       // 2. Autocomplete suggestions.
       .then(function () {
         var box = $('#search-box');
@@ -97,7 +104,11 @@
         if (head) head.click();
         return stage('canon-dark', function () {
           var slot = $('#ext-slot-tripitaka'), icon = slot && slot.querySelector('.ext-dict-toggle-icon');
-          var open = !!icon && icon.textContent.indexOf('▼') >= 0 && slot.children.length > 2;
+          // The slot always has exactly 2 children (header + content), collapsed or not — content just
+          // collapses to 0 height rather than being removed. The icon is the only real open/closed signal;
+          // "> 2 children" could never be true, which is why canon-dark never actually opened anything and
+          // its screenshot was pixel-identical to declension-dark's, scrollIntoView included.
+          var open = !!icon && icon.textContent.indexOf('▼') >= 0;
           // Unlike the declension click (which the page scrolls to on its own), expanding this slot leaves
           // the scroll position wherever declension-dark left it — the previous run's canon-dark screenshot
           // was pixel-identical to declension-dark because of exactly that, nothing had actually scrolled.

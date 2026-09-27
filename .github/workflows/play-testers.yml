@@ -1,8 +1,5 @@
 name: Play testers (one-off)
 
-# Reads the internal track's testers for gift.dhamma.uposatha, and tries to add an email to the explicit list if the API
-# supports it (it may not: Play's own "tester lists" for closed/internal tracks are a Console-only concept in some
-# API versions). Read-only unless ADD_EMAIL is set. Deletes the edit either way — nothing else in the console changes.
 on:
   workflow_dispatch:
     inputs:
@@ -29,34 +26,10 @@ jobs:
           creds = service_account.Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/androidpublisher"])
           svc = build("androidpublisher", "v3", credentials=creds, cache_discovery=False)
           pkg = "gift.dhamma.uposatha"
-          add = os.environ.get("ADD_EMAIL", "").strip()
           edit = svc.edits().insert(packageName=pkg, body={}).execute()
           eid = edit["id"]
-          try:
-              t = svc.edits().testers().get(packageName=pkg, editId=eid, track="internal").execute()
-              print("current testers resource:", json.dumps(t))
-              if add:
-                  emails = set(t.get("testers", {}).get("emails", [])) if isinstance(t.get("testers"), dict) else set()
-                  # Try the documented shape first (Testers.googleGroups); explicit email lists are usually
-                  # Console-managed "tester lists" referenced by name, not raw emails, so this may 400.
-                  body = dict(t)
-                  emails = set(body.get("emails", []))
-                  emails.add(add)
-                  body["emails"] = sorted(emails)
-                  try:
-                      r = svc.edits().testers().update(packageName=pkg, editId=eid, track="internal", body=body).execute()
-                      print("patched:", json.dumps(r))
-                      svc.edits().commit(packageName=pkg, editId=eid).execute()
-                      print("COMMITTED")
-                  except Exception as e:
-                      print("PATCH FAILED:", str(e)[:500])
-                      svc.edits().delete(packageName=pkg, editId=eid).execute()
-              else:
-                  svc.edits().delete(packageName=pkg, editId=eid).execute()
-          except Exception as e:
-              print("READ FAILED:", str(e)[:500])
-              try:
-                  svc.edits().delete(packageName=pkg, editId=eid).execute()
-              except Exception:
-                  pass
+          t = svc.edits().testers().get(packageName=pkg, editId=eid, track="internal").execute()
+          print("KEYS:", sorted(t.keys()))
+          print("googleGroups:", t.get("googleGroups"))
+          svc.edits().delete(packageName=pkg, editId=eid).execute()
           PY

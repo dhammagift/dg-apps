@@ -1023,6 +1023,16 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # The web bundle the APK was built from (uposatha/www: the page, the bridge, the sounds), for the iOS job below:
+      # the same files go into both apps, so the page is snapshotted once.
+      - name: Upload the Uposatha web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: uposatha-www-${{ github.run_number }}
+          path: uposatha/www
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Decode release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 || secrets.KEYSTORE_BASE64 }}
@@ -1124,6 +1134,112 @@ jobs:
             echo ""
             echo "versionCode ${{ github.run_number }} is on the **internal** track of \`gift.dhamma.uposatha\`."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Ariyuposatha on iOS (uposatha/ios): builds the app for the simulator from the same web bundle as the APK, launches it and
+  # keeps a screenshot. Started with `ios_checks` (no Apple account, certificate or device needed).
+  uposatha-ios:
+    name: Uposatha app (iOS simulator)
+    needs: uposatha-build
+    if: inputs.ios_checks
+    runs-on: macos-26
+    steps:
+      - name: Checkout this repo (the app)
+        uses: actions/checkout@v4
+
+      - name: Download the web bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: uposatha-www-${{ github.run_number }}
+          path: uposatha/www
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Restore npm and SwiftPM caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ~/Library/Caches/org.swift.swiftpm
+            uposatha/ios/DerivedData/SourcePackages
+          key: ${{ runner.os }}-upo-ios-${{ hashFiles('uposatha/ios/App/CapApp-SPM/Package.swift', 'uposatha/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-upo-ios-
+
+      - name: Install the app's dependencies
+        working-directory: uposatha
+        run: npm ci
+
+      - name: Select the newest Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Sync Capacitor into uposatha/ios
+        working-directory: uposatha
+        run: npx cap sync ios
+
+      - name: Build for the iOS Simulator
+        working-directory: uposatha/ios/App
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ../../ios-build.log | tail -30
+
+      - name: Upload the xcodebuild log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uposatha-ios-build-log-${{ github.run_number }}
+          path: uposatha/ios-build.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Run it in a simulator and take a screenshot
+        run: |
+          APP="uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app"
+          test -d "$APP" || { echo "::error::no App.app was built"; exit 1; }
+          DEV=$(xcrun simctl list devices available | grep -E "iPhone" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          echo "simulator $DEV"
+          xcrun simctl boot "$DEV" || true
+          xcrun simctl bootstatus "$DEV" -b
+          xcrun simctl install "$DEV" "$APP"
+          xcrun simctl launch "$DEV" gift.dhamma.uposatha
+          sleep 12
+          mkdir -p shots
+          xcrun simctl io "$DEV" screenshot shots/uposatha-ios-1.png
+          xcrun simctl ui "$DEV" appearance dark
+          sleep 3
+          xcrun simctl io "$DEV" screenshot shots/uposatha-ios-2-dark.png
+
+      - name: Upload the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uposatha-ios-screenshots-${{ github.run_number }}
+          path: shots
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload the simulator .app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uposatha-ios-simulator-${{ github.run_number }}
+          path: uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+          retention-days: 14
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------------------------
   # The dictionary half of the Play release path, the same shape as android-release above and

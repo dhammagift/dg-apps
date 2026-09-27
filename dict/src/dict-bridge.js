@@ -16,7 +16,10 @@
   'use strict';
 
   var Cap = window.Capacitor;
-  if (!Cap || typeof Cap.getPlatform !== 'function' || Cap.getPlatform() !== 'android') return;
+  if (!Cap || typeof Cap.getPlatform !== 'function') return;
+  var PLATFORM = Cap.getPlatform();
+  if (PLATFORM !== 'android' && PLATFORM !== 'ios') return;
+  var IOS = PLATFORM === 'ios';   // on iOS: no Back button (no hardware back), the App Store listing instead of Play
 
   // The launch splash is native on Android (the animated mark of the system splash screen, res/drawable/
   // dg_splash_icon.xml), so nothing is drawn here: a web splash on top of it made the app slower to open and
@@ -29,7 +32,9 @@
   // The Play listing for this app id. https rather than market://: play.google.com is an App Link,
   // so Android opens the Play app when it is installed and a browser when it is not, while a
   // market:// intent fails outright on a device without Play.
-  var STORE_URL = 'https://play.google.com/store/apps/details?id=gift.dhamma.pali';
+  // The Play listing on Android; the App Store one on iOS (a numeric id, not the bundle id — apps.apple.com
+  // does not resolve it any other way).
+  var STORE_URL = IOS ? 'https://apps.apple.com/app/id6816639947' : 'https://play.google.com/store/apps/details?id=gift.dhamma.pali';
   // Set when the reader taps Rate Us. This is NOT what hides the row — the row is permanent (owner:
   // "пункт никуда не нужно скрывать он остаётся на месте"), and tapping a store link is not proof
   // that a review was written. What it is for is the invitation we have not built yet, in this app
@@ -287,6 +292,25 @@
     });
   }
 
+  // ---- iOS: a Home Screen quick action opens a route -----------------------------------------
+  //
+  // Android's MainActivity loads a shortcut's "route" extra directly into the WebView (handleIntent);
+  // iOS has no such native WebView handle from the scene delegate, so the plugin hands the route to
+  // the page instead (DgShortcutsPlugin.swift: pendingRoute / the 'shortcut' event), and this is what
+  // acts on it — the same contract as Uposatha's wireIosShortcutTaps.
+  function wireIosShortcutTaps() {
+    var S = Cap.Plugins && Cap.Plugins.DgShortcuts;
+    if (!S) return;
+    function go(route) {
+      if (!route) return;
+      if (/^https?:/.test(route)) { location.href = route; return; }
+      try { var u = new URL(route, location.href); if (u.pathname + u.search + u.hash === location.pathname + location.search + location.hash) return; location.href = route; }
+      catch (e) { location.href = route; }
+    }
+    if (typeof S.addListener === 'function') S.addListener('shortcut', function (ev) { go(ev && ev.route); });
+    if (typeof S.launchRoute === 'function') Promise.resolve(S.launchRoute()).then(function (r) { go(r && r.route); }).catch(function () { /* none waiting */ });
+  }
+
   function rateUsUrl() { return STORE_URL; }
   // The dictionary is one page per language: dict.dhamma.gift/ and /ru/, the same pages as
   // dhamma.gift/dict/ and /dict/ru/ (the test host). Words are a query/hash, never a path.
@@ -306,7 +330,8 @@
   function start() {
     inject();
     watchHistory();
-    wireBackButton();
+    if (IOS) wireIosShortcutTaps();
+    else wireBackButton();
     pushShortcuts();
     maybeAskForRating();
     // The page has settled (it fetched its word list): now the bundle is checked against the site.

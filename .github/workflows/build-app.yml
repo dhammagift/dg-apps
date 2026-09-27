@@ -876,6 +876,16 @@ jobs:
           npx playwright install --with-deps chromium
           node tools/snapshot.js
 
+      # The web bundle the APK is built from (dict/www: the page, the bridge, the sounds), for the iOS job below:
+      # the same files go into both apps, so the page is snapshotted once.
+      - name: Upload the dictionary web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: dict-www-${{ github.run_number }}
+          path: dict/www
+          if-no-files-found: error
+          retention-days: 14
+
       # src/ -> www/ -> android/app/src/main/assets/public: the bundled page, dict-bridge.js and the
       # offline page where MainActivity and Capacitor read them from. Not optional: the asset sync is what
       # puts dict-bridge.js where MainActivity reads it from.
@@ -1404,6 +1414,133 @@ jobs:
   # App Store screenshots for Uposatha (test/ios-sim/tour.js + drive.sh): the same page the APK ships, walked
   # through its views on an iPhone 6.9" and an iPad 13" simulator. Started with `ios_checks`, same as the reader
   # app's own screenshot job; these are for the store listing, never sent anywhere automatically.
+  dict-ios-screenshots:
+    name: Dictionary app iOS screenshots
+    needs: dict-build
+    if: inputs.ios_checks
+    runs-on: macos-26
+    steps:
+      - name: Checkout this repo (the app)
+        uses: actions/checkout@v4
+
+      - name: Download the web bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: dict-www-${{ github.run_number }}
+          path: dict/www
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Restore npm and SwiftPM caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ~/Library/Caches/org.swift.swiftpm
+            dict/ios/DerivedData/SourcePackages
+          key: ${{ runner.os }}-dict-ios-${{ hashFiles('dict/ios/App/CapApp-SPM/Package.swift', 'dict/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-dict-ios-
+
+      - name: Install the app's dependencies
+        working-directory: dict
+        run: npm ci
+
+      - name: Select the newest Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Turn www/ into the screenshot-tour bundle
+        working-directory: dict
+        run: node test/ios-sim/prepare-www.js
+
+      - name: Sync Capacitor into dict/ios
+        working-directory: dict
+        run: npx cap sync ios
+
+      - name: Build for the iOS Simulator
+        working-directory: dict/ios/App
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ../../ios-tour-build.log | tail -30
+
+      # Same size as the reader and Uposatha screenshot jobs, and for the same reason: App Store Connect's iPhone
+      # slot for this app is the 6.5" frame, not 6.7"/6.9".
+      - name: Prepare a 6.5" device (the size the store page accepts)
+        id: sixfive
+        run: |
+          RUNTIME=$(xcrun simctl list runtimes | grep -Eo 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+' | sort -V | tail -1)
+          TYPE=$(xcrun simctl list devicetypes | grep -Eo 'com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-1[1-3]-Pro-Max' | sort -V | tail -1)
+          echo "runtime=$RUNTIME type=$TYPE"
+          if [ -n "$RUNTIME" ] && [ -n "$TYPE" ]; then
+            xcrun simctl create "Dict-6.5" "$TYPE" "$RUNTIME" >/dev/null
+            echo "device=Dict-6.5" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::could not create a 6.5\" device — falling back to iPhone 17 Pro Max (which the store page may refuse)"
+            echo "device=iPhone 17 Pro Max" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Walk the app and take pictures (iPhone 6.5")
+        working-directory: dict
+        run: |
+          mkdir -p .tmp/ios-tour-iphone
+          test/ios-sim/drive.sh --out .tmp/ios-tour-iphone --device "${{ steps.sixfive.outputs.device }}" \
+            --app ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+
+      - name: The same tour on a 13" iPad
+        working-directory: dict
+        continue-on-error: true   # the iPhone set is the one that matters most; a broken iPad pass must not block it
+        run: |
+          mkdir -p .tmp/ios-tour-ipad
+          test/ios-sim/drive.sh --out .tmp/ios-tour-ipad --device "iPad Pro 13-inch (M5)" \
+            --app ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+
+      - name: Upload to App Store Connect (version 1.0, en-US) — never sent for review
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
+            echo "::notice::App Store Connect signing secrets are not set — screenshots stay only in the workflow artifact."
+          else
+            pip3 install --quiet --break-system-packages cryptography
+            SETS=(--set APP_IPHONE_65=dict/.tmp/ios-tour-iphone)
+            if [ -n "$(ls -A dict/.tmp/ios-tour-ipad/*.png 2>/dev/null)" ]; then
+              SETS+=(--set APP_IPAD_PRO_3GEN_129=dict/.tmp/ios-tour-ipad)
+            else
+              echo "::notice::no iPad screenshots this run — uploading the iPhone set only"
+            fi
+            python3 dict/tools/asc-screenshots.py --app-id 6816639947 --version 1.0 --locale en-US "${SETS[@]}"
+          fi
+
+      - name: Upload the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dict-ios-store-screenshots-${{ github.run_number }}
+          path: |
+            dict/.tmp/ios-tour-iphone/*.png
+            dict/.tmp/ios-tour-iphone/app-console.log
+            dict/.tmp/ios-tour-ipad/*.png
+            dict/.tmp/ios-tour-ipad/app-console.log
+            dict/ios-tour-build.log
+          retention-days: 30
+          if-no-files-found: warn
+
   uposatha-ios-screenshots:
     name: Uposatha app iOS screenshots
     needs: uposatha-build

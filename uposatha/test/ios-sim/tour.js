@@ -38,18 +38,27 @@
     });
   }
 
-  function tab(name) { var b = document.querySelector('#appnav [data-tab="' + name + '"]'); if (b) b.click(); }
+  // The bottom nav's own active marker (aria-pressed), not just "does the view have content" — every screen's
+  // markup exists in the DOM from the first paint (only CSS hides the inactive ones), so a content check alone
+  // passed instantly no matter which tab a click had actually reached, and screenshots showed the tab BEFORE
+  // the click, not after it — this is what a real reader sees as "the tab bar" agreeing with the picture.
+  function active(name) { var b = document.querySelector('#appnav [data-tab="' + name + '"]'); return !!b && b.getAttribute('aria-pressed') === 'true'; }
+  function goTab(name, ready) {
+    var b = document.querySelector('#appnav [data-tab="' + name + '"]');
+    if (b) b.click();
+    return stage(name, function () { return active(name) && ready(); });
+  }
   function filled(sel) { var el = document.querySelector(sel); return el && el.children.length > 0; }
 
   // Order matters: the driver switches the simulator to dark appearance right after "keys" and photographs
   // the rest in dark, so the light/dark split in the listing is this line, not a page decision.
   function run() {
     return waitFor(function () { return filled('#s-summary') && window.UposathaCore; }, 30000)
-      .then(function () { return stage('home', function () { return filled('#meal'); }); })
-      .then(function () { tab('cal'); return stage('cal', function () { return filled('#grid'); }); })
-      .then(function () { tab('list'); return stage('list', function () { return filled('#list'); }); })
-      .then(function () { tab('keys'); return stage('keys', function () { return filled('#keylist'); }); })
-      .then(function () { tab('parts'); return stage('parts', function () { return filled('#pgrid'); }); })
+      .then(function () { return goTab('home', function () { return filled('#meal'); }); })
+      .then(function () { return goTab('cal', function () { return filled('#grid'); }); })
+      .then(function () { return goTab('list', function () { return filled('#list'); }); })
+      .then(function () { return goTab('keys', function () { return filled('#keylist'); }); })
+      .then(function () { return goTab('parts', function () { return filled('#pgrid'); }); })
       .then(function () {
         var gear = document.getElementById('app-gear');
         if (gear) gear.click();
@@ -58,10 +67,9 @@
       .then(function () {
         var close = document.querySelector('#dg-drawer .dg-drawer-close');
         if (close) close.click();
-        tab('home');
-        return stage('home2', function () { return !document.body.classList.contains('dg-drawer-open') && filled('#meal'); });
+        return goTab('home', function () { return !document.body.classList.contains('dg-drawer-open') && filled('#meal'); });
       })
-      .then(function () { tab('cal'); return stage('cal2', function () { return filled('#grid'); }); })
+      .then(function () { return goTab('cal', function () { return filled('#grid'); }); })
       .then(function () { var P = plugin(); return P && P.stage ? Promise.resolve(P.stage({ name: 'done' })) : null; })
       .catch(function (e) { console.log('dg-tour: failed:', (e && e.message) || e); });
   }

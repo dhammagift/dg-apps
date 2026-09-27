@@ -24,7 +24,11 @@
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
   function waitFor(check, timeout) {
-    var started = Date.now(), limit = timeout || 20000;
+    // 45s default, not 20s: a freshly-launched simulator's first real interactions (autocomplete, first
+    // navigation, first panel open) can be slow to settle — the SAME check that always passed fine by
+    // stage 5 (declension-dark onward) intermittently timed out here on stage 2-4, on whichever device
+    // happened to run first in the job, dropping those stages' screenshots entirely.
+    var started = Date.now(), limit = timeout || 45000;
     return new Promise(function (resolve) {
       (function poll() {
         var ok = false;

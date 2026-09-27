@@ -14,7 +14,7 @@ import Capacitor
 // under CI load the delete can lose that race, making the "wait" a silent no-op that let whole stages (up to five
 // in one run, iPad) vanish with no error anywhere, because the page just moved on and nothing was left to prove it
 // hadn't. Comparing content instead needs no delete step at all, so there is nothing left to race.
-// 15s cap: a stuck or crashed driver must not hang the tour forever.
+// 45s cap: a stuck or crashed driver must not hang the tour forever.
 //
 // Registered only in DEBUG builds (see DgApp.swift) and never in a shipped app.
 @objc(DgSelfTestPlugin)
@@ -35,7 +35,7 @@ public class DgSelfTestPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("could not record the stage: \(error.localizedDescription)")
             return
         }
-        let deadline = Date().addingTimeInterval(15)
+        let deadline = Date().addingTimeInterval(45)
         while (try? String(contentsOf: ackURL, encoding: .utf8)) != name && Date() < deadline {
             Thread.sleep(forTimeInterval: 0.1)
         }

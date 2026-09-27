@@ -1,6 +1,6 @@
 {
   "appId": "gift.dhamma.uposatha",
-  "appName": "Ariyuposatha",
+  "appName": "Uposatha",
   "webDir": "www",
   "server": {
     "androidScheme": "https"

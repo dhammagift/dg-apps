@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Ariyuposatha</string>
-    <string name="title_activity_main">Ariyuposatha</string>
+    <string name="app_name">Uposatha</string>
+    <string name="title_activity_main">Uposatha</string>
     <string name="package_name">gift.dhamma.uposatha</string>
     <string name="custom_url_scheme">gift.dhamma.uposatha</string>
 

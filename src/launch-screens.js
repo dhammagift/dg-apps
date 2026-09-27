@@ -187,7 +187,7 @@
             el = build(app, opts, 'dgls-splash');
             var name = document.createElement('div');
             name.className = 'dgls-name';
-            name.textContent = app === 'dict' ? 'Dict' : app === 'upo' ? 'Ariyuposatha' : 'Dhamma.Gift';
+            name.textContent = app === 'dict' ? 'Dict' : app === 'upo' ? 'Uposatha' : 'Dhamma.Gift';
             el.appendChild(name);
             mount(el);
         });
@@ -208,7 +208,7 @@
         var el = build(app, opts, 'dgls-err');
         el.id = 'dglsErr';
         el.setAttribute('role', 'alert');
-        var title = app === 'dict' ? 'Dict.Dhamma.Gift' : app === 'upo' ? 'Ariyuposatha' : 'Dhamma.Gift';
+        var title = app === 'dict' ? 'Dict.Dhamma.Gift' : app === 'upo' ? 'Uposatha' : 'Dhamma.Gift';
         el.insertAdjacentHTML('beforeend',
             '<div class="dgls-h"></div><div class="dgls-tx"><span class="dgls-hd"></span><span class="dgls-bd"></span>'
             + (app === 'upo' ? '<span class="dgls-ex"></span>' : '') + '</div>'

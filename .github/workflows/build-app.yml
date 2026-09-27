@@ -1135,7 +1135,7 @@ jobs:
             echo "versionCode ${{ github.run_number }} is on the **internal** track of \`gift.dhamma.uposatha\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Ariyuposatha on iOS (uposatha/ios): builds the app for the simulator from the same web bundle as the APK, launches it and
+  # Uposatha on iOS (uposatha/ios): builds the app for the simulator from the same web bundle as the APK, launches it and
   # keeps a screenshot. Started with `ios_checks` (no Apple account, certificate or device needed).
   uposatha-ios:
     name: Uposatha app (iOS simulator)
@@ -1252,7 +1252,7 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-  # Ariyuposatha's TestFlight release (release = uposatha-ios): the same steps as ios-release above, for uposatha/ios, from the
+  # Uposatha's TestFlight release (release = uposatha-ios): the same steps as ios-release above, for uposatha/ios, from the
   # web bundle uposatha-build made. It needs the app's record in App Store Connect (My Apps, +, bundle id gift.dhamma.uposatha); the
   # signing secrets are the account's, the same as the reader's.
   uposatha-ios-release:

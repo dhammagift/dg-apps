@@ -304,8 +304,8 @@
     overlay.querySelector('.dgr-eyebrow').textContent = ru ? 'Напоминания' : 'Reminders';
     overlay.querySelector('.dgr-title').textContent = ru ? 'Чтобы напоминание было слышно' : 'So that a reminder is heard';
     overlay.querySelector('.dgr-body').textContent = ru
-      ? 'Пока включён режим «Не беспокоить», напоминание приходит без звука. Разрешите Ariyuposatha звучать в этом режиме: откроются настройки Android, включите переключатель для Ariyuposatha и вернитесь.'
-      : 'While Do Not Disturb is on, a reminder arrives with no sound. Allow Ariyuposatha to sound in it: Android settings open, switch it on for Ariyuposatha and come back.';
+      ? 'Пока включён режим «Не беспокоить», напоминание приходит без звука. Разрешите Uposatha звучать в этом режиме: откроются настройки Android, включите переключатель для Uposatha и вернитесь.'
+      : 'While Do Not Disturb is on, a reminder arrives with no sound. Allow Uposatha to sound in it: Android settings open, switch it on for Uposatha and come back.';
     overlay.querySelector('.dgr-ghost').textContent = ru ? 'Позже' : 'Later';
     overlay.querySelector('.dgr-primary').textContent = ru ? 'Разрешить' : 'Allow';
     document.body.appendChild(overlay);

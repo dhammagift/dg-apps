@@ -327,7 +327,7 @@ function capacitorStub() {
             await page.goto('http://127.0.0.1:8106/error.html', { waitUntil: 'domcontentloaded' });
             await page.waitForTimeout(1800);
             const txt = await page.evaluate(() => ({ h: document.querySelector('#dglsErr .dgls-h').textContent, ex: document.querySelector('#dglsErr .dgls-ex').textContent, up: !!document.querySelector('#dglsErr .dgls-up') }));
-            check(`offline page ${lang}: title, the reminders line, the mark`, txt, { h: 'Ariyuposatha', ex: lang === 'ru' ? 'Напоминания уже стоят на телефоне и придут без сети.' : 'Your reminders are set on this phone and will arrive without it.', up: true });
+            check(`offline page ${lang}: title, the reminders line, the mark`, txt, { h: 'Uposatha', ex: lang === 'ru' ? 'Напоминания уже стоят на телефоне и придут без сети.' : 'Your reminders are set on this phone and will arrive without it.', up: true });
             await page.screenshot({ path: path.join(SHOTS, `launch-upo-error-${lang}-${theme}.png`) });
             await ctx.close();
         }

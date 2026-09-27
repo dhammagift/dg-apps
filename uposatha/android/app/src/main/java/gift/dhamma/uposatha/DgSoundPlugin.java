@@ -263,7 +263,7 @@ public class DgSoundPlugin extends Plugin {
             }
         }
         NotificationChannel channel = new NotificationChannel(id, name, importance);
-        channel.setDescription("Uposatha reminders");
+        channel.setDescription("Ariyuposatha reminders");
         channel.enableVibration(vibration);
         // Only a silent channel has nothing to override; the rest ask to sound through Do Not Disturb (honoured once the
         // reader has given the app that access).

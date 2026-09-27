@@ -1490,7 +1490,7 @@ jobs:
           if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
             echo "::notice::App Store Connect signing secrets are not set — screenshots stay only in the workflow artifact."
           else
-            pip3 install --quiet cryptography
+            pip3 install --quiet --break-system-packages cryptography
             python3 uposatha/tools/asc-screenshots.py --app-id 6816601259 --version 1.0 --locale en-US \
               --set APP_IPHONE_69=uposatha/.tmp/ios-tour-iphone \
               --set APP_IPAD_PRO_3GEN_129=uposatha/.tmp/ios-tour-ipad

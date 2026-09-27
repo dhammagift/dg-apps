@@ -139,9 +139,13 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
     }
 
     private static func answer(_ url: URL, from file: URL, task: WKURLSchemeTask) -> Bool {
-        guard let data = try? Data(contentsOf: file) else { return false }
+        guard let data = try? Data(contentsOf: file) else {
+            NSLog("DG_ROUTER answer: could not read %@", file.path)
+            return false
+        }
         let type = typeOf(url.path)
         guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers(type, length: data.count)) else { return false }
+        NSLog("DG_ROUTER answer: %@ from %@ (%d bytes, type=%@)", url.absoluteString, file.path, data.count, type)
         task.didReceive(response)
         task.didReceive(data)
         task.didFinish()

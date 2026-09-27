@@ -55,7 +55,11 @@ def call(method, path_or_url, body=None, headers=None, raw=False):
         req.add_header('Content-Type', 'application/json')
     if headers is None:
         headers = {}
-    if 'Authorization' not in {h.lower(): 1 for h in headers} and 'authorization' not in [h.lower() for h in headers]:
+    # The upload URL (raw=True) is Apple's own storage (an S3-style presigned URL): its own requestHeaders carry
+    # whatever auth its signature needs, and adding OUR App Store Connect bearer token on top breaks that
+    # signature (this is what a 400 on the PUT meant the first time). The bearer token is only for api.
+    # appstoreconnect.apple.com itself.
+    if not raw and not any(h.lower() == 'authorization' for h in headers):
         req.add_header('Authorization', 'Bearer ' + TOKEN)
     for k, v in headers.items():
         req.add_header(k, v)
@@ -140,9 +144,9 @@ def main():
                 offset, length = op.get('offset', 0), op.get('length', len(raw))
                 chunk = raw[offset:offset + length]
                 hdrs = {h['name']: h['value'] for h in op.get('requestHeaders', [])}
-                status2, _ = call(op.get('method', 'PUT'), op['url'], body=chunk, headers=hdrs, raw=True)
+                status2, body2 = call(op.get('method', 'PUT'), op['url'], body=chunk, headers=hdrs, raw=True)
                 if status2 not in (200, 201, 204):
-                    fail('upload PUT failed for %s (status %s)' % (name, status2))
+                    fail('upload PUT failed for %s (status %s)' % (name, status2), body2 if isinstance(body2, (dict, list)) else (body2 or b'')[:500])
             checksum = hashlib.md5(raw).hexdigest()
             status3, patched = call('PATCH', '/appScreenshots/%s' % shot_id,
                                      {'data': {'type': 'appScreenshots', 'id': shot_id, 'attributes': {'uploaded': True, 'sourceFileChecksum': checksum}}})

@@ -18,7 +18,7 @@
   if (!Cap || typeof Cap.getPlatform !== 'function') return;
   var PLATFORM = Cap.getPlatform();
   if (PLATFORM !== 'android' && PLATFORM !== 'ios') return;
-  var IOS = PLATFORM === 'ios';   // on iOS: no Back button, no notification channels or streams, no launcher icon change, the bundle is not updated from the site (yet)
+  var IOS = PLATFORM === 'ios';   // on iOS: no Back button, no notification channels or streams, no launcher icon change
 
   // The launch splash is native on Android (the animated mark of the system splash screen, res/drawable/
   // dg_splash_icon.xml), so nothing is drawn here: a web splash on top of it made the app slower to open and
@@ -577,7 +577,7 @@
       if (a) { try { localStorage.setItem(RATE_FLAG, '1'); } catch (err) { /* no storage */ } }
     }, true);
     // UposathaCore is loaded by the page: give it until the page has finished loading.
-    function afterLoad() { pushShortcuts(); if (!IOS) { pushLauncherIcon(); setTimeout(updateSite, 6000); } }
+    function afterLoad() { pushShortcuts(); if (!IOS) pushLauncherIcon(); setTimeout(updateSite, 6000); }
     if (document.readyState === 'complete') afterLoad();
     else window.addEventListener('load', afterLoad, { once: true });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { pushShortcuts(); if (!IOS) pushLauncherIcon(); } });

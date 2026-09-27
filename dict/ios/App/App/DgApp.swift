@@ -143,7 +143,11 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
             NSLog("DG_ROUTER answer: could not read %@", file.path)
             return false
         }
-        let type = typeOf(url.path)
+        // The TYPE from the FILE actually being served, not url.path: the root request ("capacitor://localhost",
+        // no trailing slash at all) has an EMPTY path, and typeOf("") fell back to application/octet-stream —
+        // which WebKit refuses to render as a page at all ("Frame load interrupted"), even though the bytes were
+        // the real, correct index.html.
+        let type = typeOf(file.lastPathComponent)
         guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers(type, length: data.count)) else { return false }
         NSLog("DG_ROUTER answer: %@ from %@ (%d bytes, type=%@)", url.absoluteString, file.path, data.count, type)
         task.didReceive(response)

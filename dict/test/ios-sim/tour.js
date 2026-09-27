@@ -102,6 +102,7 @@
       .then(function () {
         var head = $('[data-dictcode="tripitaka"]');
         if (head) head.click();
+        var openedAt = null;
         return stage('canon-dark', function () {
           var slot = $('#ext-slot-tripitaka'), icon = slot && slot.querySelector('.ext-dict-toggle-icon');
           // The slot always has exactly 2 children (header + content), collapsed or not — content just
@@ -109,11 +110,15 @@
           // "> 2 children" could never be true, which is why canon-dark never actually opened anything and
           // its screenshot was pixel-identical to declension-dark's, scrollIntoView included.
           var open = !!icon && icon.textContent.indexOf('▼') >= 0;
+          if (!open) return false;
           // Unlike the declension click (which the page scrolls to on its own), expanding this slot leaves
-          // the scroll position wherever declension-dark left it — the previous run's canon-dark screenshot
-          // was pixel-identical to declension-dark because of exactly that, nothing had actually scrolled.
-          if (open && head && head.scrollIntoView) head.scrollIntoView({ block: 'start' });
-          return open;
+          // the scroll position wherever declension-dark left it, so scroll explicitly.
+          if (head && head.scrollIntoView) head.scrollIntoView({ block: 'start' });
+          // The panel itself is a third-party iframe (tripitaka-mcp.com) — the icon flips the instant the
+          // CSS toggles, well before that network fetch paints, leaving a blank white box up top. Hold
+          // "open" for 2.5s before calling it ready, on top of stage()'s own settle wait.
+          if (!openedAt) openedAt = Date.now();
+          return Date.now() - openedAt > 2500;
         });
       })
       // 7. A different word, still dark: the variety the listing wants (not the same entry six times over).

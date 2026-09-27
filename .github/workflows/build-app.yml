@@ -876,6 +876,14 @@ jobs:
           npx playwright install --with-deps chromium
           node tools/snapshot.js
 
+      # src/ -> www/ -> android/app/src/main/assets/public: the bundled page, dict-bridge.js and the
+      # offline page where MainActivity and Capacitor read them from. Not optional: the asset sync is what
+      # puts dict-bridge.js where MainActivity reads it from. It also RUNS build.js (npm run build), which is
+      # what produces dict/www/ in the first place — the upload below must come after this, not before.
+      - name: Sync Capacitor
+        working-directory: dict
+        run: npm run sync-android
+
       # The web bundle the APK is built from (dict/www: the page, the bridge, the sounds), for the iOS job below:
       # the same files go into both apps, so the page is snapshotted once.
       - name: Upload the dictionary web bundle
@@ -885,13 +893,6 @@ jobs:
           path: dict/www
           if-no-files-found: error
           retention-days: 14
-
-      # src/ -> www/ -> android/app/src/main/assets/public: the bundled page, dict-bridge.js and the
-      # offline page where MainActivity and Capacitor read them from. Not optional: the asset sync is what
-      # puts dict-bridge.js where MainActivity reads it from.
-      - name: Sync Capacitor
-        working-directory: dict
-        run: npm run sync-android
 
       - name: Grant gradlew permissions
         run: chmod +x dict/android/gradlew

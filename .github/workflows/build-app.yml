@@ -1476,6 +1476,7 @@ jobs:
 
       - name: The same tour on a 13" iPad
         working-directory: uposatha
+        continue-on-error: true   # the iPhone set is the one that matters most; a broken iPad pass must not block it
         run: |
           mkdir -p .tmp/ios-tour-ipad
           test/ios-sim/drive.sh --out .tmp/ios-tour-ipad --device "iPad Pro 13-inch (M5)" \
@@ -1491,9 +1492,13 @@ jobs:
             echo "::notice::App Store Connect signing secrets are not set — screenshots stay only in the workflow artifact."
           else
             pip3 install --quiet --break-system-packages cryptography
-            python3 uposatha/tools/asc-screenshots.py --app-id 6816601259 --version 1.0 --locale en-US \
-              --set APP_IPHONE_69=uposatha/.tmp/ios-tour-iphone \
-              --set APP_IPAD_PRO_3GEN_129=uposatha/.tmp/ios-tour-ipad
+            SETS=(--set APP_IPHONE_69=uposatha/.tmp/ios-tour-iphone)
+            if [ -n "$(ls -A uposatha/.tmp/ios-tour-ipad/*.png 2>/dev/null)" ]; then
+              SETS+=(--set APP_IPAD_PRO_3GEN_129=uposatha/.tmp/ios-tour-ipad)
+            else
+              echo "::notice::no iPad screenshots this run — uploading the iPhone set only"
+            fi
+            python3 uposatha/tools/asc-screenshots.py --app-id 6816601259 --version 1.0 --locale en-US "${SETS[@]}"
           fi
 
       - name: Upload the screenshots

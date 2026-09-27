@@ -8,7 +8,7 @@
   'use strict';
 
   var SETTLE_MS = 900;
-  var SHOT_HOLD_MS = 4000;
+  var SHOT_HOLD_MS = 7000;   // generous: a screenshot command on a CI runner is not instant, and a short hold risks the driver missing a stage entirely
   var WORD = 'dhamma';
 
   function plugin() { var P = window.Capacitor && window.Capacitor.Plugins; return P && P.DgSelfTest; }
@@ -73,12 +73,13 @@
           return slot && slot.querySelector('.ext-dict-toggle-icon') && slot.querySelector('.ext-dict-toggle-icon').textContent.indexOf('▼') >= 0 && slot.children.length > 2;
         });
       })
-      // 5. Recent words: back to the start screen, where the word just looked up is now in the history.
+      // 5. Recent words: #history-pane sits beside the entry screen too (not only the start one), so this is
+      // checked right where we are — a real link click here would navigate the WebView (a full reload, which
+      // would restart this very script from the top, duplicating every earlier stage under whatever theme the
+      // driver had already flipped to by then).
       .then(function () {
-        var logo = $('#logo-link') || $('.wordmark');
-        if (logo) logo.click();
         return stage('recent', function () {
-          return document.body.dataset.screen === 'start' && (count('#history-pane li') > 0 || count('#chips > *') > 0);
+          return count('#history-pane a, #history-pane li, #history-pane .item, #history-pane [data-word], #history-pane [href]') > 0;
         });
       })
       // 6. One more entry, in dark: a different, visually rich word for a good closing marketing shot.
@@ -87,7 +88,7 @@
         if (box) { box.value = 'nibbana'; }
         var form = $('#search-form');
         if (form) form.requestSubmit ? form.requestSubmit() : form.submit();
-        return stage('sources-dark', function () {
+        return stage('entry2', function () {
           return document.body.dataset.screen === 'entry' && count('#external-dicts-container > div') >= 2;
         });
       })

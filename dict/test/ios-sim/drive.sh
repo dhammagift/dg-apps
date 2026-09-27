@@ -55,8 +55,10 @@ for i in $(seq 1 180); do
         xcrun simctl io "$UDID" screenshot "$OUT/ios-$S.png" >/dev/null \
             || echo "drive: screenshot for stage $S failed" >&2
         # Tell the page's blocked native call it can move on: this stage's picture is safely on disk now,
-        # whatever the screenshot command's own timing was (see DgSelfTestPlugin.swift's stage()).
-        touch "$DATA_DIR/Documents/stage.ack"
+        # whatever the screenshot command's own timing was (see DgSelfTestPlugin.swift's stage()). The ack's
+        # CONTENT is the stage name, not just the file's existence — content is what a stale ack file can't
+        # fake, existence can (see that file's comment for the race this fixes).
+        printf '%s' "$S" > "$DATA_DIR/Documents/stage.ack"
     fi
     sleep 1
 done

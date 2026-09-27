@@ -8,10 +8,12 @@ import Capacitor
 //
 //     xcrun simctl get_app_container booted gift.dhamma.pali data
 //
-// This call BLOCKS until the driver acks (Documents/stage.ack) that it has actually screenshotted this stage. A CI
-// runner's `xcrun simctl io screenshot` can be slow enough that a second, later stage overwrites stage.txt before
-// the driver's poll ever reads the first one — two real stages (autocomplete, settings) went missing this way
-// under load, with no error anywhere, because the page just moved on and nothing was left to prove it hadn't.
+// This call BLOCKS until the driver acks (Documents/stage.ack, its CONTENT the stage name) that it has actually
+// screenshotted THIS stage — content, not mere existence, because an existence check races a stale ack file left
+// over from the previous stage: deleting it and having a new one land are two separate filesystem operations, and
+// under CI load the delete can lose that race, making the "wait" a silent no-op that let whole stages (up to five
+// in one run, iPad) vanish with no error anywhere, because the page just moved on and nothing was left to prove it
+// hadn't. Comparing content instead needs no delete step at all, so there is nothing left to race.
 // 15s cap: a stuck or crashed driver must not hang the tour forever.
 //
 // Registered only in DEBUG builds (see DgApp.swift) and never in a shipped app.
@@ -28,14 +30,13 @@ public class DgSelfTestPlugin: CAPPlugin, CAPBridgedPlugin {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let ackURL = dir.appendingPathComponent("stage.ack")
         do {
-            try? FileManager.default.removeItem(at: ackURL)
             try name.write(to: dir.appendingPathComponent("stage.txt"), atomically: true, encoding: .utf8)
         } catch {
             call.reject("could not record the stage: \(error.localizedDescription)")
             return
         }
         let deadline = Date().addingTimeInterval(15)
-        while !FileManager.default.fileExists(atPath: ackURL.path) && Date() < deadline {
+        while (try? String(contentsOf: ackURL, encoding: .utf8)) != name && Date() < deadline {
             Thread.sleep(forTimeInterval: 0.1)
         }
         call.resolve(["stage": name])

@@ -1492,7 +1492,7 @@ jobs:
             echo "::notice::App Store Connect signing secrets are not set — screenshots stay only in the workflow artifact."
           else
             pip3 install --quiet --break-system-packages cryptography
-            SETS=(--set APP_IPHONE_69=uposatha/.tmp/ios-tour-iphone)
+            SETS=(--set APP_IPHONE_67=uposatha/.tmp/ios-tour-iphone)
             if [ -n "$(ls -A uposatha/.tmp/ios-tour-ipad/*.png 2>/dev/null)" ]; then
               SETS+=(--set APP_IPAD_PRO_3GEN_129=uposatha/.tmp/ios-tour-ipad)
             else

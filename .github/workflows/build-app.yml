@@ -61,11 +61,11 @@ on:
         required: false
         type: string
       release:
-        description: 'Which store gets this build. Play goes to the INTERNAL track (testers only; production still needs a promote in the console) and covers BOTH Android apps — the reader (gift.dhamma.twa) and the dictionary (gift.dhamma.pali), each on its own package. Default none: a manual run is usually about trying something, not about shipping, and an unasked-for build in App Store Connect or a burnt versionCode is the cost of getting that wrong. A tag always releases to both. uposatha = ONLY the Uposatha app (gift.dhamma.uposatha) to the internal track of Play; it does not go out with play, both or a tag. uposatha-ios = ONLY the Uposatha app for iOS to TestFlight (needs its App Store Connect record: bundle id gift.dhamma.uposatha).'
+        description: 'Which store gets this build. Play goes to the INTERNAL track (testers only; production still needs a promote in the console) and covers BOTH Android apps — the reader (gift.dhamma.twa) and the dictionary (gift.dhamma.pali), each on its own package. Default none: a manual run is usually about trying something, not about shipping, and an unasked-for build in App Store Connect or a burnt versionCode is the cost of getting that wrong. A tag always releases to both. uposatha = ONLY the Uposatha app (gift.dhamma.uposatha) to the internal track of Play; it does not go out with play, both or a tag. uposatha-ios = ONLY the Uposatha app for iOS to TestFlight (needs its App Store Connect record: bundle id gift.dhamma.uposatha). dict = ONLY the dictionary to the internal track of Play (the reader ships separately with play/both). dict-ios = ONLY the dictionary for iOS to TestFlight.'
         required: false
         type: choice
         default: none
-        options: [none, play, testflight, both, uposatha, uposatha-ios]
+        options: [none, play, testflight, both, uposatha, uposatha-ios, dict, dict-ios]
       ios_checks:
         description: 'Also run the three iOS check jobs (simulator build, UI checks, screenshots). Off by default: a manual run is usually about the Android half, and those three only add ~17 minutes of waiting after it. A tag always runs them.'
         required: false
@@ -1412,6 +1412,143 @@ jobs:
         run: |
           { echo "### Uposatha iOS release: uploaded"; echo ""; echo "Build ${{ github.run_number }} was archived and sent to TestFlight (processing takes 5-15 minutes)."; } >> "$GITHUB_STEP_SUMMARY"
 
+  dict-ios-release:
+    name: Dictionary app iOS release (TestFlight)
+    needs: dict-build
+    if: github.event_name == 'workflow_dispatch' && inputs.release == 'dict-ios'
+    runs-on: macos-26
+    steps:
+      - name: Checkout this repo (the app)
+        uses: actions/checkout@v4
+
+      - name: Download the web bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: dict-www-${{ github.run_number }}
+          path: dict/www
+
+      - name: Are the signing secrets there?
+        id: asc
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
+          [ -n "$APPLE_TEAM_ID" ] || missing="$missing APPLE_TEAM_ID"
+          if [ -z "$missing" ]; then
+            echo "have=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::missing secrets:$missing - nothing was archived or uploaded."
+            { echo "### Dictionary iOS release: nothing happened"; echo ""; echo "Missing repository secrets: \`$missing\`"; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Set up Node.js
+        if: steps.asc.outputs.have == 'yes'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Install the app's dependencies
+        if: steps.asc.outputs.have == 'yes'
+        working-directory: dict
+        run: npm ci
+
+      - name: Select the newest Xcode 26
+        if: steps.asc.outputs.have == 'yes'
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Write the App Store Connect key
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
+
+      - name: Sync Capacitor into dict/ios
+        if: steps.asc.outputs.have == 'yes'
+        working-directory: dict
+        run: npx cap sync ios
+
+      - name: Archive
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project dict/ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath dict/ios/build/App.xcarchive \
+            -derivedDataPath dict/ios/DerivedData \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+            archive 2>&1 | tee ios-archive.log | tail -30
+
+      - name: Export the IPA
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath dict/ios/build/App.xcarchive \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath dict/ios/build/export \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee ios-export.log | tail -30
+          grep -q "Upload succeeded" ios-export.log
+
+      - name: Upload the logs on failure
+        if: failure() && steps.asc.outputs.have == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dict-ios-release-logs-${{ github.run_number }}
+          path: |
+            ios-archive.log
+            ios-export.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Say what went to TestFlight
+        if: success() && steps.asc.outputs.have == 'yes'
+        run: |
+          { echo "### Dictionary iOS release: uploaded"; echo ""; echo "Build ${{ github.run_number }} was archived and sent to TestFlight (processing takes 5-15 minutes)."; } >> "$GITHUB_STEP_SUMMARY"
+
   # App Store screenshots for Uposatha (test/ios-sim/tour.js + drive.sh): the same page the APK ships, walked
   # through its views on an iPhone 6.9" and an iPad 13" simulator. Started with `ios_checks`, same as the reader
   # app's own screenshot job; these are for the store listing, never sent anywhere automatically.
@@ -1687,7 +1824,7 @@ jobs:
   dict-release:
     name: Dictionary app release (Play internal track)
     needs: dict-build
-    if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'play' || inputs.release == 'both')) || startsWith(github.ref, 'refs/tags/')
+    if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'play' || inputs.release == 'both' || inputs.release == 'dict')) || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - name: Is the service account there?

@@ -55,8 +55,9 @@
 
   function run() {
     return waitFor(function () { return $('#search-box') && $('.dictlist'); }, 30000)
-      // 1. The start screen itself: what a reader sees before typing anything.
-      .then(function () { return stage('home', function () { return document.body.dataset.screen === 'start' && count('.dictlist li') > 0; }); })
+      // 1. The start screen itself: what a reader sees before typing anything. Blur first: the search box
+      // auto-focuses on load, and a screenshot with the keyboard up hides half the hero copy behind it.
+      .then(function () { var ae = document.activeElement; if (ae && ae.blur) ae.blur(); return stage('home', function () { return document.body.dataset.screen === 'start' && count('.dictlist li') > 0; }); })
       // 2. Autocomplete suggestions.
       .then(function () {
         var box = $('#search-box');
@@ -92,7 +93,12 @@
         if (head) head.click();
         return stage('canon-dark', function () {
           var slot = $('#ext-slot-tripitaka'), icon = slot && slot.querySelector('.ext-dict-toggle-icon');
-          return !!icon && icon.textContent.indexOf('▼') >= 0 && slot.children.length > 2;
+          var open = !!icon && icon.textContent.indexOf('▼') >= 0 && slot.children.length > 2;
+          // Unlike the declension click (which the page scrolls to on its own), expanding this slot leaves
+          // the scroll position wherever declension-dark left it — the previous run's canon-dark screenshot
+          // was pixel-identical to declension-dark because of exactly that, nothing had actually scrolled.
+          if (open && head && head.scrollIntoView) head.scrollIntoView({ block: 'start' });
+          return open;
         });
       })
       // 7. A different word, still dark: the variety the listing wants (not the same entry six times over).

@@ -1481,6 +1481,21 @@ jobs:
           test/ios-sim/drive.sh --out .tmp/ios-tour-ipad --device "iPad Pro 13-inch (M5)" \
             --app ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
 
+      - name: Upload to App Store Connect (version 1.0, en-US) — never sent for review
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
+            echo "::notice::App Store Connect signing secrets are not set — screenshots stay only in the workflow artifact."
+          else
+            pip3 install --quiet cryptography
+            python3 uposatha/tools/asc-screenshots.py --app-id 6816601259 --version 1.0 --locale en-US \
+              --set APP_IPHONE_69=uposatha/.tmp/ios-tour-iphone \
+              --set APP_IPAD_PRO_3GEN_129=uposatha/.tmp/ios-tour-ipad
+          fi
+
       - name: Upload the screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -65,3 +65,5 @@ done
 echo "drive: screenshots in $OUT"
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
 ls -la "$OUT"
+COUNT=$(find "$OUT" -maxdepth 1 -name "*.png" | wc -l | tr -d ' ')
+[ "$COUNT" -gt 0 ] || { echo "drive: zero screenshots captured — the tour never reached a single stage" >&2; exit 1; }

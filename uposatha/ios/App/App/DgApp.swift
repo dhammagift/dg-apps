@@ -163,12 +163,25 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
                 return
             }
         }
+        // Bundled: read and serve it ourselves. `inner` (Capacitor's own handler) answers strictly by url.path, and path
+        // is remapped above for "/" and friends — delegating a remapped lookup to it would serve THAT literal path
+        // (index.html, the offline splash) instead of the calendar page every "/" request actually wants.
+        if let bundle = Bundle.main.url(forResource: "public" + path, withExtension: nil), let data = try? Data(contentsOf: bundle) {
+            let type = Self.typeOf(path)
+            if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: data.count)) {
+                urlSchemeTask.didReceive(response)
+                urlSchemeTask.didReceive(data)
+                urlSchemeTask.didFinish()
+                return
+            }
+        }
         let last = (path as NSString).lastPathComponent
-        let bundled = FileManager.default.fileExists(atPath: Bundle.main.bundlePath + "/public" + path)
         let hasExtension = (last as NSString).pathExtension.count > 0
-        if hasExtension && !bundled && !path.hasPrefix("/_capacitor") {
+        if hasExtension && !path.hasPrefix("/_capacitor") {
             return proxy(url: url, task: urlSchemeTask, fallback: { self.inner.webView(webView, start: urlSchemeTask) })
         }
+        // No extension and not bundled: Capacitor's own SPA fallback (its internal /_capacitor paths, or a route with no
+        // matching file) — the one case genuinely meant for the original, unmodified request.
         inner.webView(webView, start: urlSchemeTask)
     }
 

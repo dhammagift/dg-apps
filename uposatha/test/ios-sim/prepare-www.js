@@ -21,4 +21,8 @@ if (page.indexOf('ios-tour.js') !== -1) { console.error('prepare-www: ' + PAGE +
 if (!page.includes('</body>')) { console.error('prepare-www: ' + PAGE + ' has no </body> to append the tour to'); process.exit(1); }
 page = page.replace('</body>', '<script src="/ios-tour.js"></script>\n</body>');
 fs.writeFileSync(PAGE, page);
-console.log('ready: ' + PAGE + ' now loads the screenshot tour');
+// build.js also copies this same page to www/index.html (Capacitor's default entry document) — kept identical here
+// so the tour runs regardless of which of the two names actually gets served for "/".
+const INDEX = path.join(WWW, 'index.html');
+if (fs.existsSync(INDEX)) fs.writeFileSync(INDEX, page);
+console.log('ready: ' + PAGE + (fs.existsSync(INDEX) ? ' and ' + INDEX : '') + ' now load the screenshot tour');

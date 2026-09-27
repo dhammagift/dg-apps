@@ -22,6 +22,14 @@ import Capacitor
 // any method from its superclass".
 class DgBridgeViewController: CAPBridgeViewController {
 
+    // The status-bar strip is the site's own dark navbar band, ALWAYS (issue #15's own words — see
+    // src/native-bridge.js: "there is nothing for this file to switch"; Android fixes this the same way,
+    // MainActivity.applyStatusBarIcons(), setAppearanceLightStatusBars(false)). Left to iOS's own default
+    // (UIViewControllerBasedStatusBarAppearance = true, Info.plist), a view controller with no opinion here
+    // picks its icon colour from context that changes — the reported "sometimes one colour, sometimes the
+    // other". Fixed: light (white) icons, unconditionally, matching the dark band they sit on.
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
     // Capacitor registers its asset handler for capacitor://localhost on the configuration this
     // returns, after it returns — the one moment /dg-sql can be put on the same origin, which is
     // what lets the worker reach it with a plain same-origin XMLHttpRequest. So the configuration is

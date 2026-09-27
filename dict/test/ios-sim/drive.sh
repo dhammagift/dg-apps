@@ -10,7 +10,10 @@ APP=""
 OUT=".tmp/ios-tour"
 DEVICE="iPhone 17 Pro Max"
 BUNDLE="gift.dhamma.pali"
-DARK_AFTER="declension"   # the stage after which the simulator flips to dark appearance
+# No OS-level dark flip here: the dictionary's theme is a stored preference switched by an in-page control
+# (#theme-toggle -> body.classList.toggle('dark-mode')), evaluated once at load and never reacting to
+# prefers-color-scheme — tour.js flips it itself, mid-session, and each stage name already says which
+# theme it is (declension-dark, canon-dark, ...), so the driver needs no theme bookkeeping of its own.
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -42,22 +45,16 @@ rm -f "$DATA_DIR/Documents/stage.txt"
 
 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" > "$OUT/app-console.log" 2>&1 &
 
-THEME="light"
 LAST=""
 for i in $(seq 1 180); do
     S=$(cat "$DATA_DIR/Documents/stage.txt" 2>/dev/null || true)
     if [ -n "$S" ] && [ "$S" != "$LAST" ]; then
         LAST="$S"
-        echo "drive: stage $S ($THEME)"
+        echo "drive: stage $S"
         if [ "$S" = "done" ]; then break; fi
         sleep 1
-        xcrun simctl io "$UDID" screenshot "$OUT/ios-$S-$THEME.png" >/dev/null \
+        xcrun simctl io "$UDID" screenshot "$OUT/ios-$S.png" >/dev/null \
             || echo "drive: screenshot for stage $S failed" >&2
-        if [ "$S" = "$DARK_AFTER" ]; then
-            xcrun simctl ui "$UDID" appearance dark
-            THEME="dark"
-            sleep 2
-        fi
     fi
     sleep 1
 done

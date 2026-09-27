@@ -1,0 +1,38 @@
+name: Play status
+
+# Read-only: prints what is on the internal track of each Play app (version codes and release status).
+# It opens a Play "edit", reads the track and throws the edit away: nothing is changed in the console.
+on:
+  workflow_dispatch:
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the internal track of each app
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          pip install --quiet google-api-python-client google-auth
+          python3 - <<'PY'
+          import json, os
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          info = json.loads(os.environ["PLAY_JSON"])
+          creds = service_account.Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/androidpublisher"])
+          svc = build("androidpublisher", "v3", credentials=creds, cache_discovery=False)
+          for pkg in ("gift.dhamma.twa", "gift.dhamma.pali", "gift.dhamma.uposatha"):
+              try:
+                  edit = svc.edits().insert(packageName=pkg, body={}).execute()
+                  for track in ("internal",):
+                      t = svc.edits().tracks().get(packageName=pkg, editId=edit["id"], track=track).execute()
+                      for r in t.get("releases", []):
+                          print(pkg, track, "status=%s" % r.get("status"), "versionCodes=%s" % r.get("versionCodes"), "name=%s" % r.get("name"))
+                      if not t.get("releases"):
+                          print(pkg, track, "no releases")
+                  bundles = svc.edits().bundles().list(packageName=pkg, editId=edit["id"]).execute().get("bundles", [])
+                  print(pkg, "bundles in the app:", sorted(b["versionCode"] for b in bundles)[-8:])
+                  svc.edits().delete(packageName=pkg, editId=edit["id"]).execute()
+              except Exception as e:
+                  print(pkg, "ERROR", str(e)[:300])
+          PY

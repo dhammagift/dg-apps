@@ -139,17 +139,13 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
     }
 
     private static func answer(_ url: URL, from file: URL, task: WKURLSchemeTask) -> Bool {
-        guard let data = try? Data(contentsOf: file) else {
-            NSLog("DG_ROUTER answer: could not read %@", file.path)
-            return false
-        }
+        guard let data = try? Data(contentsOf: file) else { return false }
         // The TYPE from the FILE actually being served, not url.path: the root request ("capacitor://localhost",
         // no trailing slash at all) has an EMPTY path, and typeOf("") fell back to application/octet-stream —
         // which WebKit refuses to render as a page at all ("Frame load interrupted"), even though the bytes were
         // the real, correct index.html.
         let type = typeOf(file.lastPathComponent)
         guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers(type, length: data.count)) else { return false }
-        NSLog("DG_ROUTER answer: %@ from %@ (%d bytes, type=%@)", url.absoluteString, file.path, data.count, type)
         task.didReceive(response)
         task.didReceive(data)
         task.didFinish()
@@ -163,10 +159,8 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url, urlSchemeTask.request.httpMethod == "GET", url.host == "localhost" else {
-            NSLog("DG_ROUTER passthrough %@ method=%@ host=%@", urlSchemeTask.request.url?.absoluteString ?? "nil", urlSchemeTask.request.httpMethod ?? "nil", urlSchemeTask.request.url?.host ?? "nil")
             return inner.webView(webView, start: urlSchemeTask)
         }
-        NSLog("DG_ROUTER request %@", url.absoluteString)
         let path = url.path
         if path.hasPrefix("/_capacitor") || path == "/cordova.js" || path == "/favicon.ico" {
             return inner.webView(webView, start: urlSchemeTask)
@@ -181,7 +175,6 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         if let downloaded = DgSiteStore.file(for: file), Self.answer(url, from: downloaded, task: urlSchemeTask) { return }
         if isDirectory, let bundle = Self.bundled(indexPath), Self.answer(url, from: bundle, task: urlSchemeTask) { return }
         if !isDirectory, let bundle = Self.bundled(path), Self.answer(url, from: bundle, task: urlSchemeTask) { return }
-        NSLog("DG_ROUTER falling through to proxy for %@ (isDirectory=%@ file=%@)", url.absoluteString, isDirectory ? "yes" : "no", file)
         proxy(url: url, task: urlSchemeTask, fallback: { self.inner.webView(webView, start: urlSchemeTask) })
     }
 

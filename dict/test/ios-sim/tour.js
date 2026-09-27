@@ -53,9 +53,13 @@
         if (box) { box.value = WORD; }
         var form = $('#search-form');
         if (form) form.requestSubmit ? form.requestSubmit() : form.submit();
+        // Just "the entry screen is up and several dictionary panels exist" — not their expand/collapse glyph,
+        // which turned out to be the one condition that never became true (a stage whose readiness never
+        // resolves still gets captured, after its 20s timeout, so this stage simply never got a distinct
+        // picture: whatever was on screen when 'declension' overtook it is what ios-sources-*.png would have
+        // shown, which is why it never appeared at all).
         return stage('sources', function () {
-          return document.body.dataset.screen === 'entry' && count('#external-dicts-container > div') >= 2 &&
-            $('#ext-slot-dpd .ext-dict-toggle-icon') && $('#ext-slot-dpd .ext-dict-toggle-icon').textContent.indexOf('▼') >= 0;
+          return document.body.dataset.screen === 'entry' && count('#external-dicts-container > div[id^="ext-slot-"]') >= 2;
         });
       })
       // 3. The declension (grammar) table of the first sense.

@@ -127,6 +127,14 @@ def main():
             print('  %s: created set %s' % (display_type, set_id))
         else:
             print('  %s: using existing set %s' % (display_type, set_id))
+            # Clear it first: a repeat run must REPLACE the set, not keep appending to it forever (Apple caps a
+            # set at 10 screenshots, and the 4th run of this script hit that ceiling and started failing).
+            status, existing_shots = call('GET', '/appScreenshotSets/%s/appScreenshots' % set_id)
+            if status == 200:
+                for shot in existing_shots.get('data', []):
+                    call('DELETE', '/appScreenshots/%s' % shot['id'])
+                if existing_shots.get('data'):
+                    print('    removed %d screenshot(s) left from an earlier run' % len(existing_shots['data']))
 
         for f in files:
             size = os.path.getsize(f)

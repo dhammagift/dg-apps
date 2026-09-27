@@ -41,7 +41,7 @@ xcrun simctl install "$UDID" "$APP"
 
 DATA_DIR=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data 2>/dev/null || true)
 [ -n "$DATA_DIR" ] || { echo "drive: could not find the app's data container" >&2; exit 1; }
-rm -f "$DATA_DIR/Documents/stage.txt"
+rm -f "$DATA_DIR/Documents/stage.txt" "$DATA_DIR/Documents/stage.ack"
 
 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" > "$OUT/app-console.log" 2>&1 &
 
@@ -52,9 +52,11 @@ for i in $(seq 1 180); do
         LAST="$S"
         echo "drive: stage $S"
         if [ "$S" = "done" ]; then break; fi
-        sleep 1
         xcrun simctl io "$UDID" screenshot "$OUT/ios-$S.png" >/dev/null \
             || echo "drive: screenshot for stage $S failed" >&2
+        # Tell the page's blocked native call it can move on: this stage's picture is safely on disk now,
+        # whatever the screenshot command's own timing was (see DgSelfTestPlugin.swift's stage()).
+        touch "$DATA_DIR/Documents/stage.ack"
     fi
     sleep 1
 done

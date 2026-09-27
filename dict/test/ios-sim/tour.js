@@ -15,7 +15,10 @@
   'use strict';
 
   var SETTLE_MS = 900;
-  var SHOT_HOLD_MS = 7000;
+  // The native call now blocks until the driver acks the screenshot (DgSelfTestPlugin.swift), so this is
+  // just a small buffer after that ack, not the sole thing standing between a slow CI screenshot and a
+  // missed stage (that used to be a fixed 7s guess — and guessing wrong lost stages under load).
+  var SHOT_HOLD_MS = 300;
 
   function plugin() { var P = window.Capacitor && window.Capacitor.Plugins; return P && P.DgSelfTest; }
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }

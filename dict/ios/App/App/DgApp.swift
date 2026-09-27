@@ -155,8 +155,10 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url, urlSchemeTask.request.httpMethod == "GET", url.host == "localhost" else {
+            NSLog("DG_ROUTER passthrough %@ method=%@ host=%@", urlSchemeTask.request.url?.absoluteString ?? "nil", urlSchemeTask.request.httpMethod ?? "nil", urlSchemeTask.request.url?.host ?? "nil")
             return inner.webView(webView, start: urlSchemeTask)
         }
+        NSLog("DG_ROUTER request %@", url.absoluteString)
         let path = url.path
         if path.hasPrefix("/_capacitor") || path == "/cordova.js" || path == "/favicon.ico" {
             return inner.webView(webView, start: urlSchemeTask)
@@ -171,6 +173,7 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         if let downloaded = DgSiteStore.file(for: file), Self.answer(url, from: downloaded, task: urlSchemeTask) { return }
         if isDirectory, let bundle = Self.bundled(indexPath), Self.answer(url, from: bundle, task: urlSchemeTask) { return }
         if !isDirectory, let bundle = Self.bundled(path), Self.answer(url, from: bundle, task: urlSchemeTask) { return }
+        NSLog("DG_ROUTER falling through to proxy for %@ (isDirectory=%@ file=%@)", url.absoluteString, isDirectory ? "yes" : "no", file)
         proxy(url: url, task: urlSchemeTask, fallback: { self.inner.webView(webView, start: urlSchemeTask) })
     }
 

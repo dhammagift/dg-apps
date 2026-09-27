@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D6A0C0DE2FEA00050072D4E8 /* DgSelfTestPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A0C0DE2FEA00040072D4E8 /* DgSelfTestPlugin.swift */; };
 		D6A0C0DE2FEA00020072D4E8 /* DgApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A0C0DE2FEA00010072D4E8 /* DgApp.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
@@ -20,6 +21,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		D6A0C0DE2FEA00040072D4E8 /* DgSelfTestPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgSelfTestPlugin.swift; sourceTree = "<group>"; };
 		D6A0C0DE2FEA00010072D4E8 /* DgApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgApp.swift; sourceTree = "<group>"; };
 		D6A0C0DE2FEA00030072D4E8 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
@@ -71,6 +73,7 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				D6A0C0DE2FEA00010072D4E8 /* DgApp.swift */,
+				D6A0C0DE2FEA00040072D4E8 /* DgSelfTestPlugin.swift */,
 				D6A0C0DE2FEA00030072D4E8 /* App.entitlements */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -165,6 +168,7 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				D6A0C0DE2FEA00020072D4E8 /* DgApp.swift in Sources */,
+				D6A0C0DE2FEA00050072D4E8 /* DgSelfTestPlugin.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

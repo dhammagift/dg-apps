@@ -1401,6 +1401,100 @@ jobs:
         run: |
           { echo "### Uposatha iOS release: uploaded"; echo ""; echo "Build ${{ github.run_number }} was archived and sent to TestFlight (processing takes 5-15 minutes)."; } >> "$GITHUB_STEP_SUMMARY"
 
+  # App Store screenshots for Uposatha (test/ios-sim/tour.js + drive.sh): the same page the APK ships, walked
+  # through its views on an iPhone 6.9" and an iPad 13" simulator. Started with `ios_checks`, same as the reader
+  # app's own screenshot job; these are for the store listing, never sent anywhere automatically.
+  uposatha-ios-screenshots:
+    name: Uposatha app iOS screenshots
+    needs: uposatha-build
+    if: inputs.ios_checks
+    runs-on: macos-26
+    steps:
+      - name: Checkout this repo (the app)
+        uses: actions/checkout@v4
+
+      - name: Download the web bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: uposatha-www-${{ github.run_number }}
+          path: uposatha/www
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Restore npm and SwiftPM caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ~/Library/Caches/org.swift.swiftpm
+            uposatha/ios/DerivedData/SourcePackages
+          key: ${{ runner.os }}-upo-ios-${{ hashFiles('uposatha/ios/App/CapApp-SPM/Package.swift', 'uposatha/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-upo-ios-
+
+      - name: Install the app's dependencies
+        working-directory: uposatha
+        run: npm ci
+
+      - name: Select the newest Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Turn www/ into the screenshot-tour bundle
+        working-directory: uposatha
+        run: node test/ios-sim/prepare-www.js
+
+      - name: Sync Capacitor into uposatha/ios
+        working-directory: uposatha
+        run: npx cap sync ios
+
+      - name: Build for the iOS Simulator
+        working-directory: uposatha/ios/App
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ../../ios-tour-build.log | tail -30
+
+      - name: Walk the app and take pictures (iPhone 6.9")
+        working-directory: uposatha
+        run: |
+          mkdir -p .tmp/ios-tour-iphone
+          test/ios-sim/drive.sh --out .tmp/ios-tour-iphone --device "iPhone 17 Pro Max" \
+            --app ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+
+      - name: The same tour on a 13" iPad
+        working-directory: uposatha
+        run: |
+          mkdir -p .tmp/ios-tour-ipad
+          test/ios-sim/drive.sh --out .tmp/ios-tour-ipad --device "iPad Pro 13-inch (M5)" \
+            --app ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+
+      - name: Upload the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uposatha-ios-store-screenshots-${{ github.run_number }}
+          path: |
+            uposatha/.tmp/ios-tour-iphone/*.png
+            uposatha/.tmp/ios-tour-iphone/app-console.log
+            uposatha/.tmp/ios-tour-ipad/*.png
+            uposatha/.tmp/ios-tour-ipad/app-console.log
+            uposatha/ios-tour-build.log
+          retention-days: 30
+          if-no-files-found: warn
+
   # ---------------------------------------------------------------------------------------------
   # The dictionary half of the Play release path, the same shape as android-release above and
   # gated by the same choice: `release: play` (or `both`, or any tag) uploads BOTH Android apps,

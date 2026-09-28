@@ -1,14 +1,14 @@
 name: Build App
 
 # Builds the offline SQLite databases + the Android APK entirely on GitHub's runner — the prod
-# servertrack: alpha has no disk headroom for this (core.db+lang_ru.db+lang_en.db alone are ~260MB, plus
+# server has no disk headroom for this (core.db+lang_ru.db+lang_en.db alone are ~260MB, plus
 # Gradle/Android SDK caches).
 #
 # THE UI IS NOT IN THIS REPOSITORY. It is generated at build time from a dg-node checkout:
 # build-page.js turns dg-node's search/index.html into www/index.html, build-assets.js copies
 # every asset that page references, build-toc-snapshot.js snapshots a running dg-fastify.js.
 # Which dg-node commit is used is pinned by the DG_NODE_REF file at this repo's root (a branch
-# name or tag), overridable per-run via the workflow_dispatch input below.
+# name or tag), overridable per-run via the workflow_dispatch input below.hh
 #
 # dg-node has many git-tracked RELATIVE symlinks (reader/images/*.png, reader/css/index.css,
 # siteroot/*, ...) that assume the exact prod directory depth:

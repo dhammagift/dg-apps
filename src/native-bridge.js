@@ -994,16 +994,16 @@
     // MainActivity -> /login/index.html#dg_google=...&state=...), and here the same Firebase account is
     // signed in with it. The merge/overwrite choice made before leaving is kept with the state: the
     // login page reloads on the way back.
-    (function googleSignInViaBrowser() {
-        // App Review 4.8: a third-party sign-in has to come with Sign in with Apple, so the iOS build
-        // hides the Google button and the divider that separated it, leaving the passphrase login.
-        // Only the button goes: the rest of this function also defines window.dgSignInUrl, which the
-        // simulator self-test asserts on (run 200 went red on "no sign-in URL builder in the page"),
-        // and the sign-in return path needs it. A hidden button offers nothing, which is what 4.8 asks.
-        if (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios') {
-            document.head.insertAdjacentHTML('beforeend', '<style>#btn-google-login,#btn-google-login+div{display:none!important}</style>');
-        }
-        var KEY = 'dg.app.googleSignIn';
+    // One shape, two providers: app-google.html and app-apple.html are the same page (bar which
+    // Firebase provider they call), the return handoff is the same three values under a
+    // provider-specific fragment key (dg_google / dg_apple, deep-link.js), and the credential
+    // Firebase wants back differs only in shape (a bare Google token string vs. an Apple
+    // {idToken} object). App Review 4.8 is why Apple exists here at all: a third-party sign-in
+    // (Google) demands Apple as an equally-offered option, not Google hidden away instead — an
+    // earlier version of this file hid the Google button on iOS to dodge that; now Apple is real,
+    // both stay visible everywhere.
+    function wireBrowserSignIn(name, page, credentialFromToken) {
+        var KEY = 'dg.app.' + name + 'SignIn';
         var origin = window.DG_ONLINE_ORIGIN || 'https://dhamma.gift';
         var Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
 
@@ -1018,11 +1018,13 @@
             // only the app knows which it is — a user-agent guess would be a second thing to keep
             // correct on every iOS release.
             var plat = (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform()) || 'web';
-            return origin + '/login/app-google.html?state=' + state +
+            return origin + '/login/' + page + '?state=' + state +
                 '&pkg=' + encodeURIComponent(pkg || 'gift.dhamma.mobile') + '&lang=' + (ru ? 'ru' : 'en') +
                 '&plat=' + encodeURIComponent(plat);
         }
-        window.dgSignInUrl = function (state, pkg) { return signInUrl(state || 'a1b2c3d4e5f60718293a4b5c6d7e8f90', pkg); };
+        if (name === 'google') {
+            window.dgSignInUrl = function (state, pkg) { return signInUrl(state || 'a1b2c3d4e5f60718293a4b5c6d7e8f90', pkg); };
+        }
 
         function start() {
             var bytes = new Uint8Array(16);
@@ -1036,38 +1038,46 @@
                 openExternal(signInUrl(state, i.id));
             });
         }
-        // settings.js defines its own syncLoginGoogle, and on some pages it loads after this file.
+        // settings.js defines its own syncLoginGoogle/syncLoginApple, and on some pages it loads
+        // after this file.
+        var prop = 'syncLogin' + name.charAt(0).toUpperCase() + name.slice(1);
         try {
-            Object.defineProperty(window, 'syncLoginGoogle', { configurable: true, get: function () { return start; }, set: function () {} });
-        } catch (e) { window.syncLoginGoogle = start; }
+            Object.defineProperty(window, prop, { configurable: true, get: function () { return start; }, set: function () {} });
+        } catch (e) { window[prop] = start; }
 
         function finish() {
-            var m = /^#dg_google=([^&]+)&state=([a-f0-9]+)$/.exec(location.hash);
+            var re = new RegExp('^#dg_' + name + '=([^&]+)&state=([a-f0-9]+)$');
+            var m = re.exec(location.hash);
             if (!m) return;
             history.replaceState(history.state, '', location.pathname + location.search);
             var saved = null;
             try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); localStorage.removeItem(KEY); } catch (e) { /* unreadable: rejected below */ }
             if (!saved || saved.state !== m[2] || Date.now() - saved.at > 15 * 60 * 1000) {
-                console.error('[dg-google] sign-in reply does not match a request from this app; ignored');
+                console.error('[dg-' + name + '] sign-in reply does not match a request from this app; ignored');
                 return;
             }
             window.pendingOverwrite = saved.overwrite === true;
             Promise.resolve(typeof window.initFirebase === 'function' && window.initFirebase()).then(function () {
-                return firebase.auth().signInWithCredential(firebase.auth.GoogleAuthProvider.credential(decodeURIComponent(m[1])));
+                return firebase.auth().signInWithCredential(credentialFromToken(decodeURIComponent(m[1])));
             }).then(function () {
                 localStorage.setItem('dg_cloud_session', 'true');
             }).catch(function (e) {
-                console.error('[dg-google] Firebase sign-in with the Google token failed:', e && (e.code || e.message));
+                console.error('[dg-' + name + '] Firebase sign-in with the ' + name + ' token failed:', e && (e.code || e.message));
                 if (typeof window.showBubbleNotification === 'function') {
                     var ru = /^\/ru\//.test(location.pathname);
-                    window.showBubbleNotification(ru ? 'Не получилось войти через Google. Попробуйте ещё раз' : 'Google sign-in failed. Please try again', 6000, 'error');
+                    var label = name === 'google' ? 'Google' : 'Apple';
+                    window.showBubbleNotification(
+                        ru ? 'Не получилось войти через ' + label + '. Попробуйте ещё раз' : label + ' sign-in failed. Please try again',
+                        6000, 'error');
                 }
             });
         }
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', finish);
         else finish();
         window.addEventListener('hashchange', finish);
-    })();
+    }
+    wireBrowserSignIn('google', 'app-google.html', function (token) { return firebase.auth.GoogleAuthProvider.credential(token); });
+    wireBrowserSignIn('apple', 'app-apple.html', function (token) { return new firebase.auth.OAuthProvider('apple.com').credential({ idToken: token }); });
 
     var CapApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
     if (CapApp) {

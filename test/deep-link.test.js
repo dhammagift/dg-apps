@@ -30,6 +30,7 @@ const CASES = [
     ['search: only the site\'s own query keys survive', 'dhammagift://kacchapa?evil=1&fast=1', '/?q=kacchapa&fast=1'],
     ['auth: the sign-in return', 'dhammagift://auth?id_token=tok&state=abc123', '/login/index.html#dg_google=tok&state=abc123'],
     ['auth: the Russian login page', 'dhammagift://auth?id_token=tok&state=abc123&lang=ru', '/ru/login/index.html#dg_google=tok&state=abc123'],
+    ['auth: Apple sign-in return', 'dhammagift://auth?provider=apple&id_token=tok&state=abc123', '/login/index.html#dg_apple=tok&state=abc123'],
     // Refusals. Each one would otherwise put the reader somewhere meaningless.
     // Universal Links / verified App Links: the same mapping through an ordinary site URL.
     ['universal link: a text path', 'https://dhamma.gift/mn1', '/?_nativeRoute=%2Fmn1'],

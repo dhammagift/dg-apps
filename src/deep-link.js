@@ -145,7 +145,12 @@
             // with a partial fragment is how you get a spinner that never resolves.
             if (!token || !state) return null;
             var page = params.get('lang') === 'ru' ? 'ru/login/index.html' : 'login/index.html';
-            return '/' + page + '#dg_google=' + encodeURIComponent(token) + '&state=' + encodeURIComponent(state);
+            // provider distinguishes which OAuthProvider native-bridge.js's finish() builds the
+            // Firebase credential from (app-google.html never sends this param, so its absence
+            // means Google — the fragment key it always used, kept as-is rather than renamed, so a
+            // login return already in flight when this shipped still resolves).
+            var frag = params.get('provider') === 'apple' ? 'dg_apple' : 'dg_google';
+            return '/' + page + '#' + frag + '=' + encodeURIComponent(token) + '&state=' + encodeURIComponent(state);
         }
 
         if (host === 'route') {

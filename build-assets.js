@@ -58,7 +58,11 @@ const ASSETS = [
     { url: '/assets/css/bootstrap.5.3.1.min.css', sources: [l('css/bootstrap.5.3.1.min.css')] },
     { url: '/assets/css/langswitch.css', sources: [f('public/overrides/css/langswitch.css')] },
     { url: '/assets/css/paliLookup.css', sources: [l('css/paliLookup.css')] },
-    { url: '/assets/css/extrastyles.css', sources: [l('css/extrastyles.css')] },
+    // Override first, legacy second — the site's own precedence (public/overrides before
+    // siteroot/assets). The override @imports quick-modal.css: the quick window's redesign and its
+    // Subscriptions tab (dg-node ТЗ §7-8) would otherwise run on the legacy styles in the app.
+    { url: '/assets/css/extrastyles.css', sources: [f('public/overrides/css/extrastyles.css'), l('css/extrastyles.css')] },
+    { url: '/assets/css/quick-modal.css', sources: [f('public/overrides/css/quick-modal.css')] },
     { url: '/assets/js/fontawesome-local.js', sources: [f('public/overrides/js/fontawesome-local.js')] },
     { url: '/assets/css/table.css', sources: [l('css/table.css')] },
     { url: '/nodejs/res/css/home.css', sources: [f('search/css/home.css')] },
@@ -88,6 +92,10 @@ const ASSETS = [
     // on first Quick Menu open — was missing here entirely, so that fetch 404'd and History/
     // Favorites/Quick search never rendered offline (the stub silently swallows script.onerror).
     { url: '/assets/js/quickModal.js', sources: [f('public/overrides/js/quickModal.js')] },
+    // Uposatha engine, loaded on demand by the subscription form and by the app's reminder
+    // scheduler (home.js scheduleAppReminders) for the "Uposatha days" choice.
+    { url: '/assets/js/vendor/astronomy.browser.min.js', sources: [f('public/overrides/js/vendor/astronomy.browser.min.js')] },
+    { url: '/assets/js/uposatha-core.js', sources: [f('public/overrides/js/uposatha-core.js')] },
     // Find-on-page (Ctrl+F replacement, search/index.html's own tags). Added to the site after
     // this list was written, so the app shipped a page whose two <script> tags resolved to
     // index.html — the "Unexpected identifier" class of failure below is exactly what that looks
@@ -498,7 +506,8 @@ const ASSET_LOOSE_FILES = [
     // is absent — so the list cannot silently fall behind, and the APK does not carry a picture
     // library for pages nobody opens.
     'img/dictSettings.png', 'img/buttons/pwa-cta.png', 'img/multi-tool-512x512.png',
-    'img/find-dhamma-512x512.png', 'img/albumart512.png', 'img/favicon-sc.png',
+    'img/find-dhamma-512x512.png', 'img/albumart512.png', 'img/dgsanhkalogo_sqare.png', // badge of the reading-subscription notifications (home.js)
+    'img/favicon-sc.png',
     'img/gray-white.png', 'img/icon-192x192.png',
     // Found by the app's error reports, not by verifyReferencedAssets (legacy pages it does not parse).
     'img/dictSettingsRu.jpg', 'img/dhammafindlogo.webp',

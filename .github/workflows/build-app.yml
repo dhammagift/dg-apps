@@ -61,11 +61,11 @@ on:
         required: false
         type: string
       release:
-        description: 'Which store gets this build. Play goes to the INTERNAL track (testers only; production still needs a promote in the console) and covers BOTH Android apps — the reader (gift.dhamma.twa) and the dictionary (gift.dhamma.pali), each on its own package. Default none: a manual run is usually about trying something, not about shipping, and an unasked-for build in App Store Connect or a burnt versionCode is the cost of getting that wrong. A tag always releases to both. uposatha = ONLY the Uposatha app (gift.dhamma.uposatha) to the internal track of Play; it does not go out with play, both or a tag. uposatha-ios = ONLY the Uposatha app for iOS to TestFlight (needs its App Store Connect record: bundle id gift.dhamma.uposatha). dict = ONLY the dictionary to the internal track of Play (the reader ships separately with play/both). dict-ios = ONLY the dictionary for iOS to TestFlight.'
+        description: 'Which store gets this build. Play goes to the INTERNAL track (testers only; production still needs a promote in the console) and covers BOTH Android apps — the reader (gift.dhamma.twa) and the dictionary (gift.dhamma.pali), each on its own package. Default none: a manual run is usually about trying something, not about shipping, and an unasked-for build in App Store Connect or a burnt versionCode is the cost of getting that wrong. A tag always releases to both. uposatha = ONLY the Uposatha app (gift.dhamma.uposatha) to the internal track of Play; it does not go out with play, both or a tag. uposatha-ios = ONLY the Uposatha app for iOS to TestFlight (needs its App Store Connect record: bundle id gift.dhamma.uposatha). dict = ONLY the dictionary to the internal track of Play (the reader ships separately with play/both). dict-ios = ONLY the dictionary for iOS to TestFlight. reader = ONLY the reader (gift.dhamma.twa) to Play, decoupled from play/both (which also ship the dictionary) — for a reader-only change that does not warrant re-shipping the dictionary too.'
         required: false
         type: choice
         default: none
-        options: [none, play, testflight, both, uposatha, uposatha-ios, dict, dict-ios]
+        options: [none, play, testflight, both, uposatha, uposatha-ios, dict, dict-ios, reader]
       ios_checks:
         description: 'Also run the three iOS check jobs (simulator build, UI checks, screenshots). Off by default: a manual run is usually about the Android half, and those three only add ~17 minutes of waiting after it. A tag always runs them.'
         required: false
@@ -766,7 +766,7 @@ jobs:
   android-release:
     name: Android release (Play internal track)
     needs: build
-    if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'play' || inputs.release == 'both')) || startsWith(github.ref, 'refs/tags/')
+    if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'play' || inputs.release == 'both' || inputs.release == 'reader')) || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - name: Is the service account there?

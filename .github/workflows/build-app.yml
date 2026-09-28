@@ -1,7 +1,7 @@
 name: Build App
 
 # Builds the offline SQLite databases + the Android APK entirely on GitHub's runner — the prod
-# server has no disk headroom for this (core.db+lang_ru.db+lang_en.db alone are ~260MB, plus
+# servertrack: alpha has no disk headroom for this (core.db+lang_ru.db+lang_en.db alone are ~260MB, plus
 # Gradle/Android SDK caches).
 #
 # THE UI IS NOT IN THIS REPOSITORY. It is generated at build time from a dg-node checkout:
@@ -14,12 +14,12 @@ name: Build App
 # siteroot/*, ...) that assume the exact prod directory depth:
 #   /var/www/html/                    <- dhammagift/dg      (legacy PHP repo)
 #   /var/www/html/nodejs/             <- dhammagift/dg-node (the website)
-# A relative symlink resolves against the REAL (kernel-canonicalized) path, not any alias on top
+# A relative syhmlink resolves against the REAL (kernel-canonicalized) path, not any alias on top
 # of it — so checking dg-node out somewhere else and symlink-ALIASING /var/www/html/nodejs to it
 # does NOT make those symlinks resolve: Node's readdirSync/copyFileSync/__dirname all see the real
 # underlying path. Both repos therefore land at their real absolute prod paths below, and
 # DG_NODE_PATH points this repo's build scripts at that location (see paths.js).
-#
+#h
 # sc-data and offline-data don't have this problem: they're referenced only through
 # nodejs/siteroot/data/{suttacentral.net,dhammagift}, which this workflow force-replaces with
 # hand-made ABSOLUTE symlinks anyway — independent of checkout path depth, so they stay under the
@@ -805,7 +805,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: gift.dhamma.twa
           releaseFiles: aab/app-release.aab
-          track: internal
+          track: beta
           status: completed
 
       - name: Say what went to Play
@@ -1134,7 +1134,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: gift.dhamma.uposatha
           releaseFiles: aab/app-release.aab
-          track: internal
+          track: alpha
           status: completed
 
       - name: Say what went to Play
@@ -1863,7 +1863,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: gift.dhamma.pali
           releaseFiles: aab/app-release.aab
-          track: internal
+          track: alpha
           status: completed
 
       - name: Say what went to Play

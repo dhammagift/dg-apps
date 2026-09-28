@@ -264,6 +264,17 @@
     // script reads window.location (that runs on DOMContentLoaded, this runs at parse time).
     // Lives here rather than in dg-node's app.js because it is native-only glue — on the site
     // nothing ever produces this parameter.
+    // Set right before a reload that a live shortcut/deep-link tap causes (followLiveDeepLinks
+    // below), and cleared at the end of this function once that reload's own parse-time handling
+    // is done — declared up here, not down by its other use, so both can see it. It exists only to
+    // survive Capacitor's own known redelivery of the SAME appUrlOpen event to the page the FIRST
+    // delivery just opened (see followLiveDeepLinks) — a moment, not the rest of the session. Left
+    // to linger for the whole session (as it used to, never cleared), a SECOND, perfectly ordinary
+    // tap of the identical shortcut later on matched the same stamp and was silently swallowed —
+    // "шорткаты работают через раз" (dg-node #51): the first tap after launch worked, every later
+    // tap of that same one quietly did nothing.
+    var HANDLED_KEY = 'dg.deeplink.handled';
+
     (function rewriteNativeShortcutRoute() {
         var params = new URLSearchParams(location.search);
         var route = params.get('_nativeRoute');
@@ -302,6 +313,9 @@
             return;
         }
         history.replaceState(null, '', route);
+        // Past the one moment a redelivered event could land on THIS same reload (see HANDLED_KEY
+        // above) — safe now to let the next distinct tap of the same shortcut through.
+        try { sessionStorage.removeItem(HANDLED_KEY); } catch (e) { /* private mode */ }
     })();
 
     // ---------------------------------------------------------------------------------------
@@ -329,8 +343,6 @@
         // navigating somewhere meaningless.
         if (target) location.replace(target);
     })();
-
-    var HANDLED_KEY = 'dg.deeplink.handled';
 
     // The offline layer's progress card is driven by dg:dl-progress events, and while
     // DgDownloadPlugin does the transfer and the unpacking (src/platform.js's prepareArchive) those
@@ -384,7 +396,12 @@
                 if (sessionStorage.getItem(HANDLED_KEY) === stamp) return;
                 sessionStorage.setItem(HANDLED_KEY, stamp);
             } catch (e) { /* private mode: worst case one extra navigation */ }
-            location.replace(target);
+            // location.href, not location.replace(): .replace() also REPLACES the current history
+            // entry, so wherever the reader was reading was simply gone, with nothing a back-swipe
+            // could return to (dg-node #51: "не работает назад"). A real navigation still reloads
+            // the document (rewriteNativeShortcutRoute above then runs on it, same as a cold
+            // start), but pushes a new entry instead of erasing the one before it.
+            location.href = target;
         });
     })();
 

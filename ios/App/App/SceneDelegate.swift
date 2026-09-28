@@ -8,9 +8,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        // DgBridgeViewController, not CAPBridgeViewController: the app's own subclass, which is
-        // where its in-target plugins get registered (see DgBridgeViewController.swift).
-        window?.rootViewController = DgBridgeViewController()
+        // DgRootViewController, not DgBridgeViewController directly: it pins the bridge's webview to
+        // view.safeAreaLayoutGuide, so the webview's own frame never reaches under the status bar or home
+        // indicator (see DgBridgeViewController.swift's comment on DgRootViewController for why).
+        window?.rootViewController = DgRootViewController()
         window?.makeKeyAndVisible()
 
         // A quick action that LAUNCHED the app: the bridge and its plugins do not exist yet, so

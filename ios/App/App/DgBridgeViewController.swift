@@ -2,6 +2,49 @@ import UIKit
 import WebKit
 import Capacitor
 
+// The root: the page sits inside the safe area (under the status bar and above the home indicator), on a
+// fixed dark background — issue #15/#51's own words: the strip behind both bars is the site's own dark navbar
+// band, ALWAYS, in both themes, not something that follows the page's current theme.
+//
+// This used to be done differently: capacitor.config.json's ios.contentInset:"always" (plus a matching
+// ios.backgroundColor), which insets the WKWebView's SCROLL CONTENT but leaves its FRAME spanning the whole
+// screen, status bar included — so the status bar is just the native OS chrome drawn transparently over
+// whatever the page has scrolled to that instant. Capacitor's own contentInset handling doesn't touch
+// position:fixed elements at all (they're laid out against the full, uninset viewport), so a fixed-position
+// panel (dg-node's #dg-drawer, dg-node #51 "мультитул") or the page's own top content can end up rendered
+// AT true screen y=0 — directly under/behind the status bar — independent of scroll position, which is
+// exactly the reported "иконки мультитула наезжают на статус-бар" and the settings sheet's sideways drift
+// (dg-node bc5a3e7 patched the drift's own symptom; this is that bug's actual native root cause).
+//
+// Uposatha and Dict hit no version of this bug because they never used contentInset — both already pin their
+// bridge's view to safeAreaLayoutGuide (see their own DgApp.swift), so their WKWebView's FRAME itself never
+// extends past the safe area: nothing in the page ever renders under either bar, fixed or not, scrolled or
+// not. Same fix here.
+final class DgRootViewController: UIViewController {
+    private let bridgeController = DgBridgeViewController()
+
+    // UIKit asks the WINDOW'S rootViewController for this — this VC, not its child bridgeController, now
+    // that the child's own view no longer spans the full screen (it's confined to the safe area above). A
+    // status-bar-style override left on DgBridgeViewController alone would simply never be consulted.
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = UIColor(red: 0x2E / 255, green: 0x3E / 255, blue: 0x50 / 255, alpha: 1)
+        addChild(bridgeController)
+        bridgeController.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(bridgeController.view)
+        let guide = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            bridgeController.view.topAnchor.constraint(equalTo: guide.topAnchor),
+            bridgeController.view.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
+            bridgeController.view.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
+            bridgeController.view.trailingAnchor.constraint(equalTo: guide.trailingAnchor)
+        ])
+        bridgeController.didMove(toParent: self)
+    }
+}
+
 // The app's own bridge view controller: CAPBridgeViewController plus the plugins that live in this
 // target rather than in an npm package.
 //
@@ -21,14 +64,6 @@ import Capacitor
 // cleanup hook has to be a deinit — an @objc override of it fails the build with "does not override
 // any method from its superclass".
 class DgBridgeViewController: CAPBridgeViewController {
-
-    // The status-bar strip is the site's own dark navbar band, ALWAYS (issue #15's own words — see
-    // src/native-bridge.js: "there is nothing for this file to switch"; Android fixes this the same way,
-    // MainActivity.applyStatusBarIcons(), setAppearanceLightStatusBars(false)). Left to iOS's own default
-    // (UIViewControllerBasedStatusBarAppearance = true, Info.plist), a view controller with no opinion here
-    // picks its icon colour from context that changes — the reported "sometimes one colour, sometimes the
-    // other". Fixed: light (white) icons, unconditionally, matching the dark band they sit on.
-    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 
     // Capacitor registers its asset handler for capacitor://localhost on the configuration this
     // returns, after it returns — the one moment /dg-sql can be put on the same origin, which is

@@ -63,6 +63,9 @@ const ASSETS = [
     // Subscriptions tab (dg-node ТЗ §7-8) would otherwise run on the legacy styles in the app.
     { url: '/assets/css/extrastyles.css', sources: [f('public/overrides/css/extrastyles.css'), l('css/extrastyles.css')] },
     { url: '/assets/css/quick-modal.css', sources: [f('public/overrides/css/quick-modal.css')] },
+    // Home header logo (dg-node 38babad switched it to a WebP that lives only in dg-node's
+    // overrides, not in the legacy img tree the app copies — the header showed a broken image).
+    { url: '/assets/img/dgsanhkalogo-sm.webp', sources: [f('public/overrides/img/dgsanhkalogo-sm.webp')] },
     { url: '/assets/js/fontawesome-local.js', sources: [f('public/overrides/js/fontawesome-local.js')] },
     { url: '/assets/css/table.css', sources: [l('css/table.css')] },
     { url: '/nodejs/res/css/home.css', sources: [f('search/css/home.css')] },

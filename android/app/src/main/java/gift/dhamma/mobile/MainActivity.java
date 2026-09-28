@@ -89,6 +89,21 @@ public class MainActivity extends BridgeActivity {
         controller.setAppearanceLightStatusBars(false);
     }
 
+    // And on every return: a system dialog (the notification permission prompt, a share sheet)
+    // hands the window back with the icons the plugin or the system last chose (owner, 2026-09-28:
+    // dark icons on the dark band again after the reminders build).
+    @Override
+    public void onResume() {
+        super.onResume();
+        applyStatusBarIcons();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) applyStatusBarIcons();
+    }
+
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);

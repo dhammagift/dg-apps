@@ -2,5 +2,10 @@
   "appId": "gift.dhamma.mobile",
   "appName": "Dhamma.gift",
   "webDir": "www",
-  "ios": {}
+  "ios": {},
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK"
+    }
+  }
 }

@@ -239,6 +239,14 @@
       try { localStorage.setItem(RATE_FLAG, '1'); } catch (e) { /* private mode: the prompt asks later */ }
     });
     rate.appendChild(btn);
+    // dg-apps issue #38: only the emoji opened the store, not the title/description beside them.
+    // A tap on the emoji still goes through btn's own listener and real <a> navigation above; this
+    // only forwards a tap elsewhere in the row to that same button — one path to the store.
+    rate.style.cursor = 'pointer';
+    rate.addEventListener('click', function (e) {
+      if (btn.contains(e.target)) return;
+      btn.click();
+    });
     out.push(rate);
 
     // Filled from the value MainActivity prepends to this script (versionName + versionCode), so

@@ -1412,6 +1412,16 @@
             // navigation is what opens the store.
             try { localStorage.setItem(RATE_FLAG, '1'); } catch (e) { /* private mode: the prompt asks later */ }
         });
+        // dg-apps issue #38: only the emoji opened the store, not the title/description beside
+        // them — a small, easy-to-miss target for what is meant to be a one-tap row. A tap on the
+        // emoji itself still goes through btn's own listener above (and its real <a> navigation);
+        // this only forwards a tap elsewhere in the row to that same button, so there is exactly
+        // one path to the store, not two competing ones.
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function (e) {
+            if (btn.contains(e.target)) return;
+            btn.click();
+        });
     }
 
     function onReady() { fillVersionRow(); wireShortcutsToggle(); wireRateUsRow(); maybeAskForRating(); }

@@ -1428,7 +1428,19 @@
         });
     }
 
-    function onReady() { fillVersionRow(); wireShortcutsToggle(); wireRateUsRow(); maybeAskForRating(); }
+    // Privacy policy row (injected by build-assets.js above the version): the site's one policy
+    // page for every app, opened in the in-app browser tab.
+    function wirePrivacyRow() {
+        var row = document.getElementById('dgPrivacyRow');
+        if (!row) return;
+        var ru = isRu();
+        document.getElementById('dgPrivacyTitle').textContent = ru ? 'Политика конфиденциальности' : 'Privacy Policy';
+        row.addEventListener('click', function () {
+            openExternal((window.DG_ONLINE_ORIGIN || 'https://dhamma.gift') + (isRu() ? '/ru' : '') + '/docs/policies');
+        });
+    }
+
+    function onReady() { fillVersionRow(); wireShortcutsToggle(); wireRateUsRow(); wirePrivacyRow(); maybeAskForRating(); }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', onReady);
     else onReady();
 })();

@@ -61,6 +61,7 @@
       shortcuts: 'Recent words in app shortcuts',
       version: 'App version',
       rate: 'Rate Us',
+      privacy: 'Privacy Policy',
       rateNote: 'Open the store page and leave a review.'
     },
     ru: {
@@ -68,6 +69,7 @@
       shortcuts: 'Недавние слова в ярлыках',
       version: 'Версия приложения',
       rate: 'Оценить приложение',
+      privacy: 'Политика конфиденциальности',
       rateNote: 'Открыть страницу в магазине и оставить отзыв.'
     }
   };
@@ -248,6 +250,19 @@
       btn.click();
     });
     out.push(rate);
+
+    // Privacy policy above the version (owner, 2026-09-28: in every app's settings; the stores
+    // want it reachable in-app). The site's policies page covers all the apps.
+    var pol = row('dg-privacy-row', t.privacy, '');
+    pol.style.cursor = 'pointer';
+    pol.addEventListener('click', function () {
+      // Browser plugin (an in-app browser tab over the dictionary): dhamma.gift is in this app's
+      // allowNavigation, so a plain link would load the policy in place of the dictionary.
+      var url = 'https://dhamma.gift' + (isRu() ? '/ru' : '') + '/docs/policies';
+      var B = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+      if (B) B.open({ url: url }); else window.open(url, '_blank', 'noopener');
+    });
+    out.push(pol);
 
     // Filled from the value MainActivity prepends to this script (versionName + versionCode), so
     // the row never depends on the site knowing anything about the app. Last row on purpose.

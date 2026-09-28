@@ -421,6 +421,24 @@ function injectRateUsRow() {
     fs.writeFileSync(dest, html, 'utf8');
 }
 
+// Privacy policy, between Rate Us and the version (owner, 2026-09-28: in every app's settings; the
+// stores want it reachable in-app, and the site footer that carried it is hidden in the app).
+// native-bridge.js retitles it for Russian and opens the site's /docs/policies in the in-app browser.
+function injectPrivacyRow() {
+    const dest = path.join(WWW, 'settings', 'index.html');
+    let html = fs.readFileSync(dest, 'utf8');
+    const anchor = `      <div class="row" id="dgAppVersionRow" style="cursor:pointer">`;
+    const row = `      <div class="row" id="dgPrivacyRow" style="cursor:pointer">
+        <div><p class="row-title" id="dgPrivacyTitle">Privacy Policy</p></div>
+      </div>
+`;
+    if (!html.includes('id="dgPrivacyRow"')) {
+        if (!html.includes(anchor)) throw new Error('injectPrivacyRow: the app-version row is not in settings/index.html (injectAppVersionRow must run first).');
+        html = html.replace(anchor, row + anchor);
+    }
+    fs.writeFileSync(dest, html, 'utf8');
+}
+
 // dg-docs (Help/Docs portal): deliberately NOT bundled. First cut baked the ~23MB Docusaurus
 // build (en+ru) into the APK, but owner (weighing APK size vs. offline benefit): docs are read
 // occasionally, not offline-critical the way search/reader are — the DB download at first launch
@@ -959,6 +977,7 @@ function main() {
     injectOfflineLibraryRow();
     injectAppVersionRow();
     injectRateUsRow();
+    injectPrivacyRow();
     verifyPageAssets();
     verifyReferencedAssets();
     verifyTocSnapshot();

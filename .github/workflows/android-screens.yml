@@ -14,6 +14,16 @@ on:
         description: 'APK artifact name in that run (dg-app-full-apk-release-<run number>)'
         required: true
         type: string
+      api_level:
+        description: 'Emulator API level (the newer the image, the newer its WebView)'
+        required: false
+        type: string
+        default: '36'
+      target:
+        description: 'System image: google_apis or google_apis_playstore'
+        required: false
+        type: string
+        default: 'google_apis'
 
 permissions:
   actions: read
@@ -43,8 +53,8 @@ jobs:
       - name: Emulator and screenshots
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
-          target: google_apis
+          api-level: ${{ inputs.api_level }}
+          target: ${{ inputs.target }}
           arch: x86_64
           profile: pixel_7
           disable-animations: true

@@ -22,7 +22,10 @@ snapshot({
         ...['pubbanha', 'majjhanhika', 'sayanha', 'pathama', 'majjhima', 'pacchima', 'vikala'].map((n) => `/assets/audio/parts/${n}.mp3`)],
     skip: (p, type) => p.startsWith('/api/') || p === '/sw.js' || (type !== 'document' && p === '/uposatha-calendar'),   // API answers, the site's service worker, a script asking for the page again
     async interact(page) {
-        for (const tab of ['list', 'cal', 'parts', 'home']) {
+        // 'keys' (Suttas) was missing here: its art (.keys-art, loading="lazy") never got a
+        // chance to load during the crawl, so the crawler never saw the request and the image
+        // never made it into the offline bundle — present on the live site, missing in the apps.
+        for (const tab of ['list', 'cal', 'parts', 'keys', 'home']) {
             await page.evaluate((t) => { const b = document.querySelector(`#appnav [data-tab="${t}"]`); if (b) b.click(); }, tab);
             await page.waitForTimeout(700);
         }

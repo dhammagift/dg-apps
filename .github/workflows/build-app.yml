@@ -1338,6 +1338,18 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
+          echo "DG_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
+      # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
+      # CI runs left (only "Created via API" ones, never a person's own); the job's own is revoked
+      # after the export below.
+      - name: Free the development-certificate slots older CI runs used
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" prune
 
       - name: Sync Capacitor into uposatha/ios
         if: steps.asc.outputs.have == 'yes'
@@ -1396,6 +1408,13 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             2>&1 | tee ios-export.log | tail -30
           grep -q "Upload succeeded" ios-export.log
+
+      - name: Revoke this job's development certificate
+        if: always() && steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup "$DG_JOB_START"
 
       - name: Upload the logs on failure
         if: failure() && steps.asc.outputs.have == 'yes'
@@ -1475,6 +1494,18 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
+          echo "DG_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
+      # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
+      # CI runs left (only "Created via API" ones, never a person's own); the job's own is revoked
+      # after the export below.
+      - name: Free the development-certificate slots older CI runs used
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" prune
 
       - name: Sync Capacitor into dict/ios
         if: steps.asc.outputs.have == 'yes'
@@ -1533,6 +1564,13 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             2>&1 | tee ios-export.log | tail -30
           grep -q "Upload succeeded" ios-export.log
+
+      - name: Revoke this job's development certificate
+        if: always() && steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup "$DG_JOB_START"
 
       - name: Upload the logs on failure
         if: failure() && steps.asc.outputs.have == 'yes'
@@ -2408,6 +2446,18 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
+          echo "DG_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
+      # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
+      # CI runs left (only "Created via API" ones, never a person's own); the job's own is revoked
+      # after the export below.
+      - name: Free the development-certificate slots older CI runs used
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" prune
 
       - name: Sync Capacitor into ios/
         if: steps.asc.outputs.have == 'yes'
@@ -2502,6 +2552,13 @@ jobs:
           # destination=upload sends the build straight from the export and writes no IPA to disk
           # (run 170), so the log line is the only proof that something reached App Store Connect.
           grep -q "Upload succeeded" ios-export.log
+
+      - name: Revoke this job's development certificate
+        if: always() && steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup "$DG_JOB_START"
 
       - name: Upload the archive log on failure
         if: failure() && steps.asc.outputs.have == 'yes'

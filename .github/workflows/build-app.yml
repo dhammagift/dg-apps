@@ -1338,7 +1338,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
-          echo "DG_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
 
       # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
       # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
@@ -1414,7 +1413,7 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup "$DG_JOB_START"
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup
 
       - name: Upload the logs on failure
         if: failure() && steps.asc.outputs.have == 'yes'
@@ -1494,7 +1493,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
-          echo "DG_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
 
       # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
       # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
@@ -1570,7 +1568,7 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup "$DG_JOB_START"
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup
 
       - name: Upload the logs on failure
         if: failure() && steps.asc.outputs.have == 'yes'
@@ -2446,7 +2444,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
-          echo "DG_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
 
       # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
       # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
@@ -2558,7 +2555,7 @@ jobs:
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup "$DG_JOB_START"
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup
 
       - name: Upload the archive log on failure
         if: failure() && steps.asc.outputs.have == 'yes'

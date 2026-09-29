@@ -11,10 +11,13 @@
 // Only certificates Xcode made through the API key are touched ("Created via API" in the name) —
 // a person's own development certificate from their Mac never is.
 //
-//   node tools/asc-dev-certs.js prune             before the archive: revoke CI certificates older
-//                                                 than 3 h (older runs; a parallel job keeps its own)
-//   node tools/asc-dev-certs.js cleanup <epoch>   after the export: revoke CI certificates created
-//                                                 since <epoch> (seconds) — this job's own
+//   node tools/asc-dev-certs.js prune     before the archive: revoke CI certificates older than 3 h
+//                                         (older runs; a parallel job keeps its own) and note the
+//                                         ones left in $ASC_KEY_PATH.seen
+//   node tools/asc-dev-certs.js cleanup   after the export: revoke CI certificates that were not
+//                                         there before — this job's own. (By id, not by date: Apple
+//                                         only gives the expiry, and creation = expiry − 1 year was
+//                                         ~10 min off, so run 383's own certificate survived.)
 //
 // Env: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH (the .p8). Never fails the job: a problem here is
 // printed as a warning and the archive either works anyway or fails with Apple's own message.
@@ -37,8 +40,11 @@ function token() {
 }
 
 async function main() {
-    const [mode, since] = process.argv.slice(2);
-    if (mode !== 'prune' && mode !== 'cleanup') throw new Error('usage: prune | cleanup <epoch-seconds>');
+    const mode = process.argv[2];
+    if (mode !== 'prune' && mode !== 'cleanup') throw new Error('usage: prune | cleanup');
+    const seenFile = process.env.ASC_KEY_PATH + '.seen';
+    const seen = mode === 'cleanup' ? JSON.parse(fs.readFileSync(seenFile, 'utf8')) : [];
+    const left = [];
     const auth = { Authorization: 'Bearer ' + token() };
     const res = await fetch(API + '/certificates?filter[certificateType]=DEVELOPMENT,IOS_DEVELOPMENT&limit=200', { headers: auth });
     if (!res.ok) throw new Error('list: HTTP ' + res.status + ' ' + (await res.text()).slice(0, 300));
@@ -49,12 +55,14 @@ async function main() {
         const label = a.name || a.displayName || '';
         const created = Date.parse(a.expirationDate) - YEAR_MS;
         const fromCi = /created via api/i.test(label + ' ' + (a.displayName || ''));
-        const revoke = fromCi && (mode === 'prune' ? now - created > KEEP_MS : created >= Number(since) * 1000 - 60000);
+        const revoke = fromCi && (mode === 'prune' ? now - created > KEEP_MS : !seen.includes(c.id));
+        if (!revoke) left.push(c.id);
         console.log(`${revoke ? 'revoke' : 'keep  '}  ${label}  (created ~${new Date(created).toISOString().slice(0, 16)})`);
         if (!revoke) continue;
         const del = await fetch(API + '/certificates/' + c.id, { method: 'DELETE', headers: auth });
         if (!del.ok) console.log('   ! HTTP ' + del.status + ' ' + (await del.text()).slice(0, 200));
     }
+    if (mode === 'prune') fs.writeFileSync(seenFile, JSON.stringify(left));
 }
 
 main().catch(e => { console.log('::warning::asc-dev-certs: ' + e.message); });

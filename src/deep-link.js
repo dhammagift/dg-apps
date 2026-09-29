@@ -134,6 +134,13 @@
         }
 
         if (url.protocol !== 'dhammagift:') return null;
+        // A WebView before Chrome ~130 does not split a non-special scheme into host and path:
+        // dhammagift://route/mn8 came out as host '' and path '//route/mn8', and the app searched
+        // for "//route/mn8" (seen on the API 35 emulator's WebView 124). Parse the same text as a
+        // special URL instead: identical host/path/query/hash on every WebView.
+        if (!url.hostname && /^dhammagift:\/\//i.test(raw)) {
+            try { url = new URL('https://' + raw.slice('dhammagift://'.length)); } catch (e) { return null; }
+        }
 
         var host = url.hostname.toLowerCase();
         // A non-ASCII search term arrives percent-encoded in the host position, and URL parsing

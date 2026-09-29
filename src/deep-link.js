@@ -102,6 +102,10 @@
         var colon = q.indexOf(':');
         if (colon !== -1) { base = q.slice(0, colon); seg = q.slice(colon); }
         if (canonId(base)) {
+            // The old links carried the segment in the fragment (/memorize/?q=sn35.239#2.10). Put it
+            // in the path the way the reader always reads it: a fragment did not survive the app's
+            // hand-off to the page, so the text opened at the top (owner: only ?q=sn35.239:2.10 worked).
+            if (!seg && /^#\d[\d.]*$/.test(hash)) { seg = ':' + hash.slice(1); hash = ''; }
             return '/' + encodeURIComponent(base.toLowerCase()) + seg + (rest ? '?' + rest : '') + hash;
         }
         return '/?q=' + encodeURIComponent(q) + (rest ? '&' + rest : '') + hash;

@@ -32,6 +32,8 @@ public class MainActivity extends BridgeActivity {
         // transfer (the page keeps reporting it; this only mirrors it natively).
         registerPlugin(DgProgressPlugin.class);
         registerPlugin(DgTtsPlugin.class);
+        // The strips behind the system bars in the page's colours (dg-apps#40, see DgBarsPlugin).
+        registerPlugin(DgBarsPlugin.class);
         // OS-level search: the offline library's metadata into Android's own AppSearch, so a sutta
         // is findable from the phone's search. Platform API only, so it adds no dependency and no
         // APK weight. Registered only from Android 12 (where android.app.appsearch exists at all)
@@ -84,6 +86,8 @@ public class MainActivity extends BridgeActivity {
      * uiMode change, so onCreate alone would not run again.
      */
     private void applyStatusBarIcons() {
+        // Once the page has reported its colours they decide the strips and the icons (dg-apps#40).
+        if (DgBarsPlugin.apply(this)) return;
         WindowInsetsControllerCompat controller =
                 new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
         controller.setAppearanceLightStatusBars(false);

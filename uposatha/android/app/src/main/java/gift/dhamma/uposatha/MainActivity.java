@@ -66,6 +66,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgSitePlugin.class);
         registerPlugin(DgAlarmPlugin.class);
         registerPlugin(DgIconPlugin.class);
+        // The strips behind the system bars in the page's colours (dg-apps#40, see DgBarsPlugin).
+        registerPlugin(DgBarsPlugin.class);
         // The launch splash is the animated mark (res/drawable/dg_splash_icon.xml, 890 ms). The system takes the
         // splash down the moment the first frame is ready, which on a warm start is before the mark has drawn;
         // holding it for the length of the animation is what lets it play, and costs a cold start nothing it
@@ -90,6 +92,25 @@ public class MainActivity extends BridgeActivity {
             bare.setOverScrollMode(View.OVER_SCROLL_NEVER);
         }
         // Deliberately no handleIntent(getIntent()) here — see handledIntent above.
+    }
+
+    // SystemBars puts the theme's window background back on these occasions — re-paint the page's colours.
+    @Override
+    public void onResume() {
+        super.onResume();
+        DgBarsPlugin.apply(this);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) DgBarsPlugin.apply(this);
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        DgBarsPlugin.apply(this);
     }
 
     @Override

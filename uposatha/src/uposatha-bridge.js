@@ -616,3 +616,42 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })();
+
+// The strips behind the system bars (status bar, gesture bar, the camera cutout in landscape) in the
+// page's own colours instead of a fixed navy frame (owner, dg-apps#40: "борода"). The native DgBars
+// plugin paints them; this reports the colour at the page's top edge and of its body whenever the
+// theme, the view or the scroll position may have changed it. Android only — iOS has no such plugin.
+(function syncSystemBars() {
+  var Cap = window.Capacitor;
+  if (!Cap || !Cap.isPluginAvailable || !Cap.isPluginAvailable('DgBars')) return;
+  var last = '', timer = 0;
+  function hex(c) {
+    var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/.exec(c || '');
+    if (!m || (m[4] !== undefined && +m[4] < 0.5)) return '';   // transparent: look further up
+    return '#' + [m[1], m[2], m[3]].map(function (v) { return ('0' + (Math.round(+v)).toString(16)).slice(-2); }).join('');
+  }
+  function bgOf(el) {
+    for (; el && el.nodeType === 1; el = el.parentElement) { var h = hex(getComputedStyle(el).backgroundColor); if (h) return h; }
+    return '';
+  }
+  function run() {
+    if (!document.body) return;
+    var bottom = bgOf(document.body) || bgOf(document.documentElement) || '#111111';
+    var top = bgOf(document.elementFromPoint(window.innerWidth / 2, 1)) || bottom;
+    if (top + bottom === last) return;
+    last = top + bottom;
+    Cap.Plugins.DgBars.set({ top: top, bottom: bottom }).catch(function () { last = ''; });
+  }
+  function soon() { clearTimeout(timer); timer = setTimeout(run, 150); }
+  function watch() {
+    var mo = new MutationObserver(soon);
+    mo.observe(document.documentElement, { attributes: true });
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] });
+    soon();
+  }
+  if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
+  window.addEventListener('load', soon);
+  window.addEventListener('resize', soon);
+  window.addEventListener('scroll', soon, { passive: true });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { last = ''; soon(); } });
+})();

@@ -1,0 +1,61 @@
+# Screens of a built Dhamma.Gift APK on an Android emulator: what the app really shows, on a real
+# Android WebView, before the owner has to install it (owner, 2026-09-29). Run by hand with the id
+# of a build-app.yml run; the screenshots come back as the artifact android-screens-<run>.
+name: Android screens
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: 'build-app.yml run id whose APK to screenshot'
+        required: true
+        type: string
+      apk_artifact:
+        description: 'APK artifact name in that run (dg-app-full-apk-release-<run number>)'
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  screens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the APK
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.apk_artifact }}
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Emulator and screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots
+
+      - name: Upload the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-screens-${{ github.run_number }}
+          path: shots
+          retention-days: 14
+          if-no-files-found: warn

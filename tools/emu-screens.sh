@@ -1,0 +1,32 @@
+#!/bin/bash
+# Screens of the built Dhamma.Gift APK on an Android emulator (workflow android-screens.yml), so a
+# change can be looked at on a real Android WebView before it reaches the owner or a store
+# (owner, 2026-09-29: "сними себе сам ... проверь, пришли скриншоты").
+# Usage: tools/emu-screens.sh <apk> <out-dir>
+set -u
+APK=$1; OUT=$2; PKG=gift.dhamma.mobile
+mkdir -p "$OUT"
+adb install -r "$APK" || exit 1
+adb shell dumpsys package com.google.android.webview | grep -m1 versionName > "$OUT/webview-version.txt" || true
+shot() { sleep "${2:-6}"; adb exec-out screencap -p > "$OUT/$1.png"; echo "shot $1"; }
+route() { adb shell am start -W -a android.intent.action.VIEW -d "dhammagift://route/$1" "$PKG" > /dev/null; }
+up() { for i in $(seq 1 "$1"); do adb shell input swipe 540 1900 540 400 60; done; }
+
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 0
+for theme in light dark; do
+  if [ "$theme" = dark ]; then adb shell cmd uimode night yes; else adb shell cmd uimode night no; fi
+  adb shell am force-stop "$PKG"
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null
+  shot "$theme-1-home" 15
+  route metta;        shot "$theme-2-results" 10
+  route mn8;          shot "$theme-3-reader" 10
+  up 40;              shot "$theme-4-reader-end" 4
+  route mn8
+  adb shell settings put system user_rotation 1
+  shot "$theme-5-reader-landscape" 8
+  adb shell settings put system user_rotation 0
+  sleep 3
+done
+adb logcat -d -t 400 > "$OUT/logcat.txt" 2>/dev/null || true
+ls -la "$OUT"

@@ -1447,8 +1447,10 @@
 
 // The strips behind the system bars (status bar, gesture bar, the camera cutout in landscape) in the
 // page's own colours instead of a fixed navy frame (owner, dg-apps#40: "борода"). The native DgBars
-// plugin paints them; this reports the colour at the page's top edge and of its body whenever the
-// theme, the view or the scroll position may have changed it. Android only — iOS has no such plugin.
+// plugin paints them; this reports the colour at the page's top edge and of its body when the theme
+// or the view has changed it. Not on scroll, and not for a shade nobody can see (#fff vs #fdfdfd):
+// each report repaints native chrome, and a stream of them made page switches jump (owner, 380).
+// Android only — iOS has no such plugin.
 (function syncSystemBars() {
   var Cap = window.Capacitor;
   if (!Cap || !Cap.isPluginAvailable || !Cap.isPluginAvailable('DgBars')) return;
@@ -1464,10 +1466,18 @@
     return { c: '', el: null };
   }
   function bgOf(el) { return paint(el).c; }
+  // Two colours closer than this read as one: report the body colour, not a near-twin of it.
+  function near(a, b) {
+    if (!a || !b) return false;
+    var d = 0;
+    for (var i = 1; i < 7; i += 2) d += Math.abs(parseInt(a.substr(i, 2), 16) - parseInt(b.substr(i, 2), 16));
+    return d < 24;
+  }
   function run() {
     if (!document.body) return;
     var bottom = bgOf(document.body) || bgOf(document.documentElement) || '#111111';
     var hit = paint(document.elementFromPoint(window.innerWidth / 2, 1)), top = hit.c || bottom;
+    if (near(top, bottom)) { top = bottom; hit.el = null; }
     // A header band (not the page itself): how far down it reaches, so a landscape cutout strip beside it matches.
     var band = hit.el && hit.el !== document.body && hit.el !== document.documentElement && top !== bottom
       ? Math.max(0, Math.round(hit.el.getBoundingClientRect().bottom)) : 0;
@@ -1476,16 +1486,15 @@
     last = key;
     Cap.Plugins.DgBars.set({ top: top, bottom: bottom, band: band }).catch(function () { last = ''; });
   }
-  function soon() { clearTimeout(timer); timer = setTimeout(run, 150); }
+  function soon() { clearTimeout(timer); timer = setTimeout(run, 300); }
   function watch() {
     var mo = new MutationObserver(soon);
-    mo.observe(document.documentElement, { attributes: true });
-    mo.observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-bs-theme', 'data-theme'] });
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     soon();
   }
   if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
   window.addEventListener('load', soon);
   window.addEventListener('resize', soon);
-  window.addEventListener('scroll', soon, { passive: true });
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { last = ''; soon(); } });
 })();

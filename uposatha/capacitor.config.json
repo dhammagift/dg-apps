@@ -3,7 +3,8 @@
   "appName": "Uposatha",
   "webDir": "www",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "hostname": "uposatha.dhamma.gift"
   },
   "android": {
     "backgroundColor": "#111111"

@@ -24,7 +24,7 @@
   // dg_splash_icon.xml), so nothing is drawn here: a web splash on top of it made the app slower to open and
   // the page under it showed a scroll strip.
 
-  var STORE_URL = 'https://play.google.com/store/apps/details?id=gift.dhamma.uposatha';
+  var STORE_URL = IOS ? 'https://apps.apple.com/app/id6816601259' : 'https://play.google.com/store/apps/details?id=gift.dhamma.uposatha';
   // Set when the reader taps Rate Us (the page's own row, #up-rate) or "Rate" in the invitation: whoever
   // has tapped it is never invited again.
   var RATE_FLAG = 'dgRateUsTapped';
@@ -571,6 +571,14 @@
     if (!onCalendar) { if (!IOS) wireBackButton(); return; }
     if (IOS) { wrapIosNotifications(); wireIosShortcutTaps(); }
     else { wireBackButton(); wrapLocalNotifications(); watchStreamRow(); }
+    // #up-rate's href is dg-node's own static markup (uposatha-calendar.html) — the Play Store URL,
+    // because the page has no way to know which platform loaded it. On iOS that sent a reader
+    // straight into a Play Store 404 in Safari (dg-apps#38: "Ссылка в рейтинге ведёт на гугл"). One
+    // native fact the page cannot have on its own; this is the one place that supplies it.
+    if (IOS) {
+        var rateRow = document.getElementById('up-rate');
+        if (rateRow) rateRow.href = STORE_URL;
+    }
     // The page's own Rate Us row: note the tap, so the invitation never asks someone who has been.
     document.addEventListener('click', function (e) {
       var a = e.target && e.target.closest && e.target.closest('#up-rate');

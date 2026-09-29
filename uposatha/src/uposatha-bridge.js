@@ -43,13 +43,9 @@
     return /^ru/i.test(l || navigator.language || '');
   }
 
-  // ---- the page's own splash --------------------------------------------------------------------
-  //
-  // The page's app layer (app-refresh.js) draws a splash of its own once per session when it finds itself in an
-  // app. Android draws the launch splash natively (the animated system splash), so the reader saw two, one
-  // after the other. The page shows its splash only when sessionStorage.upSplash is unset: it is set here,
-  // before the page's scripts run.
-  if (onCalendar) { try { sessionStorage.setItem('upSplash', '1'); } catch (e) { /* no storage: the page draws its own */ } }
+  // The page's own splash (app-refresh.js) no longer auto-fires in the app — Android's native
+  // launch splash (the animated system splash) already covers a cold start, and the page's copy
+  // right after it made every launch show two. Nothing to signal from here any more.
 
   // ---- the bundled page: no service worker, kept up to date -------------------------------------
   var SITE_CONFIG = {

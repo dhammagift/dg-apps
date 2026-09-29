@@ -1,6 +1,6 @@
 name: Play status
 
-# Read-only: prints what is on the internal track of each Play app (version codes and release status).
+# Read-only: prints what is on each track (internal, alpha, beta, production) of each Play app (version codes and release status).
 # It opens a Play "edit", reads the track and throws the edit away: nothing is changed in the console.
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ jobs:
           for pkg in ("gift.dhamma.twa", "gift.dhamma.pali", "gift.dhamma.uposatha"):
               try:
                   edit = svc.edits().insert(packageName=pkg, body={}).execute()
-                  for track in ("internal",):
+                  for track in ("internal", "alpha", "beta", "production"):
                       t = svc.edits().tracks().get(packageName=pkg, editId=edit["id"], track=track).execute()
                       for r in t.get("releases", []):
                           print(pkg, track, "status=%s" % r.get("status"), "versionCodes=%s" % r.get("versionCodes"), "name=%s" % r.get("name"))

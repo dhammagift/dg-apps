@@ -567,8 +567,29 @@
 
   // @rate-prompt (inlined from src/native-bridge.js by uposatha/build.js)
 
+  // The OS status/navigation bar icon style is fixed at native start (capacitor.config.json ->
+  // plugins.SystemBars.style: 'DARK', light icons for a permanently dark background) — it never
+  // followed the page's own theme switch, so picking the light theme left light (near-invisible)
+  // system-bar icons over a now-light page (dg-apps#38: "Тема не меняет хедер и футер ОС"). Synced
+  // here, not in the shared themeswitch.js: the reader's own status-bar strip is deliberately always
+  // dark regardless of theme (issue #15), so this stays Uposatha-only.
+  function syncSystemBars() {
+    var SystemBars = Cap.Plugins && Cap.Plugins.SystemBars;
+    if (!SystemBars) return;
+    var dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    SystemBars.setStyle({ style: dark ? 'DARK' : 'LIGHT' }).catch(function () { /* no-op */ });
+  }
+  function watchSystemBars() {
+    syncSystemBars();
+    var mo = new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) if (muts[i].attributeName === 'data-bs-theme') { syncSystemBars(); return; }
+    });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+  }
+
   function start() {
     if (!onCalendar) { if (!IOS) wireBackButton(); return; }
+    watchSystemBars();
     if (IOS) { wrapIosNotifications(); wireIosShortcutTaps(); }
     else { wireBackButton(); wrapLocalNotifications(); watchStreamRow(); }
     // #up-rate's href is dg-node's own static markup (uposatha-calendar.html) — the Play Store URL,

@@ -6,5 +6,9 @@
          that strip. The colour is the site's own navbar band (#dg-hero-navbar, its 'dg-navy' token), which
          is the same dark strip in both themes, so this is deliberately NOT a themed colour and the
          page theme no longer takes part. -->
-    <color name="dg_navbar">#1b2836</color>
+    <!-- dg-apps#40: the page now runs edge to edge under transparent system bars, so this colour
+         is only what shows before the first paint (and round the page on a WebView too old to pass
+         the insets through, where Capacitor still pads it): the page background, not a navy frame.
+         values-night/colors.xml has the dark one. -->
+    <color name="dg_navbar">#ffffff</color>
 </resources>

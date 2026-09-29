@@ -109,6 +109,7 @@ function verify(html) {
         else if (count > 1) problems.push(`duplicate <script src="${tag}"> (${count}x) — the offline layer would load twice`);
     }
     if (html.includes('serviceWorker.register')) problems.push('service worker registration still present');
+    if (!html.includes('viewport-fit=cover')) problems.push('viewport is not viewport-fit=cover — the page would not reach under the system bars');
     if (/href="\/settings\/"/.test(html)) problems.push('href="/settings/" survived — Settings would open the search page');
     if (html.indexOf('src="/offline/platform.js"') > html.indexOf('<script src="/assets/')) {
         problems.push('offline platform.js is not the first script — the fetch shim would install too late');
@@ -125,6 +126,17 @@ function verify(html) {
 // Pointing at the file directly is what makes it resolve. The site keeps the directory form,
 // which is the nicer URL and works there; only the app build is rewritten.
 const DIRECTORY_LINKS = /href="\/(settings|memo)\/"/g;
+
+// Edge to edge (owner, dg-apps#40: no painted "beard" round the page): viewport-fit=cover lets the
+// page run under the transparent status and gesture bars — Capacitor's SystemBars passes the insets
+// through to it instead of padding the WebView and showing the window background there. The page
+// keeps clear of the bars itself (html.dg-app, dg-node search/css/home.css). App build only: on the
+// site the meta stays as it is.
+const VIEWPORT = '<meta name="viewport" content="width=device-width, initial-scale=1">';
+function coverViewport(html) {
+    if (!html.includes(VIEWPORT)) throw new Error('search/index.html: viewport meta not found — update VIEWPORT in build-page.js');
+    return html.replace(VIEWPORT, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">');
+}
 
 function resolveDirectoryLinks(html) {
     let count = 0;
@@ -150,6 +162,7 @@ function main() {
     html = injectAppScripts(html);
     html = dropServiceWorker(html);
     html = resolveDirectoryLinks(html);
+    html = coverViewport(html);
     verify(html);
 
     fs.mkdirSync(WWW, { recursive: true });

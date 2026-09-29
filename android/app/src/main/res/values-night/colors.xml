@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dark page background (dg-node --dg-page, dark): see values/colors.xml. -->
+    <color name="dg_navbar">#111111</color>
+</resources>

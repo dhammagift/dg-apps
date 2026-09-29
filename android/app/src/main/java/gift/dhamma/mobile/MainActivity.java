@@ -2,14 +2,12 @@ package gift.dhamma.mobile;
 
 import android.app.SearchManager;
 import android.content.Intent;
-import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.WebView;
 
-import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -32,8 +30,6 @@ public class MainActivity extends BridgeActivity {
         // transfer (the page keeps reporting it; this only mirrors it natively).
         registerPlugin(DgProgressPlugin.class);
         registerPlugin(DgTtsPlugin.class);
-        // The strips behind the system bars in the page's colours (dg-apps#40, see DgBarsPlugin).
-        registerPlugin(DgBarsPlugin.class);
         // OS-level search: the offline library's metadata into Android's own AppSearch, so a sutta
         // is findable from the phone's search. Platform API only, so it adds no dependency and no
         // APK weight. Registered only from Android 12 (where android.app.appsearch exists at all)
@@ -66,53 +62,11 @@ public class MainActivity extends BridgeActivity {
             bare.setHorizontalScrollBarEnabled(false);
             bare.setOverScrollMode(View.OVER_SCROLL_NEVER);
         }
-
-        // After the bridge, deliberately: the Capacitor StatusBar plugin applies its style inside
-        // super.onCreate (its load()), and it would undo the theme.
-        applyStatusBarIcons();
     }
 
-    /**
-     * The strip behind the status bar is the site's own dark band in both themes (issue #15), and
-     * the theme says so — {@code windowLightStatusBar=false}, light icons. The Capacitor StatusBar
-     * plugin overrides that anyway: with no "style" in capacitor.config.json it applies DEFAULT,
-     * which takes the icon colour from the SYSTEM night mode (see its own getStyleForTheme()), so a
-     * phone in light mode got dark icons on our dark band and the clock vanished (owner report,
-     * 2026-09-24: "чёрное на тёмном, не видел часов" — while every other app was fine, because
-     * every other app's strip follows the same theme it derives the icons from).
-     *
-     * Re-asserted on configuration changes too: that is exactly the moment the plugin re-applies
-     * DEFAULT, and the manifest's configChanges list means this activity is not recreated for a
-     * uiMode change, so onCreate alone would not run again.
-     */
-    private void applyStatusBarIcons() {
-        // Once the page has reported its colours they decide the strips and the icons (dg-apps#40).
-        if (DgBarsPlugin.apply(this)) return;
-        WindowInsetsControllerCompat controller =
-                new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
-        controller.setAppearanceLightStatusBars(false);
-    }
-
-    // And on every return: a system dialog (the notification permission prompt, a share sheet)
-    // hands the window back with the icons the plugin or the system last chose (owner, 2026-09-28:
-    // dark icons on the dark band again after the reminders build).
-    @Override
-    public void onResume() {
-        super.onResume();
-        applyStatusBarIcons();
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) applyStatusBarIcons();
-    }
-
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        applyStatusBarIcons();
-    }
+    // No status-bar code here any more (dg-apps#40): the page runs edge to edge under transparent
+    // system bars (viewport-fit=cover, build-page.js) and native-bridge.js sets the icon style from
+    // what the page shows at the top. The old fixed dark strip and its forced light icons are gone.
 
     @Override
     public void onNewIntent(Intent intent) {

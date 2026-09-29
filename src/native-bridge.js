@@ -1445,56 +1445,33 @@
     else onReady();
 })();
 
-// The strips behind the system bars (status bar, gesture bar, the camera cutout in landscape) in the
-// page's own colours instead of a fixed navy frame (owner, dg-apps#40: "борода"). The native DgBars
-// plugin paints them; this reports the colour at the page's top edge and of its body when the theme
-// or the view has changed it. Not on scroll, and not for a shade nobody can see (#fff vs #fdfdfd):
-// each report repaints native chrome, and a stream of them made page switches jump (owner, 380).
-// Android only — iOS has no such plugin.
-(function syncSystemBars() {
+// Status and gesture bar icons (dg-apps#40). The page runs edge to edge under transparent bars
+// (viewport-fit=cover, build-page.js), so there is no strip to paint — only the icons have to stay
+// readable on what the page shows there: light on the navy home navbar and on the dark theme, dark
+// on the light theme. Decided by the view and the theme (two classes, no colour sampling), sent only
+// when it changes, and again when the app comes back to the front (a system dialog may have reset it).
+(function syncBarIcons() {
   var Cap = window.Capacitor;
-  if (!Cap || !Cap.isPluginAvailable || !Cap.isPluginAvailable('DgBars')) return;
-  var last = '', timer = 0;
-  function hex(c) {
-    var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/.exec(c || '');
-    if (!m || (m[4] !== undefined && +m[4] < 0.95)) return '';   // see-through (a sheet's scrim too): look further up
-    return '#' + [m[1], m[2], m[3]].map(function (v) { return ('0' + (Math.round(+v)).toString(16)).slice(-2); }).join('');
-  }
-  // The first element up the tree with a solid background: its colour, and the element itself.
-  function paint(el) {
-    for (; el && el.nodeType === 1; el = el.parentElement) { var h = hex(getComputedStyle(el).backgroundColor); if (h) return { c: h, el: el }; }
-    return { c: '', el: null };
-  }
-  function bgOf(el) { return paint(el).c; }
-  // Two colours closer than this read as one: report the body colour, not a near-twin of it.
-  function near(a, b) {
-    if (!a || !b) return false;
-    var d = 0;
-    for (var i = 1; i < 7; i += 2) d += Math.abs(parseInt(a.substr(i, 2), 16) - parseInt(b.substr(i, 2), 16));
-    return d < 24;
-  }
-  function run() {
+  var Bars = Cap && Cap.Plugins && Cap.Plugins.SystemBars;
+  if (!Bars || typeof Bars.setStyle !== 'function') return;
+  var last = '';
+  function run(force) {
     if (!document.body) return;
-    var bottom = bgOf(document.body) || bgOf(document.documentElement) || '#111111';
-    var hit = paint(document.elementFromPoint(window.innerWidth / 2, 1)), top = hit.c || bottom;
-    if (near(top, bottom)) { top = bottom; hit.el = null; }
-    // A header band (not the page itself): how far down it reaches, so a landscape cutout strip beside it matches.
-    var band = hit.el && hit.el !== document.body && hit.el !== document.documentElement && top !== bottom
-      ? Math.max(0, Math.round(hit.el.getBoundingClientRect().bottom)) : 0;
-    var key = top + bottom + band;
-    if (key === last) return;
-    last = key;
-    Cap.Plugins.DgBars.set({ top: top, bottom: bottom, band: band }).catch(function () { last = ''; });
+    var dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    var top = (dark || document.body.classList.contains('dg-state-home')) ? 'DARK' : 'LIGHT';
+    var bottom = dark ? 'DARK' : 'LIGHT';
+    if (!force && top + bottom === last) return;
+    last = top + bottom;
+    Bars.setStyle({ style: top, bar: 'StatusBar' }).catch(function () { last = ''; });
+    Bars.setStyle({ style: bottom, bar: 'NavigationBar' }).catch(function () { last = ''; });
   }
-  function soon() { clearTimeout(timer); timer = setTimeout(run, 300); }
   function watch() {
-    var mo = new MutationObserver(soon);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-bs-theme', 'data-theme'] });
+    var mo = new MutationObserver(function () { run(false); });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
     mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    soon();
+    run(true);
   }
   if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
-  window.addEventListener('load', soon);
-  window.addEventListener('resize', soon);
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { last = ''; soon(); } });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') run(true); });
+  window.addEventListener('focus', function () { run(true); });
 })();

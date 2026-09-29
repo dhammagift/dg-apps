@@ -395,7 +395,7 @@
   var last = '', timer = 0;
   function hex(c) {
     var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/.exec(c || '');
-    if (!m || (m[4] !== undefined && +m[4] < 0.5)) return '';   // transparent: look further up
+    if (!m || (m[4] !== undefined && +m[4] < 0.95)) return '';   // see-through (a sheet's scrim too): look further up
     return '#' + [m[1], m[2], m[3]].map(function (v) { return ('0' + (Math.round(+v)).toString(16)).slice(-2); }).join('');
   }
   // The first element up the tree with a solid background: its colour, and the element itself.

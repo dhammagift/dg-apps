@@ -630,17 +630,23 @@
     if (!m || (m[4] !== undefined && +m[4] < 0.5)) return '';   // transparent: look further up
     return '#' + [m[1], m[2], m[3]].map(function (v) { return ('0' + (Math.round(+v)).toString(16)).slice(-2); }).join('');
   }
-  function bgOf(el) {
-    for (; el && el.nodeType === 1; el = el.parentElement) { var h = hex(getComputedStyle(el).backgroundColor); if (h) return h; }
-    return '';
+  // The first element up the tree with a solid background: its colour, and the element itself.
+  function paint(el) {
+    for (; el && el.nodeType === 1; el = el.parentElement) { var h = hex(getComputedStyle(el).backgroundColor); if (h) return { c: h, el: el }; }
+    return { c: '', el: null };
   }
+  function bgOf(el) { return paint(el).c; }
   function run() {
     if (!document.body) return;
     var bottom = bgOf(document.body) || bgOf(document.documentElement) || '#111111';
-    var top = bgOf(document.elementFromPoint(window.innerWidth / 2, 1)) || bottom;
-    if (top + bottom === last) return;
-    last = top + bottom;
-    Cap.Plugins.DgBars.set({ top: top, bottom: bottom }).catch(function () { last = ''; });
+    var hit = paint(document.elementFromPoint(window.innerWidth / 2, 1)), top = hit.c || bottom;
+    // A header band (not the page itself): how far down it reaches, so a landscape cutout strip beside it matches.
+    var band = hit.el && hit.el !== document.body && hit.el !== document.documentElement && top !== bottom
+      ? Math.max(0, Math.round(hit.el.getBoundingClientRect().bottom)) : 0;
+    var key = top + bottom + band;
+    if (key === last) return;
+    last = key;
+    Cap.Plugins.DgBars.set({ top: top, bottom: bottom, band: band }).catch(function () { last = ''; });
   }
   function soon() { clearTimeout(timer); timer = setTimeout(run, 150); }
   function watch() {

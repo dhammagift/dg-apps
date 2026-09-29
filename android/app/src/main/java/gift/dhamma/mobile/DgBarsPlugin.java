@@ -30,12 +30,16 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class DgBarsPlugin extends Plugin {
     // null until the page has reported: the theme's navy and icons stay as they were.
     private static Integer top, rest;
+    // How far down the page the top colour reaches (a navy header, in dp): the side strips of a
+    // landscape cutout carry it that far too, so the header does not end in a white notch.
+    private static float band;
 
     @PluginMethod
     public void set(PluginCall call) {
         try {
             top = Color.parseColor(call.getString("top"));
             rest = Color.parseColor(call.getString("bottom"));
+            band = call.getFloat("band", 0f);
         } catch (Exception e) {
             call.reject("bad colour");
             return;
@@ -53,6 +57,7 @@ public class DgBarsPlugin extends Plugin {
     static boolean apply(Activity activity) {
         if (top == null) return false;
         final int t = top, r = rest;
+        final float bandPx = band * activity.getResources().getDisplayMetrics().density;
         final View decor = activity.getWindow().getDecorView();
         decor.setBackground(new Drawable() {
             private final Paint paint = new Paint();
@@ -64,7 +69,12 @@ public class DgBarsPlugin extends Plugin {
                 canvas.drawRect(b, paint);
                 // The status-bar strip is exactly the decor's top padding (SystemBars sets it to the inset).
                 paint.setColor(t);
-                canvas.drawRect(b.left, b.top, b.right, b.top + decor.getPaddingTop(), paint);
+                int pt = decor.getPaddingTop();
+                canvas.drawRect(b.left, b.top, b.right, b.top + pt, paint);
+                if (bandPx > 0) {
+                    canvas.drawRect(b.left, b.top + pt, b.left + decor.getPaddingLeft(), b.top + pt + bandPx, paint);
+                    canvas.drawRect(b.right - decor.getPaddingRight(), b.top + pt, b.right, b.top + pt + bandPx, paint);
+                }
             }
 
             @Override

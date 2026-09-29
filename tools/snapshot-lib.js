@@ -47,7 +47,11 @@ async function snapshot({ site, out, prefix = '', visits, interact, skip, extras
                 p = current.save;
             } else if (p === '/' || p.endsWith('/')) return;
             if (skip && skip(p, type)) return;
-            const body = await res.body();
+            // Chromium hands a text resource to Playwright already decoded (text/plain with no charset as
+            // windows-1252) and res.body() re-encodes that string as UTF-8, so every non-ASCII byte came out
+            // doubled — Dict's sutta_words.txt: ā -> "Ä" + U+0081 in the apps' autosuggest (dg-apps#42).
+            // Everything but the page itself is fetched again as raw bytes.
+            const body = type === 'document' ? await res.body() : Buffer.from(await (await fetch(res.url())).arrayBuffer());
             // A response served from the browser's cache can come back with an empty body: never let it replace a good one.
             if (body.length === 0 && got.has(p)) return;
             if (body.length === 0) { skipped.push('empty ' + u.pathname); return; }

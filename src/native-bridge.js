@@ -104,7 +104,22 @@
             try {
                 var u = new URL(raw, location.href);
                 if (u.origin === location.origin && /^\/config\/[\w.-]+\.json$/.test(u.pathname)) {
-                    return pageFetch.call(window, origin + u.pathname + u.search, init);
+                    var fromSite = pageFetch.call(window, origin + u.pathname + u.search, init);
+                    // iOS pages run on capacitor://localhost, and Google's website restriction on the web
+                    // key cannot allow that scheme (dg-apps#43: every Firebase call from the iOS app came
+                    // back "Requests from referer capacitor://localhost are blocked"). The site's config
+                    // carries a second key for the iOS app (API-restricted, no website restriction).
+                    if (u.pathname === '/config/sync-config.json' && window.Capacitor && window.Capacitor.getPlatform &&
+                            window.Capacitor.getPlatform() === 'ios') {
+                        return fromSite.then(function (r) {
+                            if (!r.ok) return r;
+                            return r.json().then(function (cfg) {
+                                if (cfg && cfg.apiKeyIos) cfg.apiKey = cfg.apiKeyIos;
+                                return new Response(JSON.stringify(cfg), { status: 200, headers: { 'Content-Type': 'application/json' } });
+                            });
+                        });
+                    }
+                    return fromSite;
                 }
                 // The dictionary data is not bundled (dictionaryFromSite below): ai-search.js fetches it as
                 // text, so the same cached-or-site copy answers here.

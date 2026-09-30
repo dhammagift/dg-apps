@@ -50,10 +50,9 @@ for theme in light dark; do
   shot "$theme-5-reader-landscape" 8
   adb shell settings put system user_rotation 0
   sleep 3
-  # Settings (the Cloud row) and the Uposatha calendar, as the app routes them.
+  # Settings (the Cloud row). The Uposatha calendar is not bundled here: the app opens it on the site.
   route settings/;           shot "$theme-6-settings" 10
   up 2;                      shot "$theme-7-settings-scrolled" 4
-  route uposatha-calendar;   shot "$theme-8-uposatha" 12
 done
 adb logcat -d -t 400 > "$OUT/logcat.txt" 2>/dev/null || true
 ls -la "$OUT"

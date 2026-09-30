@@ -26,6 +26,37 @@ if [ "$PKG" = gift.dhamma.uposatha ]; then
   adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true
   grep -cE "Shortcut: *dg-|id=dg-" "$OUT/shortcuts.txt"; exit 0
 fi
+if [ "${4:-}" = shortcuts ]; then
+  # Dhamma.Gift launcher shortcuts, end to end, with a verdict (owner, 2026-09-30: "не работают шорткаты
+  # в андроид ... авто тесты"). Reads texts, leaves the app (that is when the page pushes its list),
+  # then asks the system what it holds and launches each shortcut the way the launcher does.
+  # Writes $OUT/shortcuts-result.txt; exits 1 when a check fails, so the workflow run goes red.
+  fail=0; res="$OUT/shortcuts-result.txt"; : > "$res"
+  ok() { echo "PASS $*" >> "$res"; }; ko() { echo "FAIL $*" >> "$res"; fail=1; }
+  screen_has() { adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb shell cat /sdcard/ui.xml | grep -qi "$1"; }
+  adb logcat -c
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 15
+  adb shell input tap 309 2184; sleep 2
+  for r in mn8 sn56.11 dn22; do adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/$r" "$PKG" > /dev/null; sleep 10; done
+  adb shell run-as "$PKG" true 2>/dev/null && echo "(debuggable)" >> "$res"
+  adb shell input keyevent KEYCODE_HOME; sleep 5
+  adb shell dumpsys shortcut "$PKG" > "$OUT/shortcuts.txt"
+  grep -q "favorites_history" "$OUT/shortcuts.txt" && ok "static shortcut favorites_history declared" || ko "static shortcut favorites_history missing"
+  n=$(grep -oE "id=dg-recent[-a-z0-9]*" "$OUT/shortcuts.txt" | sort -u | wc -l)
+  [ "$n" -ge 1 ] && ok "dynamic recent-text shortcuts: $n" || ko "no dynamic recent-text shortcuts pushed"
+  # Launch them the way the launcher does: the static one (MAIN + route extra), one recent text (SHORTCUT action).
+  adb shell am force-stop "$PKG"
+  adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as > /dev/null; sleep 12
+  adb exec-out screencap -p > "$OUT/shortcut-static.png"
+  screen_has "Favorites\|Избранное\|History\|История" && ok "static shortcut opens Favorites & History" || ko "static shortcut: Favorites & History not on screen"
+  adb shell am force-stop "$PKG"
+  adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a gift.dhamma.mobile.SHORTCUT --es route /sn56.11 > /dev/null; sleep 12
+  adb exec-out screencap -p > "$OUT/shortcut-recent.png"
+  screen_has "Dhammacakkappavattana\|sn56.11" && ok "recent-text shortcut opens sn56.11" || ko "recent-text shortcut: sn56.11 not on screen"
+  adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true
+  grep -iE "dg-shortcuts|Uncaught|TypeError|ReferenceError" "$OUT/logcat.txt" | head -20 >> "$res"
+  cat "$res"; exit $fail
+fi
 adb shell dumpsys package com.google.android.webview | grep -m1 versionName > "$OUT/webview-version.txt" || true
 shot() { sleep "${2:-6}"; adb exec-out screencap -p > "$OUT/$1.png"; echo "shot $1"; }
 # App Links (https://dhamma.gift/...), the way a tapped link arrives: explicit package, so no

@@ -29,6 +29,11 @@ on:
         required: false
         type: string
         default: 'gift.dhamma.mobile'
+      mode:
+        description: 'screens, or shortcuts (Dhamma.Gift launcher shortcuts test: PASS/FAIL, red run on a failure)'
+        required: false
+        type: string
+        default: 'screens'
 
 permissions:
   actions: read
@@ -64,7 +69,7 @@ jobs:
           profile: pixel_7
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots ${{ inputs.package }}
+          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots ${{ inputs.package }} ${{ inputs.mode }}
 
       - name: Upload the screenshots
         if: always()

@@ -94,8 +94,8 @@ class DgBridgeViewController: CAPBridgeViewController {
 
 // MARK: - The bundled page and its updates
 
-// Where the page comes from: the same site as SITE_CONFIG in uposatha-bridge.js (test for now, dhamma.gift later).
-private let dgSite = "https://test.dhamma.gift"
+// Where the page comes from: the same site as SITE_CONFIG in uposatha-bridge.js: the production site.
+private let dgSite = "https://dhamma.gift"
 
 // Files of the page downloaded from the site (by the bridge's updater, through DgSite.put) live here and are answered
 // in front of the bundled ones; nothing is ever deleted but by DgSite.clear.

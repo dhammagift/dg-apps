@@ -132,8 +132,8 @@ public class DgSitePlugin extends Plugin {
 
     // ---- serving ------------------------------------------------------------------------------
 
-    // Where the page comes from: the same site as SITE_CONFIG in uposatha-bridge.js (test for now, dhamma.gift later).
-    private static final String SITE = "https://test.dhamma.gift";
+    // Where the page comes from: the same site as SITE_CONFIG in uposatha-bridge.js: the production site.
+    private static final String SITE = "https://dhamma.gift";
     private static final Map<String, String> TYPES = new HashMap<>();
     static {
         TYPES.put("html", "text/html");

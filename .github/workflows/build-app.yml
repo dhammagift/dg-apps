@@ -1007,13 +1007,13 @@ jobs:
 
       # The app bundles the calendar page: it opens with no network, and updates itself from the site when
       # there is one (uposatha/tools/snapshot.js). A real browser loads the page off the site and records
-      # everything it fetches. The site is test.dhamma.gift for now (the same value as SITE in
+      # everything it fetches. The site is dhamma.gift, production (the same value as SITE in
       # uposatha/src/uposatha-bridge.js). Fails the job when the site cannot be reached: an APK with no
       # page in it must never be built quietly.
       - name: Take the calendar page off the site
         working-directory: uposatha
         env:
-          SITE: https://test.dhamma.gift
+          SITE: https://dhamma.gift
         run: |
           npx playwright install --with-deps chromium
           node tools/snapshot.js

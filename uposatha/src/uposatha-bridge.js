@@ -49,7 +49,7 @@
 
   // ---- the bundled page: no service worker, kept up to date -------------------------------------
   var SITE_CONFIG = {
-    site: 'https://test.dhamma.gift',   // where the page comes from: test for now (dhamma.gift when the page is on prod)
+    site: 'https://dhamma.gift',   // where the page comes from: the production site (owner, 2026-09-30)
     // The page's file in the bundle is /uposatha-calendar.html; on the site it is /uposatha-calendar.
     urlFor: function (path) { return path === '/uposatha-calendar.html' ? '/uposatha-calendar' : path; }
   };

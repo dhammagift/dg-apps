@@ -69,7 +69,9 @@
         var path = queue.shift();
         if (!path || fetched > 400) return Promise.resolve();
         fetched++;
-        return fetch(SITE + SITE_CONFIG.urlFor(path), { cache: 'no-store' }).then(function (res) {
+        // 'no-cache', not 'no-store': the WebView keeps what it fetched and asks the site with the file's ETag, so a file
+        // that has not changed comes back as a 304 with no body — a check costs a few KB, not the whole page again.
+        return fetch(SITE + SITE_CONFIG.urlFor(path), { cache: 'no-cache' }).then(function (res) {
           if (!res.ok) return null;
           return res.arrayBuffer();
         }).then(function (buf) {

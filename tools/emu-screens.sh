@@ -14,6 +14,11 @@ if [ "$PKG" = gift.dhamma.uposatha ]; then
   sleep 25; adb exec-out screencap -p > "$OUT/uposatha-home.png"
   adb shell input keyevent KEYCODE_HOME; sleep 3
   adb shell dumpsys shortcut "$PKG" > "$OUT/shortcuts.txt"
+  # The page updates itself from the site (DgSite, files/site/): what arrived, and whether it is the current page.
+  # run-as needs the debuggable APK; on a release one these two files stay empty.
+  sleep 30
+  adb shell run-as "$PKG" find files/site -type f > "$OUT/site-files.txt" 2>&1 || true
+  adb shell run-as "$PKG" cat files/site/assets/js/uposatha-calendar.js > "$OUT/site-uposatha-calendar.js" 2>/dev/null || true
   adb logcat -d -t 400 > "$OUT/logcat.txt" 2>/dev/null || true
   grep -cE "Shortcut: *dg-|id=dg-" "$OUT/shortcuts.txt"; exit 0
 fi

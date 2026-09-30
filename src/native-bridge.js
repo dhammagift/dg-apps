@@ -1012,7 +1012,7 @@
     // Each resolves to { idToken, rawNonce? }; anything unset keeps the browser page for that provider.
     var GOOGLE_WEB_CLIENT_ID = '777733337986-6k09gc88abcajbc749mjrhvjq8ljqhl8.apps.googleusercontent.com';
     var GOOGLE_IOS_CLIENT_ID = '777733337986-rbnaheovnq438pgseumc5s799js6rrhu.apps.googleusercontent.com';
-    var APPLE_NATIVE_IOS = false;
+    var APPLE_NATIVE_IOS = true;
     var nativeSignIn = {};
     (function () {
         var C = window.Capacitor;

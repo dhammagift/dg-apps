@@ -1010,7 +1010,7 @@
     //  - APPLE_NATIVE_IOS: true once the App ID has "Sign in with Apple" (and App.entitlements the
     //    matching entitlement) and the Firebase project knows the iOS app (bundle ID gift.dhamma.mobile).
     // Each resolves to { idToken, rawNonce? }; anything unset keeps the browser page for that provider.
-    var GOOGLE_WEB_CLIENT_ID = '';
+    var GOOGLE_WEB_CLIENT_ID = '777733337986-6k09gc88abcajbc749mjrhvjq8ljqhl8.apps.googleusercontent.com';
     var GOOGLE_IOS_CLIENT_ID = '';
     var APPLE_NATIVE_IOS = false;
     var nativeSignIn = {};

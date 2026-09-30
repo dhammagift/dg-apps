@@ -75,6 +75,10 @@ def call(method, path_or_url, body=None, headers=None, raw=False):
             return e.code, b
 
 
+# appStoreState values in which a version's screenshots can still be changed.
+EDITABLE = {'PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED', 'METADATA_REJECTED', 'INVALID_BINARY'}
+
+
 def fail(msg, detail=None):
     print('asc-screenshots: ' + msg, file=sys.stderr)
     if detail is not None:
@@ -97,7 +101,13 @@ def main():
     if status != 200 or not versions.get('data'):
         fail('could not find version %s of app %s' % (args.version, args.app_id), versions)
     version_id = versions['data'][0]['id']
-    print('version %s -> %s (state %s)' % (args.version, version_id, versions['data'][0]['attributes'].get('appStoreState')))
+    state = versions['data'][0]['attributes'].get('appStoreState')
+    print('version %s -> %s (state %s)' % (args.version, version_id, state))
+    # Only a version Apple lets us edit. Waiting for / in review, or live: nothing is touched — run 413 sent
+    # DELETEs to a version WAITING_FOR_REVIEW (Apple refused them, and the upload after them).
+    if state not in EDITABLE:
+        print('  not editable in state %s: screenshots left as they are' % state)
+        return
 
     status, locs = call('GET', '/appStoreVersions/%s/appStoreVersionLocalizations?filter[locale]=%s' % (version_id, args.locale))
     if status != 200 or not locs.get('data'):
@@ -132,7 +142,9 @@ def main():
             status, existing_shots = call('GET', '/appScreenshotSets/%s/appScreenshots' % set_id)
             if status == 200:
                 for shot in existing_shots.get('data', []):
-                    call('DELETE', '/appScreenshots/%s' % shot['id'])
+                    st, gone = call('DELETE', '/appScreenshots/%s' % shot['id'])
+                    if st not in (200, 204):
+                        fail('could not remove screenshot %s (HTTP %s), nothing uploaded' % (shot['id'], st), gone if isinstance(gone, dict) else None)
                 if existing_shots.get('data'):
                     print('    removed %d screenshot(s) left from an earlier run' % len(existing_shots['data']))
 

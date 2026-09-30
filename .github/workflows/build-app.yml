@@ -440,6 +440,9 @@ jobs:
         run: node test/deep-link.test.js
 
       - name: Install a browser driver for the end-to-end checks
+        # 40-170 s normally; run 429 hung here for 40 min (a stuck download on the runner) with nothing
+        # to stop it but the 6-hour job limit. Each try is capped, and a second one follows a hang.
+        timeout-minutes: 12
         env:
           PLAYWRIGHT_BROWSERS_PATH: /opt/pw-browsers
         run: |
@@ -453,7 +456,8 @@ jobs:
           # locally: `npx --package=playwright-core ... playwright install` fails instantly with
           # "playwright: not found" — playwright-core ships no such binary at all). Same version
           # pin either way, so both packages agree on which Chromium revision to fetch/resolve.
-          npx --yes playwright@1.49.1 install --with-deps chromium webkit
+          timeout 300 npx --yes playwright@1.49.1 install --with-deps chromium webkit \
+            || timeout 300 npx --yes playwright@1.49.1 install --with-deps chromium webkit
 
       # The app's own checks, run in dg-node against the server that is already up: every bundled
       # page compared with the live site (the "tile opens the search page" family — a missing path

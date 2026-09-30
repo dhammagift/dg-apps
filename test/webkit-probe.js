@@ -47,6 +47,25 @@ const OUT = 'out';
         return { iframe: true, src: f.src, rect: { x: r.x, width: r.width, right: r.right }, inner };
     });
     await page.screenshot({ path: OUT + '/2-settings-sheet.png' });
+    // Try zoom values inside the sheet: which one leaves nothing wider than the frame?
+    report.trials = [];
+    for (const z of ['0.909091', '1', '1.1']) {
+        const t = await page.evaluate((z) => {
+            const f = [...document.querySelectorAll('iframe')].find(x => /\/settings\//.test(x.src || ''));
+            if (!f) return null;
+            const d = f.contentDocument, w = f.contentWindow;
+            d.documentElement.style.zoom = z;
+            d.documentElement.style.setProperty('--dg-zoom', z);
+            void d.body.offsetWidth;
+            const frameW = f.getBoundingClientRect().width;
+            return { zoom: z, frameInnerWidth: w.innerWidth, frameRectWidth: frameW,
+                     bodyScrollWidth: d.body.scrollWidth, docScrollWidth: d.documentElement.scrollWidth,
+                     overflowX: d.documentElement.scrollWidth > d.documentElement.clientWidth + 1 };
+        }, z);
+        await page.waitForTimeout(400);
+        await page.screenshot({ path: OUT + '/3-zoom-' + z + '.png' });
+        report.trials.push(t);
+    }
     fs.writeFileSync(OUT + '/report.json', JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report, null, 2));
     await browser.close();

@@ -44,6 +44,8 @@ if [ "${4:-}" = shortcuts ]; then
   grep -q "favorites_history" "$OUT/shortcuts.txt" && ok "static shortcut favorites_history declared" || ko "static shortcut favorites_history missing"
   n=$(grep -oE "id=dg-recent[-a-z0-9]*" "$OUT/shortcuts.txt" | sort -u | wc -l)
   [ "$n" -ge 1 ] && ok "dynamic recent-text shortcuts: $n" || ko "no dynamic recent-text shortcuts pushed"
+  # The last five opened were dn22, dukkha, sn56.11, metta, mn8: the three slots must hold a search too.
+  grep -qiE "shortLabel=(dukkha|metta)" "$OUT/shortcuts.txt" && ok "a recent search is among the shortcuts" || ko "no recent search among the shortcuts"
   # Launch them the way the launcher does: the static one (MAIN + route extra), one recent text (SHORTCUT action).
   adb shell am force-stop "$PKG"
   adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as > /dev/null; sleep 12

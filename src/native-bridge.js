@@ -474,14 +474,21 @@
     // Excluded, with the owner's own examples: search queries (/?q=…), SPA commands typed into the
     // search box (which land in history as "/toc", "/bupm"), the quick modal (/4as), the memo app
     // (/memo, whose recordings showed up as "запись1") and every static page under /assets.
+    // Searches count too now (owner, 2026-09-30: "в шорткатах нет истории поиска"). They were left out
+    // while the history also caught commands and failed queries ("toc / bupm / запись1"); since
+    // settings.js writes only a search that found something or a text that loaded, a one-segment
+    // route in the history (/metta, /kāyagatā) is a real search. Bare commands stay out.
+    var NOT_A_SEARCH = /^\/(toc|bupm|history|dict|random|4as)$/i;
     function isTextRoute(route) {
         var path = String(route || '').split('?')[0].split('#')[0];
-        if (/^\/(assets|memo|memorize|settings|offline)\b/.test(path)) return false;
+        if (/^\/(assets|memo|memorize|settings|offline|login|search|reader)\b/.test(path)) return false;
         if (path === '/' || path === '/4as' || /^\/4as\/\d$/.test(path)) return false;
         // A text id starts with letters and carries digits somewhere: /dn22, /sn56.11,
         // /pli-tv-bu-vb-pj1, /dn22:2.2 — and /toc/<book> for a whole book.
         if (/^\/toc\/[a-z0-9-]+$/i.test(path)) return true;
-        return /^\/[a-z][a-z-]*\d/i.test(path);
+        if (/^\/[a-z][a-z-]*\d/i.test(path)) return true;
+        // A search: one path segment that is not a command.
+        return /^\/[^\/]+$/.test(path) && !NOT_A_SEARCH.test(path);
     }
 
     // The three entries the settings switch turns off when it is on. They used to be STATIC

@@ -182,9 +182,6 @@ two Android files that are easy to confuse.
 
 - **Nothing is published to any store by hand.** The Play path above is dormant unless someone picks
   `release: play` or pushes a tag.
-- **iOS**: this project is Android-only. The App Store build does not exist yet, which is also why
-  the Rate Us row in the reader app has an empty `DG_IOS_APP_ID` and falls back to an App Store
-  search.
 - **The old TWA module** (`dg-twa/dict-app`) and its CI job still exist; retiring it from Play is a
   separate decision. Both apps currently share one package id, so whichever uploads last wins —
   nothing should be promoted to production on `gift.dhamma.pali` until the TWA job stops running.

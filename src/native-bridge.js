@@ -1353,11 +1353,10 @@
     // rather than market://: play.google.com is an App Link, so Android opens the Play app when it
     // is installed and a browser when it is not, while a market:// intent fails outright on a
     // device without Play.
-    // iOS: the numeric App Store id, which exists only once the app is on the store — hence the
-    // constant. Until it is filled in, the row opens the App Store search for the app's name
-    // rather than a dead id (the iOS build is not live yet).
+    // iOS: the numeric App Store id (live on the store since 2026-09-30). Should it ever be
+    // emptied, the row falls back to the App Store search for the app's name.
     var DG_PLAY_PACKAGE = 'gift.dhamma.twa';
-    var DG_IOS_APP_ID = '';
+    var DG_IOS_APP_ID = '6813706217';
 
     // The invite itself: three emoji at one size, the same label the dictionary app's Rate Us row
     // wears (owner: "такой же пункт Меню... с таким же дизайном"). 16px, not the 19px this page's

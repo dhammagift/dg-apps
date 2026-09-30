@@ -1,0 +1,42 @@
+# A quick WebKit look at a live page, for layout bugs that only iOS shows (the servers here cannot run
+# Playwright's WebKit). Opens the page as an iPhone, runs the probe script, uploads screenshots + JSON.
+# First use: the settings sheet running wider than the screen on iOS (the 110% page zoom and the
+# settings iframe's own zoom).
+name: WebKit probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Page to open
+        default: https://test.dhamma.gift/
+      device:
+        description: Playwright device name
+        default: iPhone 15 Pro
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Playwright WebKit
+        run: |
+          mkdir -p /tmp/probe && cd /tmp/probe
+          npm init -y >/dev/null
+          npm i playwright@1.48.2 >/dev/null
+          npx playwright install --with-deps webkit
+      - name: Probe
+        env:
+          PROBE_URL: ${{ inputs.url }}
+          PROBE_DEVICE: ${{ inputs.device }}
+        run: |
+          cp test/webkit-probe.js /tmp/probe/ && cd /tmp/probe && node webkit-probe.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webkit-probe
+          path: /tmp/probe/out

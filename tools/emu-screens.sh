@@ -37,7 +37,7 @@ if [ "${4:-}" = shortcuts ]; then
   adb logcat -c
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 15
   adb shell input tap 309 2184; sleep 2
-  for r in mn8 sn56.11 dn22; do adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/$r" "$PKG" > /dev/null; sleep 10; done
+  for r in mn8 metta sn56.11 dukkha dn22; do adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/$r" "$PKG" > /dev/null; sleep 10; done
   adb shell run-as "$PKG" true 2>/dev/null && echo "(debuggable)" >> "$res"
   adb shell input keyevent KEYCODE_HOME; sleep 5
   adb shell dumpsys shortcut "$PKG" > "$OUT/shortcuts.txt"
@@ -47,10 +47,15 @@ if [ "${4:-}" = shortcuts ]; then
   # Launch them the way the launcher does: the static one (MAIN + route extra), one recent text (SHORTCUT action).
   adb shell am force-stop "$PKG"
   adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as > /dev/null; sleep 12
+  adb shell input tap 309 2184; sleep 2   # "Not now" on the offline-library sheet a force-stop brings back
   adb exec-out screencap -p > "$OUT/shortcut-static.png"
   screen_has "Favorites\|Избранное\|History\|История" && ok "static shortcut opens Favorites & History" || ko "static shortcut: Favorites & History not on screen"
+  adb shell cat /sdcard/ui.xml > "$OUT/ui-history.xml"
+  # Searches (not only texts) must be in the history too (owner, 2026-09-30: "поиски не сохраняются в историю").
+  for q in metta dukkha; do grep -q "text=\"$q" "$OUT/ui-history.xml" && ok "search '$q' is in the history" || ko "search '$q' missing from the history"; done
   adb shell am force-stop "$PKG"
   adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a gift.dhamma.mobile.SHORTCUT --es route /sn56.11 > /dev/null; sleep 12
+  adb shell input tap 309 2184; sleep 2
   adb exec-out screencap -p > "$OUT/shortcut-recent.png"
   screen_has "Dhammacakkappavattana\|sn56.11" && ok "recent-text shortcut opens sn56.11" || ko "recent-text shortcut: sn56.11 not on screen"
   adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true

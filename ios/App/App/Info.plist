@@ -14,8 +14,11 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<!-- The short name iOS shows in its own dialogs — "App wants to use accounts.google.com to Sign In"
+	     said "App" (the target's PRODUCT_NAME). A literal here, not a renamed target: PRODUCT_NAME also
+	     names the binary and the Swift module, which the extensions and App Intents refer to. -->
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>Dhamma.gift</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<!-- Custom scheme the Google sign-in handoff comes back on. On Android the site returns

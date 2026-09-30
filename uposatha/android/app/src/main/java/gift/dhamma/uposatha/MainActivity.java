@@ -41,10 +41,11 @@ import java.util.HashSet;
  */
 public class MainActivity extends BridgeActivity {
 
-    // The origin the injected bridge may run on: the app's own. The page it shows is bundled in the APK
-    // (www/, a snapshot of the site's calendar page taken at build time) and served from here; links to the
-    // site itself open in the browser.
-    private static final HashSet<String> BRIDGE_ORIGINS = new HashSet<>(Arrays.asList("https://localhost"));
+    // The injected bridge runs on the app's own origin only: the page it shows is bundled in the APK (www/, a
+    // snapshot of the site's calendar page taken at build time) and served from there; links to the site itself
+    // open in the browser. Taken from the bridge (server.hostname in capacitor.config.json), not written here:
+    // it was a hard-coded https://localhost, and when the hostname became uposatha.dhamma.gift (538a62e, for the
+    // iOS location dialog) the bridge silently stopped running on Android: no shortcuts, no version, no updates.
     // Where `cap sync` puts src/uposatha-bridge.js (see uposatha/build.js).
     private static final String BRIDGE_ASSET = "public/uposatha-bridge.js";
 
@@ -152,7 +153,7 @@ public class MainActivity extends BridgeActivity {
         WebView webView = getBridge().getWebView();
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
-                WebViewCompat.addDocumentStartJavaScript(webView, script, BRIDGE_ORIGINS);
+                WebViewCompat.addDocumentStartJavaScript(webView, script, new HashSet<>(Arrays.asList(getBridge().getLocalUrl())));
                 return;
             } catch (IllegalArgumentException e) {
                 // Falls through to the listener: an injection that cannot be registered must not
@@ -203,7 +204,7 @@ public class MainActivity extends BridgeActivity {
         String url = route;
         if (!route.startsWith("http")) {
             if (getBridge() == null) return;
-            url = getBridge().getLocalUrl() + route;   // https://localhost: the bundled page
+            url = getBridge().getLocalUrl() + route;   // the bundled page
         }
         final String finalUrl = url;
         final WebView webView = getBridge() != null ? getBridge().getWebView() : null;

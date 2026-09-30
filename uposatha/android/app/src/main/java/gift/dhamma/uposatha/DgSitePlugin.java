@@ -188,7 +188,7 @@ public class DgSitePlugin extends Plugin {
     static WebResourceResponse serve(Context context, Bridge bridge, WebResourceRequest request) {
         if (!"GET".equals(request.getMethod())) return null;
         Uri uri = request.getUrl();
-        if (!"localhost".equals(uri.getHost())) return null;
+        if (!bridge.getHost().equals(uri.getHost())) return null;   // the app's own origin (server.hostname), not the site
         String path = uri.getPath();
         if (path == null) return null;
         if (path.equals("/") || path.equals("/index.html") || path.equals("/uposatha-calendar") || path.equals("/uposatha-calendar/")) {

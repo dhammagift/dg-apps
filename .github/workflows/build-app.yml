@@ -76,6 +76,11 @@ on:
         required: false
         type: boolean
         default: false
+      video:
+        description: 'Record the emulator test as a video (flow.mp4) as well as screenshots'
+        required: false
+        type: boolean
+        default: false
       dict_only:
         description: 'Run ONLY the dictionary app jobs and skip the reader app entirely. For checking a change under dict/ without building the offline library: minutes instead of the better part of an hour. A tag ignores it — a release builds everything.'
         required: false
@@ -784,13 +789,15 @@ jobs:
           name: dg-app-full-apk-release-${{ github.run_number }}
           path: apk
       - name: OCR
-        run: sudo apt-get install -y -qq tesseract-ocr ffmpeg > /dev/null
+        run: sudo apt-get install -y -qq tesseract-ocr ${{ inputs.video && 'ffmpeg' || '' }} > /dev/null
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Emulator
+        env:
+          VIDEO: ${{ inputs.video && '1' || '0' }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36

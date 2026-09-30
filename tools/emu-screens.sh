@@ -34,10 +34,12 @@ if [ "${4:-}" = shortcuts ]; then
   fail=0; res="$OUT/shortcuts-result.txt"; : > "$res"
   # The whole scenario as a video (owner: "запиши весь ролик"). screenrecord stops at 180 s, so it is
   # restarted in a loop while the flag file exists, and the parts are joined at the end.
-  touch "$OUT/.rec"
+  # Only when asked for (VIDEO=1, the workflows' "video" input): the screenshots are the default.
+  [ "${VIDEO:-0}" = 1 ] && touch "$OUT/.rec"
   ( i=0; while [ -f "$OUT/.rec" ]; do adb shell screenrecord --bit-rate 4000000 --time-limit 170 "/sdcard/rec-$i.mp4"; i=$((i+1)); done ) &
   RECPID=$!
   stop_rec() {
+    [ "${VIDEO:-0}" = 1 ] || return 0
     rm -f "$OUT/.rec"; adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null
     for f in $(adb shell ls /sdcard/ | tr -d '\r' | grep '^rec-.*\.mp4$' | sort -V); do adb pull "/sdcard/$f" "$OUT/$f" > /dev/null; echo "file '$f'" >> "$OUT/rec.txt"; done
     (cd "$OUT" && ffmpeg -loglevel error -y -f concat -safe 0 -i rec.txt -c copy flow.mp4 && rm -f rec-*.mp4 rec.txt) || true
@@ -60,7 +62,9 @@ if [ "${4:-}" = shortcuts ]; then
   # The launcher's own long-press menu, as the reader sees it: open the app drawer, long-press the icon,
   # screenshot, and read the menu (the launcher is native, so uiautomator sees its text).
   adb shell input keyevent KEYCODE_HOME; sleep 2
-  adb shell input swipe 540 2000 540 600 300; sleep 3
+  # The swipe up to the app drawer does not always take on the first try: up to three.
+  for try in 1 2 3; do
+  adb shell input swipe 540 2000 540 500 $((300 * try)); sleep 3
   adb shell uiautomator dump /sdcard/l.xml > /dev/null 2>&1; adb shell cat /sdcard/l.xml > "$OUT/launcher.xml"
   xy=$(python3 - "$OUT/launcher.xml" << 'PY'
 import re, sys
@@ -71,6 +75,9 @@ for label in ('DGift', 'Dhamma.gift', 'Dhamma.Gift'):
         a, b, c, d = map(int, m.groups()); print((a + c) // 2, (b + d) // 2); break
 PY
 )
+  [ -n "$xy" ] && break
+  adb shell input keyevent KEYCODE_HOME; sleep 2
+  done
   if [ -n "$xy" ]; then
     adb shell input swipe $xy $xy 1500; sleep 2
     adb exec-out screencap -p > "$OUT/launcher-menu.png"

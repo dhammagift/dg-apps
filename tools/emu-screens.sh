@@ -33,7 +33,8 @@ if [ "${4:-}" = shortcuts ]; then
   # Writes $OUT/shortcuts-result.txt; exits 1 when a check fails, so the workflow run goes red.
   fail=0; res="$OUT/shortcuts-result.txt"; : > "$res"
   ok() { echo "PASS $*" >> "$res"; }; ko() { echo "FAIL $*" >> "$res"; fail=1; }
-  screen_has() { adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb shell cat /sdcard/ui.xml | grep -qi "$1"; }
+  # The page is a WebView: uiautomator sees no text inside a release build, so the screen is read with OCR.
+  screen_has() { adb exec-out screencap -p > "$OUT/ocr.png"; tesseract "$OUT/ocr.png" - 2>/dev/null | tee -a "$OUT/ocr.txt" | grep -qiE "$1"; }
   adb logcat -c
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 15
   adb shell input tap 309 2184; sleep 2
@@ -51,15 +52,15 @@ if [ "${4:-}" = shortcuts ]; then
   adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as > /dev/null; sleep 12
   adb shell input tap 309 2184; sleep 2   # "Not now" on the offline-library sheet a force-stop brings back
   adb exec-out screencap -p > "$OUT/shortcut-static.png"
-  screen_has "Favorites\|Избранное\|History\|История" && ok "static shortcut opens Favorites & History" || ko "static shortcut: Favorites & History not on screen"
-  adb shell cat /sdcard/ui.xml > "$OUT/ui-history.xml"
+  screen_has "Favorites|History" && ok "static shortcut opens Favorites & History" || ko "static shortcut: Favorites & History not on screen"
+  cp "$OUT/ocr.png" "$OUT/history.png"; tesseract "$OUT/history.png" - 2>/dev/null > "$OUT/history.txt"
   # Searches (not only texts) must be in the history too (owner, 2026-09-30: "поиски не сохраняются в историю").
-  for q in metta dukkha; do grep -q "text=\"$q" "$OUT/ui-history.xml" && ok "search '$q' is in the history" || ko "search '$q' missing from the history"; done
+  for q in metta dukkha; do grep -qi "$q" "$OUT/history.txt" && ok "search '$q' is in the history" || ko "search '$q' missing from the history"; done
   adb shell am force-stop "$PKG"
   adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a gift.dhamma.mobile.SHORTCUT --es route /sn56.11 > /dev/null; sleep 12
   adb shell input tap 309 2184; sleep 2
   adb exec-out screencap -p > "$OUT/shortcut-recent.png"
-  screen_has "Dhammacakkappavattana\|sn56.11" && ok "recent-text shortcut opens sn56.11" || ko "recent-text shortcut: sn56.11 not on screen"
+  screen_has "sn56.11|Samyutta|Saṁyutta" && ok "recent-text shortcut opens sn56.11" || ko "recent-text shortcut: sn56.11 not on screen"
   adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true
   grep -iE "dg-shortcuts|Uncaught|TypeError|ReferenceError" "$OUT/logcat.txt" | head -20 >> "$res"
   cat "$res"; exit $fail

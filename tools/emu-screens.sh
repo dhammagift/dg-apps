@@ -17,6 +17,10 @@ if [ "$PKG" = gift.dhamma.uposatha ]; then
   adb shell dumpsys shortcut "$PKG" > "$OUT/shortcuts.txt"
   # The page updates itself from the site (DgSite, files/site/): what arrived, and whether it is the current page.
   # run-as needs the debuggable APK; on a release one these two files stay empty.
+  # Opened again: the page must now be the downloaded one. The screen's own text (uiautomator reads a WebView too).
+  adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null
+  sleep 25; adb exec-out screencap -p > "$OUT/uposatha-reopened.png"
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb shell cat /sdcard/ui.xml > "$OUT/ui-reopened.xml" 2>/dev/null || true
   adb shell run-as "$PKG" find files/site -type f > "$OUT/site-files.txt" 2>&1 || true
   adb shell run-as "$PKG" cat files/site/assets/js/uposatha-calendar.js > "$OUT/site-uposatha-calendar.js" 2>/dev/null || true
   adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true

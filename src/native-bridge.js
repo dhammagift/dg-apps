@@ -1002,18 +1002,29 @@
     // (Google) demands Apple as an equally-offered option, not Google hidden away instead — an
     // earlier version of this file hid the Google button on iOS to dodge that; now Apple is real,
     // both stay visible everywhere.
-    // The Firebase project's WEB OAuth client ID (Firebase console -> Authentication -> Google ->
-    // Web SDK configuration). Empty: native Google sign-in stays off and the browser page is used.
+    // Native sign-in, off until its console setup exists (dg-apps#43):
+    //  - GOOGLE_WEB_CLIENT_ID: the Firebase project's WEB OAuth client ID (Firebase console ->
+    //    Authentication -> Google -> Web SDK configuration). Android: the ID token is issued for it.
+    //    Also needs an Android OAuth client for gift.dhamma.mobile with the upload and Play signing SHA-1s.
+    //  - GOOGLE_IOS_CLIENT_ID: an iOS OAuth client of the same project (bundle ID gift.dhamma.mobile).
+    //  - APPLE_NATIVE_IOS: true once the App ID has "Sign in with Apple" (and App.entitlements the
+    //    matching entitlement) and the Firebase project knows the iOS app (bundle ID gift.dhamma.mobile).
+    // Each resolves to { idToken, rawNonce? }; anything unset keeps the browser page for that provider.
     var GOOGLE_WEB_CLIENT_ID = '';
+    var GOOGLE_IOS_CLIENT_ID = '';
+    var APPLE_NATIVE_IOS = false;
     var nativeSignIn = {};
     (function () {
-        var P = (window.Capacitor && window.Capacitor.Plugins) || {};
-        var platform = window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform();
-        if (platform === 'android' && GOOGLE_WEB_CLIENT_ID && P.DgGoogleSignIn && window.Capacitor.isPluginAvailable &&
-                window.Capacitor.isPluginAvailable('DgGoogleSignIn')) {
-            nativeSignIn.google = function () {
-                return P.DgGoogleSignIn.signIn({ serverClientId: GOOGLE_WEB_CLIENT_ID }).then(function (r) { return r.idToken; });
-            };
+        var C = window.Capacitor;
+        var P = (C && C.Plugins) || {};
+        var platform = C && C.getPlatform && C.getPlatform();
+        var has = function (n) { return !!(P[n] && C.isPluginAvailable && C.isPluginAvailable(n)); };
+        if (platform === 'android' && GOOGLE_WEB_CLIENT_ID && has('DgGoogleSignIn')) {
+            nativeSignIn.google = function () { return P.DgGoogleSignIn.signIn({ serverClientId: GOOGLE_WEB_CLIENT_ID }); };
+        }
+        if (platform === 'ios' && has('DgSignIn')) {
+            if (GOOGLE_IOS_CLIENT_ID) nativeSignIn.google = function () { return P.DgSignIn.google({ clientId: GOOGLE_IOS_CLIENT_ID }); };
+            if (APPLE_NATIVE_IOS) nativeSignIn.apple = function () { return P.DgSignIn.apple(); };
         }
     })();
 
@@ -1048,9 +1059,14 @@
         function startNative() {
             var plugin = nativeSignIn[name];
             if (!plugin) return null;
-            return plugin().then(function (token) {
+            return plugin().then(function (r) {
                 return Promise.resolve(typeof window.initFirebase === 'function' && window.initFirebase()).then(function () {
-                    return firebase.auth().signInWithCredential(credentialFromToken(token));
+                    // Apple's native token carries the nonce the plugin hashed into the request: Firebase
+                    // wants the raw one alongside it.
+                    var credential = r.rawNonce
+                        ? new firebase.auth.OAuthProvider('apple.com').credential({ idToken: r.idToken, rawNonce: r.rawNonce })
+                        : credentialFromToken(r.idToken);
+                    return firebase.auth().signInWithCredential(credential);
                 });
             }).then(function () {
                 localStorage.setItem('dg_cloud_session', 'true');

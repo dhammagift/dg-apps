@@ -131,6 +131,9 @@ class DgBridgeViewController: CAPBridgeViewController {
         // The Home Screen's long-press menu: the dynamic "recently read" items the page hands over,
         // and the handler that makes a tap open its route (DgShortcutsPlugin.swift).
         bridge?.registerPluginInstance(DgShortcutsPlugin())
+        // Native sign-in (DgSignInPlugin.swift): Apple's own sheet, and Google's in the system sign-in
+        // sheet — instead of a browser page that never came back on iOS (dg-apps#43).
+        bridge?.registerPluginInstance(DgSignInPlugin())
 
         #if DEBUG
         // Debug builds only, and deliberately so: this plugin lets the page write a file into the

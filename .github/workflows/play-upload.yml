@@ -1,0 +1,61 @@
+# Upload an AAB that an earlier Build App run already made, instead of building again (owner,
+# 2026-09-30: "всё собрано, потестили — нажимаем отправить", not a new build with the next number).
+# The bytes that go to Play are exactly the ones the owner and the emulator tests had; versionCode is
+# that run's number. Only on the owner's explicit yes (CLAUDE.md), and never to production.
+name: Play upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: 'build-app.yml run id whose AAB to upload'
+        required: true
+        type: string
+      app:
+        description: 'dg (Dhamma.Gift -> beta), dict or uposatha (-> alpha), as build-app.yml does'
+        required: false
+        type: choice
+        options: [dg, dict, uposatha]
+        default: dg
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Which app
+        id: app
+        env:
+          RUN_ID: ${{ inputs.build_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          case "${{ inputs.app }}" in
+            dg)       echo "prefix=dg-app-full-aab-release" >> "$GITHUB_OUTPUT"; echo "pkg=gift.dhamma.twa" >> "$GITHUB_OUTPUT"; echo "track=beta" >> "$GITHUB_OUTPUT" ;;
+            dict)     echo "prefix=dg-dict-aab-release" >> "$GITHUB_OUTPUT"; echo "pkg=gift.dhamma.pali" >> "$GITHUB_OUTPUT"; echo "track=alpha" >> "$GITHUB_OUTPUT" ;;
+            uposatha) echo "prefix=dg-uposatha-aab-release" >> "$GITHUB_OUTPUT"; echo "pkg=gift.dhamma.uposatha" >> "$GITHUB_OUTPUT"; echo "track=alpha" >> "$GITHUB_OUTPUT" ;;
+          esac
+          n=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID" --jq .run_number)
+          echo "run_number=$n" >> "$GITHUB_OUTPUT"
+          echo "build run $RUN_ID = #$n"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.app.outputs.prefix }}-${{ steps.app.outputs.run_number }}
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: aab
+
+      - name: Upload to Google Play
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ steps.app.outputs.pkg }}
+          releaseFiles: aab/*.aab
+          track: ${{ steps.app.outputs.track }}
+          status: completed
+
+      - name: Summary
+        run: echo "### versionCode ${{ steps.app.outputs.run_number }} -> ${{ steps.app.outputs.track }} of ${{ steps.app.outputs.pkg }}" >> "$GITHUB_STEP_SUMMARY"

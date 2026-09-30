@@ -4,9 +4,19 @@
 # (owner, 2026-09-29: "сними себе сам ... проверь, пришли скриншоты").
 # Usage: tools/emu-screens.sh <apk> <out-dir>
 set -u
-APK=$1; OUT=$2; PKG=gift.dhamma.mobile
+APK=$1; OUT=$2; PKG=${3:-gift.dhamma.mobile}
 mkdir -p "$OUT"
 adb install -r "$APK" || exit 1
+if [ "$PKG" = gift.dhamma.uposatha ]; then
+  # Uposatha: the long-press menu is dynamic shortcuts the page's bridge pushes, so what proves it is the
+  # system's own list after one launch (and the version row the bridge fills in).
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null
+  sleep 25; adb exec-out screencap -p > "$OUT/uposatha-home.png"
+  adb shell input keyevent KEYCODE_HOME; sleep 3
+  adb shell dumpsys shortcut "$PKG" > "$OUT/shortcuts.txt"
+  adb logcat -d -t 400 > "$OUT/logcat.txt" 2>/dev/null || true
+  grep -cE "Shortcut: *dg-|id=dg-" "$OUT/shortcuts.txt"; exit 0
+fi
 adb shell dumpsys package com.google.android.webview | grep -m1 versionName > "$OUT/webview-version.txt" || true
 shot() { sleep "${2:-6}"; adb exec-out screencap -p > "$OUT/$1.png"; echo "shot $1"; }
 # App Links (https://dhamma.gift/...), the way a tapped link arrives: explicit package, so no

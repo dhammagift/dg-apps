@@ -24,6 +24,11 @@ on:
         required: false
         type: string
         default: 'google_apis'
+      package:
+        description: 'Package of the APK: gift.dhamma.mobile (screens) or gift.dhamma.uposatha (shortcuts check)'
+        required: false
+        type: string
+        default: 'gift.dhamma.mobile'
 
 permissions:
   actions: read
@@ -59,7 +64,7 @@ jobs:
           profile: pixel_7
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots
+          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots ${{ inputs.package }}
 
       - name: Upload the screenshots
         if: always()

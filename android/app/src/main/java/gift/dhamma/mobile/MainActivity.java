@@ -30,6 +30,8 @@ public class MainActivity extends BridgeActivity {
         // transfer (the page keeps reporting it; this only mirrors it natively).
         registerPlugin(DgProgressPlugin.class);
         registerPlugin(DgTtsPlugin.class);
+        // Native Google sign-in (dg-apps#43): the account sheet, not a browser page with a second button.
+        registerPlugin(DgGoogleSignInPlugin.class);
         // OS-level search: the offline library's metadata into Android's own AppSearch, so a sutta
         // is findable from the phone's search. Platform API only, so it adds no dependency and no
         // APK weight. Registered only from Android 12 (where android.app.appsearch exists at all)

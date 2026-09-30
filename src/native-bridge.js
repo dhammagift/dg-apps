@@ -1002,6 +1002,21 @@
     // (Google) demands Apple as an equally-offered option, not Google hidden away instead — an
     // earlier version of this file hid the Google button on iOS to dodge that; now Apple is real,
     // both stay visible everywhere.
+    // The Firebase project's WEB OAuth client ID (Firebase console -> Authentication -> Google ->
+    // Web SDK configuration). Empty: native Google sign-in stays off and the browser page is used.
+    var GOOGLE_WEB_CLIENT_ID = '';
+    var nativeSignIn = {};
+    (function () {
+        var P = (window.Capacitor && window.Capacitor.Plugins) || {};
+        var platform = window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform();
+        if (platform === 'android' && GOOGLE_WEB_CLIENT_ID && P.DgGoogleSignIn && window.Capacitor.isPluginAvailable &&
+                window.Capacitor.isPluginAvailable('DgGoogleSignIn')) {
+            nativeSignIn.google = function () {
+                return P.DgGoogleSignIn.signIn({ serverClientId: GOOGLE_WEB_CLIENT_ID }).then(function (r) { return r.idToken; });
+            };
+        }
+    })();
+
     function wireBrowserSignIn(name, page, credentialFromToken) {
         var KEY = 'dg.app.' + name + 'SignIn';
         var origin = window.DG_ONLINE_ORIGIN || 'https://dhamma.gift';
@@ -1026,7 +1041,31 @@
             window.dgSignInUrl = function (state, pkg) { return signInUrl(state || 'a1b2c3d4e5f60718293a4b5c6d7e8f90', pkg); };
         }
 
+        // Native first where the app has it (dg-apps#43): the system account sheet, then straight into
+        // Firebase with the token — no browser page with a second "Sign in with Google" button. The
+        // browser detour below stays as the fallback (no client ID yet, an older app build, a
+        // phone without Google Play services, or any error that is not the reader closing the sheet).
+        function startNative() {
+            var plugin = nativeSignIn[name];
+            if (!plugin) return null;
+            return plugin().then(function (token) {
+                return Promise.resolve(typeof window.initFirebase === 'function' && window.initFirebase()).then(function () {
+                    return firebase.auth().signInWithCredential(credentialFromToken(token));
+                });
+            }).then(function () {
+                localStorage.setItem('dg_cloud_session', 'true');
+            }, function (e) {
+                if (e && e.code === 'cancelled') return;
+                console.error('[dg-' + name + '] native sign-in failed, falling back to the browser:', e && (e.code || e.message));
+                return startBrowser();
+            });
+        }
+
         function start() {
+            return startNative() || startBrowser();
+        }
+
+        function startBrowser() {
             var bytes = new Uint8Array(16);
             crypto.getRandomValues(bytes);
             var state = Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');

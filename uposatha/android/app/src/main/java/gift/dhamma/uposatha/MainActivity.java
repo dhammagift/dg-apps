@@ -65,7 +65,6 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgSoundPlugin.class);
         registerPlugin(DgSitePlugin.class);
         registerPlugin(DgAlarmPlugin.class);
-        registerPlugin(DgIconPlugin.class);
         // The strips behind the system bars in the page's colours (dg-apps#40, see DgBarsPlugin).
         registerPlugin(DgBarsPlugin.class);
         // The launch splash is the animated mark (res/drawable/dg_splash_icon.xml, 890 ms). The system takes the

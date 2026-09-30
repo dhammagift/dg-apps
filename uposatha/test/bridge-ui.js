@@ -32,7 +32,6 @@ function capacitorStub() {
         isNativePlatform: () => true,
         Plugins: {
             App: { addListener: (n, cb) => { if (n === 'backButton') window.__back = cb; return { remove() {} }; }, exitApp: () => { window.__calls.exit++; } },
-            DgIcon: { set: (o) => { window.__calls.icon = o.items; return Promise.resolve({ phase: 4 }); } },
             DgShortcuts: { set: (o) => { window.__calls.shortcuts.push(o.items); return Promise.resolve({ count: o.items.length }); } },
             DgAlarm: {
                 schedule: (o) => { window.__calls.alarms = (window.__calls.alarms || []).concat(o.items); return Promise.resolve(); },
@@ -227,7 +226,7 @@ function capacitorStub() {
                 window.Capacitor.getPlatform = () => 'ios';
                 window.__ios = { notify: [], cancel: [], listeners: {} };
                 const P = window.Capacitor.Plugins;
-                delete P.DgIcon; delete P.DgAlarm; delete P.DgSound;
+                delete P.DgAlarm; delete P.DgSound;
                 P.DgNotify = {
                     schedule: (o) => { window.__ios.notify = window.__ios.notify.concat(o.items); return Promise.resolve({ count: o.items.length }); },
                     cancel: (o) => { window.__ios.cancel = window.__ios.cancel.concat(o.ids); return Promise.resolve(); },
@@ -256,20 +255,6 @@ function capacitorStub() {
             check('ios: reminders go to DgNotify with the sound of their channel (the reader\'s own sound is the default one; a past reminder is dropped by the native side)', got.notify, [[7000, 'T', 'gong'], [7001, 'T2', 'pubbanha'], [7002, 'T3', ''], [7003, 'T4', 'vikala']]);
             check('ios: cancel goes to DgNotify; nothing goes to the Android paths', [got.cancel, got.android, got.channels], [[7000], 0, 0]);
             check('ios: quick actions are pushed and a tap is listened for', [got.shortcuts.length, got.listener], [4, 'function']);
-            await ctx.close();
-        }
-
-        // 4a1. The launcher icon of the day: a schedule of the next weeks, a phase index for each day.
-        {
-            const ctx = await ctxOf('light', 'en');
-            await ctx.addInitScript(capacitorStub);
-            await ctx.addInitScript(BRIDGE);
-            const page = await ctx.newPage();
-            await page.goto(PAGE, { waitUntil: 'load' });
-            await page.waitForTimeout(2500);
-            const items = await page.evaluate(() => window.__calls.icon || null);
-            check('launcher icon: 35 days, ascending, phases 0..7', items && [items.length, items.every((x, k) => (k === 0 || x.at > items[k - 1].at) && x.i >= 0 && x.i <= 7 && x.at > 0)], [35, true]);
-            check('launcher icon: the moon changes over the month (all eight shapes appear)', items && new Set(items.map((x) => x.i)).size, 8);
             await ctx.close();
         }
 

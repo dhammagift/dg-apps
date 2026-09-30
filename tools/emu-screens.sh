@@ -32,6 +32,16 @@ if [ "${4:-}" = shortcuts ]; then
   # then asks the system what it holds and launches each shortcut the way the launcher does.
   # Writes $OUT/shortcuts-result.txt; exits 1 when a check fails, so the workflow run goes red.
   fail=0; res="$OUT/shortcuts-result.txt"; : > "$res"
+  # The whole scenario as a video (owner: "запиши весь ролик"). screenrecord stops at 180 s, so it is
+  # restarted in a loop while the flag file exists, and the parts are joined at the end.
+  touch "$OUT/.rec"
+  ( i=0; while [ -f "$OUT/.rec" ]; do adb shell screenrecord --bit-rate 4000000 --time-limit 170 "/sdcard/rec-$i.mp4"; i=$((i+1)); done ) &
+  RECPID=$!
+  stop_rec() {
+    rm -f "$OUT/.rec"; adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null
+    for f in $(adb shell ls /sdcard/ | tr -d '\r' | grep '^rec-.*\.mp4$' | sort -V); do adb pull "/sdcard/$f" "$OUT/$f" > /dev/null; echo "file '$f'" >> "$OUT/rec.txt"; done
+    (cd "$OUT" && ffmpeg -loglevel error -y -f concat -safe 0 -i rec.txt -c copy flow.mp4 && rm -f rec-*.mp4 rec.txt) || true
+  }
   ok() { echo "PASS $*" >> "$res"; }; ko() { echo "FAIL $*" >> "$res"; fail=1; }
   # The page is a WebView: uiautomator sees no text inside a release build, so the screen is read with OCR.
   screen_has() { adb exec-out screencap -p > "$OUT/ocr.png"; tesseract "$OUT/ocr.png" - 2>/dev/null | tee -a "$OUT/ocr.txt" | grep -qiE "$1"; }
@@ -87,6 +97,12 @@ PY
   screen_has "sn56.11|Samyutta|Saṁyutta" && ok "recent-text shortcut opens sn56.11" || ko "recent-text shortcut: sn56.11 not on screen"
   adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true
   grep -iE "dg-shortcuts|Uncaught|TypeError|ReferenceError" "$OUT/logcat.txt" | head -20 >> "$res"
+  # A basic flow on top, for the video: settings, then home.
+  adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/settings/" "$PKG" > /dev/null; sleep 8
+  adb shell input swipe 540 1900 540 600 400; sleep 3
+  adb shell input keyevent KEYCODE_HOME; sleep 2
+  stop_rec
+  [ -s "$OUT/flow.mp4" ] && echo "video: flow.mp4 ($(du -h "$OUT/flow.mp4" | cut -f1))" >> "$res"
   cat "$res"; exit $fail
 fi
 adb shell dumpsys package com.google.android.webview | grep -m1 versionName > "$OUT/webview-version.txt" || true

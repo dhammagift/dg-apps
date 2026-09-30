@@ -147,7 +147,9 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
     }
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
-        guard let url = urlSchemeTask.request.url, urlSchemeTask.request.httpMethod == "GET", url.host == "localhost" else {
+        // No host check: this handler only ever sees the app's own scheme, and the host is server.hostname
+        // (uposatha.dhamma.gift since 538a62e). It was == "localhost", which silently stopped the downloaded page.
+        guard let url = urlSchemeTask.request.url, urlSchemeTask.request.httpMethod == "GET" else {
             return inner.webView(webView, start: urlSchemeTask)
         }
         var path = url.path

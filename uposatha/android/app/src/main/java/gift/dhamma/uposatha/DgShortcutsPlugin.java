@@ -1,5 +1,6 @@
 package gift.dhamma.uposatha;
 
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -17,6 +18,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -52,6 +54,9 @@ public class DgShortcutsPlugin extends Plugin {
     // entries show full 19-character labels on the same launcher, which is what settled it.
     private static final int SHORT_LABEL_MAX = 25;
     private static final int LONG_LABEL_MAX = 25;
+    // The last list the page handed over, kept for republish(): see DgIconPlugin.show.
+    private static final String PREFS = "dg_shortcuts";
+    private static final String KEY_ITEMS = "items";
 
     @PluginMethod
     public void set(PluginCall call) {
@@ -67,6 +72,27 @@ public class DgShortcutsPlugin extends Plugin {
             return;
         }
 
+        List<ShortcutInfoCompat> shortcuts = build(context, items, null);
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_ITEMS, items.toString()).apply();
+
+        try {
+            ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts);
+            // No enable/disable of static shortcuts here any more. The plugin used to hide the three
+            // programmed ones while "recent words" were on, exactly as the reader app does — and
+            // that is the shape that showed the owner two words out of three: the launcher counts
+            // the shortcuts DECLARED in res/xml/shortcuts.xml against its four-entry menu even when
+            // they are disabled. One static entry is declared there now (Favorites & History) and
+            // the rest of the menu is this list, whichever set the page decided on.
+            JSObject result = new JSObject();
+            result.put("count", shortcuts.size());
+            call.resolve(result);
+        } catch (Exception e) {
+            call.reject("DgShortcuts.set failed: " + e.getMessage());
+        }
+    }
+
+    /** The shortcuts for a list of {id, label, route, icon, rank}; bound to {@code activity} when given. */
+    private static List<ShortcutInfoCompat> build(Context context, JSONArray items, ComponentName activity) {
         List<ShortcutInfoCompat> shortcuts = new ArrayList<>();
         for (int i = 0; i < items.length() && shortcuts.size() < MAX_SHORTCUTS; i++) {
             JSONObject item;
@@ -86,32 +112,37 @@ public class DgShortcutsPlugin extends Plugin {
                 // treats two items with the same route as different shortcuts.
                 intent.setAction("gift.dhamma.uposatha.SHORTCUT");
                 intent.putExtra("route", route);
-                shortcuts.add(new ShortcutInfoCompat.Builder(context, id)
+                ShortcutInfoCompat.Builder b = new ShortcutInfoCompat.Builder(context, id)
                         .setShortLabel(clamp(label, SHORT_LABEL_MAX))
                         .setLongLabel(clamp(label, LONG_LABEL_MAX))
                         .setRank(rank)
                         .setIcon(iconFor(context, item.optString("icon", "")))
                         .setLongLived(true)
-                        .setIntent(intent)
-                        .build());
+                        .setIntent(intent);
+                if (activity != null) b.setActivity(activity);
+                shortcuts.add(b.build());
             } catch (Exception e) {
                 // One bad item must not cost the reader the others.
             }
         }
 
+        return shortcuts;
+    }
+
+    /**
+     * Publishes the last list again, bound to the launcher alias that is enabled now. The moon icon is one
+     * activity-alias per phase (DgIconPlugin), and Android drops the dynamic shortcuts of an activity that gets
+     * disabled: every change of phase emptied the long-press menu until the app was next opened and left (owner:
+     * "куда делись шорткаты в uposatha"). Called by DgIconPlugin right after it switches the alias.
+     */
+    static void republish(Context context, ComponentName activity) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return;
+        String stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_ITEMS, null);
+        if (stored == null) return;
         try {
-            ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts);
-            // No enable/disable of static shortcuts here any more. The plugin used to hide the three
-            // programmed ones while "recent words" were on, exactly as the reader app does — and
-            // that is the shape that showed the owner two words out of three: the launcher counts
-            // the shortcuts DECLARED in res/xml/shortcuts.xml against its four-entry menu even when
-            // they are disabled. One static entry is declared there now (Favorites & History) and
-            // the rest of the menu is this list, whichever set the page decided on.
-            JSObject result = new JSObject();
-            result.put("count", shortcuts.size());
-            call.resolve(result);
+            ShortcutManagerCompat.setDynamicShortcuts(context, build(context, new JSONArray(stored), activity));
         } catch (Exception e) {
-            call.reject("DgShortcuts.set failed: " + e.getMessage());
+            // A stale or unreadable list: the next visit to the app sets a fresh one.
         }
     }
 

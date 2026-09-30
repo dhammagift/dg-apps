@@ -80,6 +80,7 @@ public class DgIconPlugin extends Plugin {
         String pkg = context.getPackageName();
         // The wanted one first, so the app never has no launcher entry.
         ComponentName want = new ComponentName(pkg, pkg + ".IconPhase" + phase);
+        boolean switched = false;
         if (pm.getComponentEnabledSetting(want) != PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                 && !(phase == DEFAULT_PHASE && pm.getComponentEnabledSetting(want) == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)) {
             pm.setComponentEnabledSetting(want, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
@@ -90,8 +91,10 @@ public class DgIconPlugin extends Plugin {
             int state = pm.getComponentEnabledSetting(other);
             boolean off = state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
                     || (state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && i != DEFAULT_PHASE);
-            if (!off) pm.setComponentEnabledSetting(other, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
+            if (!off) { pm.setComponentEnabledSetting(other, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP); switched = true; }
         }
+        // Disabling the old alias takes its dynamic shortcuts with it: put them back on the new one.
+        if (switched) DgShortcutsPlugin.republish(context, want);
     }
 
     private static void schedule(Context context, long at) {

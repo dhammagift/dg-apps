@@ -72,7 +72,10 @@ public class DgSignInPlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorizationControl
             appleCall?.reject("Apple returned no identity token", "credential")
             return
         }
-        appleCall?.resolve(["idToken": token, "rawNonce": appleNonce])
+        // The authorization code is what Apple's token revocation takes (account deletion, App Review
+        // 5.1.1(v)): settings.js hands it to Firebase's accounts:revokeToken right before deleting.
+        let code = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        appleCall?.resolve(["idToken": token, "rawNonce": appleNonce, "authorizationCode": code])
     }
 
     public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {

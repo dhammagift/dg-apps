@@ -1043,6 +1043,14 @@
         }
     })();
 
+    // The same native sign-in for settings.js's account deletion (dg-apps#43): Firebase deletes an
+    // account only after a recent sign-in, and Apple's token revocation takes a fresh authorization
+    // code. Resolves to { idToken, rawNonce?, authorizationCode? }, or null where there is no native
+    // path for that provider (Android + Apple, or an older build).
+    window.dgNativeSignIn = function (provider) {
+        return nativeSignIn[provider] ? nativeSignIn[provider]() : null;
+    };
+
     function wireBrowserSignIn(name, page, credentialFromToken) {
         var KEY = 'dg.app.' + name + 'SignIn';
         var origin = window.DG_ONLINE_ORIGIN || 'https://dhamma.gift';

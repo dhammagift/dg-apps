@@ -47,6 +47,30 @@ if [ "${4:-}" = shortcuts ]; then
   [ "$n" -ge 1 ] && ok "dynamic recent-text shortcuts: $n" || ko "no dynamic recent-text shortcuts pushed"
   # The last five opened were dn22, dukkha, sn56.11, metta, mn8: the three slots must hold a search too.
   grep -qiE "shortLabel=(dukkha|metta)" "$OUT/shortcuts.txt" && ok "a recent search is among the shortcuts" || ko "no recent search among the shortcuts"
+  # The launcher's own long-press menu, as the reader sees it: open the app drawer, long-press the icon,
+  # screenshot, and read the menu (the launcher is native, so uiautomator sees its text).
+  adb shell input keyevent KEYCODE_HOME; sleep 2
+  adb shell input swipe 540 2000 540 600 300; sleep 3
+  adb shell uiautomator dump /sdcard/l.xml > /dev/null 2>&1; adb shell cat /sdcard/l.xml > "$OUT/launcher.xml"
+  xy=$(python3 - "$OUT/launcher.xml" << 'PY'
+import re, sys
+x = open(sys.argv[1], encoding='utf-8', errors='ignore').read()
+for label in ('DGift', 'Dhamma.gift', 'Dhamma.Gift'):
+    m = re.search(r'text="%s"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"' % re.escape(label), x)
+    if m:
+        a, b, c, d = map(int, m.groups()); print((a + c) // 2, (b + d) // 2); break
+PY
+)
+  if [ -n "$xy" ]; then
+    adb shell input swipe $xy $xy 1500; sleep 2
+    adb exec-out screencap -p > "$OUT/launcher-menu.png"
+    adb shell uiautomator dump /sdcard/m.xml > /dev/null 2>&1; adb shell cat /sdcard/m.xml > "$OUT/launcher-menu.xml"
+    grep -qiE 'text="(dukkha|metta)' "$OUT/launcher-menu.xml" && ok "launcher menu shows a recent search" || ko "launcher menu: no recent search"
+    grep -qi 'text="Favorites' "$OUT/launcher-menu.xml" && ok "launcher menu shows Favorites & History" || ko "launcher menu: no Favorites & History"
+    adb shell input keyevent KEYCODE_BACK; adb shell input keyevent KEYCODE_HOME
+  else
+    ko "launcher: app icon not found in the drawer"
+  fi
   # Launch them the way the launcher does: the static one (MAIN + route extra), one recent text (SHORTCUT action).
   adb shell am force-stop "$PKG"
   adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as > /dev/null; sleep 12

@@ -100,7 +100,9 @@ function capacitorStub() {
             DgShortcuts: { set: (o) => Promise.resolve({ count: o.items.length }) },
             DgSound: { pick: () => Promise.resolve({}), channel: () => Promise.resolve() },
             DgSite: { put: () => Promise.resolve(), list: () => Promise.resolve({ files: [] }), clear: () => Promise.resolve() },
-            LocalNotifications: { requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: () => Promise.resolve() },
+            // addListener as well: the bridge wraps the plugin's own listeners, and Capacitor's real
+            // plugin has it — the site's current page calls it as soon as it loads.
+            LocalNotifications: { addListener: () => ({ remove() {} }), requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: () => Promise.resolve() },
             SystemBars: {
                 setStyle: (o) => { window.__calls.styles.push(o.style + '/' + o.bar); return Promise.resolve(); },
                 // The native DgBars is gone; a call to it would show up here as a page error instead.

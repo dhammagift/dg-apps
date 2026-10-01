@@ -82,6 +82,11 @@ jobs:
         if: inputs.mode == 'edgetoedge' && inputs.video
         run: sudo apt-get install -y -qq ffmpeg > /dev/null
 
+      - name: Profile
+        run: |
+          mkdir -p shots
+          echo "emulator profile: ${{ inputs.profile }}, api level: ${{ inputs.api_level }}, package: ${{ inputs.package }}, mode: ${{ inputs.mode }}" | tee shots/profile.txt
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

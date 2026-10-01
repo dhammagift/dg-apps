@@ -64,9 +64,14 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = edgetoedge ]; then
     done
     return 1
   }
-  measure() { # $1 = name, $2 = light|dark
+  measure() { # $1 = name, $2 = light|dark, $3 = port|land (the orientation the shot must be)
     adb shell cmd uimode night "$([ "$2" = dark ] && echo yes || echo no)" > /dev/null 2>&1
     launch 8
+    # Rotate AFTER the launch: a fresh activity start put the emulator back to portrait in run 24,
+    # so a rotation taken before it was gone by the time the screenshot was made (the light
+    # landscape shot there is 1080x2400 and passed only because a portrait shot skips the left/right
+    # checks). The orientation is then part of the verdict, not an assumption.
+    if [ "${3:-port}" = land ] && ! rotate 1; then ko "$1: the emulator never turned landscape"; fi
     wait_page 30 || ko "$1: the page never painted"
     sleep 3
     adb exec-out screencap -p > "$OUT/edge-$1.png"
@@ -109,10 +114,17 @@ w = [int(sys.argv[2][i:i+2], 16) for i in (1, 3, 5)]
 sys.exit(0 if all(abs(a - b) <= 8 for a, b in zip(c, w)) else 1)
 PY
     [ "$v_bottom_matches_page" = true ] && ok "$1: the bottom edge is the page's own background too" || ko "$1: the bottom edge is $v_bottom_color, not the page's $v_page_bg"
-    # 4. Landscape: the camera cutout is on a side there, so the left and right edges are checked too.
-    if [ "$v_landscape" = true ]; then
-      [ "$v_frame_left" = 0 ] && ok "$1: the page reaches the left edge (no cutout strip)" || ko "$1: $v_frame_left px of a strip at the left"
-      [ "$v_frame_right" = 0 ] && ok "$1: the page reaches the right edge" || ko "$1: $v_frame_right px of a strip at the right"
+    # 4. Landscape: the camera cutout is on a side there, so the left and right edges are checked
+    #    too. A landscape pass whose screenshot is portrait is not evidence of anything: it is a
+    #    failure of the rotation, never a pass.
+    if [ "${3:-port}" = land ]; then
+      if [ "$v_landscape" = true ]; then
+        ok "$1: the shot really is landscape ($(python3 -c "from PIL import Image;im=Image.open('$OUT/edge-$1.png');print(f'{im.width}x{im.height}')"))"
+        [ "$v_frame_left" = 0 ] && ok "$1: the page reaches the left edge (no cutout strip)" || ko "$1: $v_frame_left px of a strip at the left"
+        [ "$v_frame_right" = 0 ] && ok "$1: the page reaches the right edge" || ko "$1: $v_frame_right px of a strip at the right"
+      else
+        ko "$1: the screenshot is NOT landscape — the emulator did not rotate, nothing was proved"
+      fi
     fi
   }
   adb logcat -c 2>/dev/null || true
@@ -126,7 +138,7 @@ PY
   # taken there; every run takes the landscape one, cutout sides included.
   TABLET=$([ "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | head -1)" = "2560x1600" ] && echo yes || echo no)
   adb shell cmd uimode night no > /dev/null 2>&1
-  if rotate 1; then measure landscape-light light; else echo "landscape: skipped (the emulator did not rotate)" >> "$res"; fi
+  measure landscape-light light land
   rotate 0 || true
   # A short tour for the video: the app layer, a tab, then the dark theme (the page follows the
   # system appearance through prefers-color-scheme, so the same path a reader takes is exercised).
@@ -138,7 +150,7 @@ PY
   launch 8; wait_page 30 || true
   adb shell input tap 250 1790; sleep 4     # the Calendar tab, on the dark page
   # Landscape again, on the dark page, while the video is still running (the cutout and the bars).
-  if rotate 1; then adb exec-out screencap -p > "$OUT/edge-landscape-dark.png"; else echo "landscape-dark: skipped (the emulator did not rotate)" >> "$res"; fi
+  measure landscape-dark dark land
   rotate 0 || true
   adb shell input keyevent KEYCODE_HOME; sleep 2
   stop_rec

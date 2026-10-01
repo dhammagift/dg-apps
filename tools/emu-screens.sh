@@ -104,6 +104,32 @@ PY
   screen_has "sn56.11|Samyutta|Saṁyutta" && ok "recent-text shortcut opens sn56.11" || ko "recent-text shortcut: sn56.11 not on screen"
   adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true
   grep -iE "dg-shortcuts|Uncaught|TypeError|ReferenceError" "$OUT/logcat.txt" | head -20 >> "$res"
+  # Favorites from the history, then the quick window reopened a few times, for the video
+  # (owner, 2026-10-01: in a favorite's row the subscribe bell turned into a trash can or a pencil
+  # ~0.3 s after the window opened, on a phone; builds 427 and 430).
+  for r in mn7 mn9 mn10 mn11 mn12; do adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/$r" "$PKG" > /dev/null; sleep 8; done
+  open_quick() {
+    adb shell am force-stop "$PKG"
+    adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as > /dev/null; sleep 10
+    adb shell input tap 309 2184; sleep 2
+  }
+  # A history row's star sits at the right edge; its height is found with OCR (the page is a WebView,
+  # uiautomator sees no text in a release build). The LAST match is the history row: favorites come first.
+  star_of() {
+    adb exec-out screencap -p > "$OUT/fav-ocr.png"
+    tesseract "$OUT/fav-ocr.png" - tsv 2>/dev/null | awk -F'\t' -v t="$1" 'NR > 1 && $12 == t { y = $8 + int($10 / 2) } END { if (y) print y }'
+  }
+  open_quick
+  for t in mn9 mn11 mn12; do
+    y=$(star_of "$t")
+    if [ -n "$y" ]; then adb shell input tap 930 "$y"; sleep 2; ok "favorite added from the history: $t"; else ko "history row not found on screen: $t"; fi
+  done
+  adb exec-out screencap -p > "$OUT/fav-after-adding.png"
+  for n in 1 2 3; do
+    adb shell input keyevent KEYCODE_BACK; sleep 2
+    open_quick
+    for d in 0 1 3; do sleep "$d"; adb exec-out screencap -p > "$OUT/fav-open-$n-${d}s.png"; done
+  done
   # A basic flow on top, for the video: settings, then home.
   adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/settings/" "$PKG" > /dev/null; sleep 8
   adb shell input swipe 540 1900 540 600 400; sleep 3

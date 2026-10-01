@@ -99,7 +99,13 @@ on:
 concurrency:
   # The dictionary/Uposatha-only run (dict_only) has a group of its own: it takes minutes, the full run takes
   # the better part of an hour, and starting the quick one must not cancel the full one that is running.
-  group: build-${{ github.ref }}-${{ inputs.dict_only && 'small' || 'full' }}
+  #
+  # The release target is part of the name too (owner, 2026-10-01: "как uposatha android может пострадать от
+  # dg apple"). Without it every manual run on a branch lands in the same group, so a Dhamma.Gift iOS release
+  # cancelled an Uposatha Android build that had nothing to do with it — not a dependency, just the same
+  # group string. Same target still cancels itself (that is what cancel-in-progress is for); different apps
+  # or stores no longer touch each other.
+  group: build-${{ github.ref }}-${{ inputs.dict_only && 'small' || 'full' }}-${{ inputs.release || 'none' }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:

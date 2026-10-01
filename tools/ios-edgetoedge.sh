@@ -126,10 +126,10 @@ fi
 for f in "$OUT"/uposatha-ios-*.png; do
     [ -f "$f" ] || continue
     python3 tools/edge-pixels.py "$f" light "${f%.png}.json" > /dev/null 2>&1 || true
-    if python3 -c "import json,sys;d=json.load(open('${f%.png}.json'));sys.exit(0 if d['top_row_uniform'] and not d['empty_page'] else 1)" 2>/dev/null; then
-        echo "PASS $(basename "$f"): the page is painted and nothing of it is under the status bar" | tee -a "$OUT/ios-edgetoedge.txt"
+    if python3 -c "import json,sys;d=json.load(open('${f%.png}.json'));sys.exit(0 if d['page_clear_of_status'] and not d['empty_page'] else 1)" 2>/dev/null; then
+        echo "PASS $(basename "$f"): painted, and its top bar starts below the cutout ($(python3 -c "import json;d=json.load(open('${f%.png}.json'));print('cutout bottom',d['cutout_bottom'],'page text',d['page_text_top'])"))" | tee -a "$OUT/ios-edgetoedge.txt"
     else
-        echo "FAIL $(basename "$f"): the page is empty or its content is under the status bar" | tee -a "$OUT/ios-edgetoedge.txt"
+        echo "FAIL $(basename "$f"): $(python3 -c "import json;d=json.load(open('${f%.png}.json'));print('empty page' if d['empty_page'] else f\"the page's own text is at {d['page_text_top']}px, the cutout ends at {d['cutout_bottom']}px — it is under the clock\")")" | tee -a "$OUT/ios-edgetoedge.txt"
         FAILED=1
     fi
 done

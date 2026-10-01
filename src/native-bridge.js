@@ -308,10 +308,12 @@
         // server, /login and /docs were never bundled. Rewriting the URL for them would land the
         // reader on the search page (a path Capacitor cannot resolve falls back to index.html), so
         // they go to the real site in the device's own browser — the same treatment their links get
-        // when tapped inside the page (NOT_BUNDLED_RE below).
+        // when tapped inside the page (NOT_BUNDLED_RE below). /uposatha-calendar is the same case:
+        // the calendar has its own app (gift.dhamma.uposatha) and its own page, this bundle has
+        // neither — a dhamma.gift/uposatha-calendar link (the bot's calendar button) opened search.
         // The literal origin, not ONLINE_ORIGIN: that var is declared further down and would still
         // be undefined here, since this runs at parse time.
-        var EXTERNAL_ROUTES = /^\/(ru\/)?(dict|memorize|docs)(\/|$)/; // login is bundled now (below)
+        var EXTERNAL_ROUTES = /^\/(ru\/)?(dict|memorize|docs|uposatha-calendar)(\/|\?|$)/; // login is bundled now (below)
         if (EXTERNAL_ROUTES.test(route)) {
             openExternal((window.DG_ONLINE_ORIGIN || 'https://dhamma.gift') + route);
             return;
@@ -787,7 +789,8 @@
     // read/d/rev/frev/ml, r.php, history.php: the legacy PHP reading modes the menus link to, never bundled.
     // documents (PDFs), legacy.suttacentral.net, th, assets/br and the timers are site-only too.
     // theravada.ru / tipitaka.theravada.su: the site's local mirrors behind the results' "Ru" links (openRu.js).
-    var NOT_BUNDLED_RE = /^\/(ru\/)?(dict|memorize|docs|read|d|rev|frev|ml|documents|legacy\.suttacentral\.net|th|theravada\.ru|theravada\.rf|tipitaka\.theravada\.su)(\/|$)|^\/(ru\/)?(r|history)\.php$|^\/(ru\/)?assets\/(br|repeat-timer|pomodoro-timer)(\/|$)/;
+    // uposatha-calendar: a page of the site (and of its own app), never bundled here.
+    var NOT_BUNDLED_RE = /^\/(ru\/)?(dict|memorize|docs|uposatha-calendar|read|d|rev|frev|ml|documents|legacy\.suttacentral\.net|th|theravada\.ru|theravada\.rf|tipitaka\.theravada\.su)(\/|$)|^\/(ru\/)?(r|history)\.php$|^\/(ru\/)?assets\/(br|repeat-timer|pomodoro-timer)(\/|$)/;
 
     // Where a link has to go outside this WebView, or null when it opens here. /4nt (the edition
     // comparison) is never bundled; its online copy is s.dhamma.gift without the /4nt prefix, the
@@ -1102,7 +1105,11 @@
                 localStorage.setItem('dg_cloud_session', 'true');
             }, function (e) {
                 if (e && e.code === 'cancelled') return;
-                console.error('[dg-' + name + '] native sign-in failed, falling back to the browser:', e && (e.code || e.message));
+                // Both halves: DgSignInPlugin.apple() rejects with a bare code ("apple") for every
+                // non-cancel ASAuthorizationError, so `code || message` threw away the only text that
+                // says WHICH failure it was (notHandled, invalidResponse, a rate limit, entitlement).
+                var why = e ? (e.code ? e.code + ': ' : '') + (e.message || '') : e;
+                console.error('[dg-' + name + '] native sign-in failed, falling back to the browser:', why);
                 return startBrowser();
             });
         }

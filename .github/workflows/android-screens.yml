@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: 'gift.dhamma.mobile'
+      profile:
+        description: 'Emulator profile: pixel_7 (phone) or pixel_tablet (tablet width)'
+        required: false
+        type: string
+        default: 'pixel_7'
       video:
         description: 'Record the emulator test as a video (flow.mp4) as well as screenshots'
         required: false
@@ -91,7 +96,7 @@ jobs:
           api-level: ${{ inputs.api_level }}
           target: ${{ inputs.target }}
           arch: x86_64
-          profile: pixel_7
+          profile: ${{ inputs.profile }}
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots ${{ inputs.package }} ${{ inputs.mode }}

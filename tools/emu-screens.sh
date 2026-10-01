@@ -54,7 +54,7 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = edgetoedge ]; then
     adb shell settings put system user_rotation "$1" > /dev/null 2>&1
     adb shell cmd window user-rotation lock "$1" > /dev/null 2>&1
     local i
-    for i in 1 2 3 4 5 6; do
+    for i in $(seq 1 10); do
       sleep 3
       adb exec-out screencap -p > "$OUT/.rot.png" 2>/dev/null
       local shape
@@ -77,7 +77,7 @@ v = json.load(open(sys.argv[1]))
 for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg",
           "top_matches_page", "bottom_matches_page", "top_row_uniform", "frame_left", "frame_right",
           "landscape", "text_top", "status_rows", "empty_page", "ink_ratio"):
-    print("v_%s=%s" % (k, "true" if v[k] is True else v[k]))
+    print("v_%s=%s" % (k, str(v[k]).lower()))   # booleans as the shell compares them
 PY
 )"
     echo "$1: page_bg=$v_page_bg status_bar_rows=$v_status_rows top_bar_text=$v_text_top ink=$v_ink_ratio" >> "$res"

@@ -103,15 +103,14 @@ PY
   adb shell pm clear "$PKG" > /dev/null 2>&1 || true   # first run: the default light theme, no stored state
   measure light light
   measure dark dark
-  # Landscape and the tablet width (owner: "нужно посмотреть в альбомной и планшетной"). One
-  # profile per run (the workflow's "profile" input), so this part is marked skipped when the
-  # emulator was not started as a tablet.
+  # Landscape and the tablet width (owner: "нужно посмотреть в альбомной и планшетной"). One profile
+  # per run (the workflow's "profile" input, pixel_7 or pixel_tablet), so the tablet pass is only
+  # taken there; every run takes the landscape one, cutout sides included.
   TABLET=$([ "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | head -1)" = "2560x1600" ] && echo yes || echo no)
   adb shell cmd uimode night no > /dev/null 2>&1
   adb shell settings put system user_rotation 1
   sleep 6
-  measure landscape light
-  adb exec-out screencap -p > "$OUT/edge-landscape-flow.png"
+  measure landscape-light light
   adb shell settings put system user_rotation 0
   sleep 4
   # A short tour for the video: the app layer, a tab, then the dark theme (the page follows the
@@ -124,7 +123,8 @@ PY
   launch 8; wait_page 30 || true
   adb shell input tap 250 1790; sleep 4     # the Calendar tab, on the dark page
   # Landscape again, on the dark page, while the video is still running (the cutout and the bars).
-  adb shell settings put system user_rotation 1; sleep 5
+  adb shell settings put system user_rotation 1
+  sleep 5
   adb exec-out screencap -p > "$OUT/edge-landscape-dark.png"
   adb shell settings put system user_rotation 0; sleep 3
   adb shell input keyevent KEYCODE_HOME; sleep 2

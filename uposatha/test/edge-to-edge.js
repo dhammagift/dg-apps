@@ -181,6 +181,8 @@ function fakeInsets(px) {
             await page.waitForTimeout(2500);
             check('no insets: the top bar keeps its own padding',
                 await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '10px');
+            check('no insets: no fallback value is left behind (the live env() decides)',
+                await page.evaluate(() => document.documentElement.style.getPropertyValue('--dg-safe-top')), '');
             check('no insets: no cover padding is added at all',
                 await page.evaluate(() => document.body.classList.contains('dg-safe-top-on')), false);
             check('the light page gets dark icons, on both bars',
@@ -208,8 +210,11 @@ function fakeInsets(px) {
             const rep = await page.evaluate(() => window.__calls.report);
             check('the page reports its measurements for the proof (what the screenshot cannot tell)',
                 [rep && rep.topInset, rep && rep.viewportFit, rep && rep.barTop >= rep.topInset], [30, true, true]);
-            check('the inset is written where the platform really pays it (no double padding without one)',
-                await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || ''), 'body.app .tbar{padding-top:calc(10px + 30px)}');
+            check('the padding is CSS with the live env() and the measured value as its fallback',
+                await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || ''),
+                'body.app .tbar{padding-top:calc(10px + var(--dg-safe-top, env(safe-area-inset-top, 0px)))}');
+            check('the measured inset is only a fallback, and it is really set',
+                await page.evaluate(() => document.documentElement.style.getPropertyValue('--dg-safe-top')), '30px');
             // The theme the page itself switches (uposatha-calendar.js setTheme): data-theme on <html>.
             await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
             await page.waitForTimeout(200);

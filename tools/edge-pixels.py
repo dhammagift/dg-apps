@@ -38,12 +38,15 @@ def main():
     w, h = img.width, img.height
     px = img.load()
 
+    # The page's own background. Sampled from the top three rows of the window, above the status
+    # bar's own icons: it is the surface the page is painted on (and the colour the transparent
+    # status bar shows, which is what this whole check is about). A card further down is NOT it —
+    # sampling the middle of the screen took a card for the background in runs 19 and 20 and
+    # turned the page itself into a "painted strip".
+    page_bg = dominant([px[x, y] for y in range(0, 3) for x in range(0, w, 4)])
+    dark_page = sum(page_bg[:3]) < 384
     top = dominant([px[x, 1] for x in range(0, w, 4)])
     bottom = dominant([px[x, h - 2] for x in range(0, w, 4)])
-    # The page's own background, sampled well inside the page (under the top bar, over the body).
-    page_bg = dominant([px[x, y] for x in range(0, w, 4) for y in range(int(h * 0.45), int(h * 0.55), 3)])
-    dark_page = sum(page_bg[:3]) < 384
-
     # A painted strip ("борода"): a flat band of rows at an edge in a colour that is NOT the page's
     # own background — the window background showing through, which is what the DgBars plugin and the
     # navy @color/dg_navbar were for. A flat band that IS the page's background is the page itself

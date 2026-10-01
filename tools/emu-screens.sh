@@ -46,6 +46,24 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = edgetoedge ]; then
     echo "page did not paint within $(( ${1:-30} * 5 ))s"
     return 1
   }
+  # Rotate the emulator. `settings put system user_rotation` alone did nothing on API 36 (the
+  # screenshots of the "landscape" pass were 1080x2400, run 20), so the window manager is asked
+  # directly, and the result is confirmed by the screenshot's own shape.
+  rotate() { # $1 = 1 landscape, 0 portrait
+    adb shell settings put system accelerometer_rotation 0 > /dev/null 2>&1
+    adb shell settings put system user_rotation "$1" > /dev/null 2>&1
+    adb shell cmd window user-rotation lock "$1" > /dev/null 2>&1
+    local i
+    for i in 1 2 3 4 5 6; do
+      sleep 3
+      adb exec-out screencap -p > "$OUT/.rot.png" 2>/dev/null
+      local shape
+      shape=$(python3 -c "from PIL import Image; im=Image.open('$OUT/.rot.png'); print('land' if im.width > im.height else 'port')" 2>/dev/null)
+      if [ "$1" = 1 ] && [ "$shape" = land ]; then return 0; fi
+      if [ "$1" = 0 ] && [ "$shape" = port ]; then return 0; fi
+    done
+    return 1
+  }
   measure() { # $1 = name, $2 = light|dark
     adb shell cmd uimode night "$([ "$2" = dark ] && echo yes || echo no)" > /dev/null 2>&1
     launch 8
@@ -108,11 +126,8 @@ PY
   # taken there; every run takes the landscape one, cutout sides included.
   TABLET=$([ "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | head -1)" = "2560x1600" ] && echo yes || echo no)
   adb shell cmd uimode night no > /dev/null 2>&1
-  adb shell settings put system user_rotation 1
-  sleep 6
-  measure landscape-light light
-  adb shell settings put system user_rotation 0
-  sleep 4
+  if rotate 1; then measure landscape-light light; else echo "landscape: skipped (the emulator did not rotate)" >> "$res"; fi
+  rotate 0 || true
   # A short tour for the video: the app layer, a tab, then the dark theme (the page follows the
   # system appearance through prefers-color-scheme, so the same path a reader takes is exercised).
   launch 8; wait_page 30 || true
@@ -123,10 +138,8 @@ PY
   launch 8; wait_page 30 || true
   adb shell input tap 250 1790; sleep 4     # the Calendar tab, on the dark page
   # Landscape again, on the dark page, while the video is still running (the cutout and the bars).
-  adb shell settings put system user_rotation 1
-  sleep 5
-  adb exec-out screencap -p > "$OUT/edge-landscape-dark.png"
-  adb shell settings put system user_rotation 0; sleep 3
+  if rotate 1; then adb exec-out screencap -p > "$OUT/edge-landscape-dark.png"; else echo "landscape-dark: skipped (the emulator did not rotate)" >> "$res"; fi
+  rotate 0 || true
   adb shell input keyevent KEYCODE_HOME; sleep 2
   stop_rec
   [ -s "$OUT/flow.mp4" ] && echo "video: flow.mp4 ($(du -h "$OUT/flow.mp4" | cut -f1))" >> "$res"

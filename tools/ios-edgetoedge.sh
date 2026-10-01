@@ -6,9 +6,15 @@
 #
 # Rotation: simctl cannot rotate, so the XCUITest bundle in uposatha/test/ios-sim/rotatetest turns
 # XCUIDevice's orientation (the mechanism the sharetest job already uses; AppleScript/System Events
-# would need accessibility rights a runner does not grant). Every rotation is verified from the
-# screenshot's own dimensions — a rotation that silently did not take must not be photographed as
-# proof.
+# would need accessibility rights a runner does not grant). The test HOLDS the orientation while the
+# screenshots are taken, because the simulator goes back to portrait the moment its session ends
+# (run 445 rotated, and every "landscape" screenshot came out portrait).
+#
+# The verdict — "nothing of the app is under the clock" — is the PAGE's own numbers, written into
+# the app's Documents by the DEBUG DgSelfTest plugin (the bridge reports the inset it applied and
+# where its top bar starts). A screenshot cannot be trusted for it: the system clock is ink on the
+# page's background too, and reading one that way was wrong twice in run 444. The screenshots are
+# only required to show a painted page; they are what a human looks at.
 #
 # Usage (from the repository root, after the simulator build and `xcodegen generate` in
 # uposatha/test/ios-sim/rotatetest):
@@ -32,12 +38,14 @@ echo "ios-edgetoedge: device $UDID"
 
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b
-# No permission alert over the first paint, if the page asks for the place (the sunrise times).
-xcrun simctl privacy "$UDID" grant location "$BUNDLE" 2>/dev/null || true
 xcrun simctl uninstall "$UDID" "$BUNDLE" 2>/dev/null || true
 xcrun simctl install "$UDID" "$APP"
+# No permission alert over the first paint, if the page asks for the place (the sunrise times). After
+# the install: before it, the grant has no app to grant to.
+xcrun simctl privacy "$UDID" grant location "$BUNDLE" 2>/dev/null || true
 
 REC=""
+ROT_PID=""
 stop_recording() {
     [ -n "$REC" ] || return 0
     kill -INT "$REC" 2>/dev/null || true
@@ -69,71 +77,120 @@ oriented() {
 }
 
 wait_orient() {
-    for _ in $(seq 1 20); do
-        oriented "$1" && return 0
+    local want="$1" tries="${2:-20}"
+    for _ in $(seq 1 "$tries"); do
+        oriented "$want" && { echo "ios-edgetoedge: the simulator is $want"; return 0; }
         sleep 1
     done
-    echo "ios-edgetoedge: the simulator never turned $1" >&2
+    echo "ios-edgetoedge: the simulator never turned $want" >&2
     return 1
 }
 
-rotate() {
+# The UI test runs in the background and holds the orientation (RotateTests sleeps) until
+# rotate_release; the log is for the post-mortem.
+rotate_hold() { # $1 = Landscape|Portrait
     local lower
     lower=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-    # The real check is wait_orient; the test log is for the post-mortem.
     xcodebuild test \
         -project "$ROTATE_PROJ" \
         -scheme RotateTests \
         -destination "id=$UDID" \
         -derivedDataPath /tmp/dg-rotate-derived \
         -only-testing:"RotateTests/RotateTests/testRotate$1" \
-        CODE_SIGNING_ALLOWED=NO > "$OUT/rotate-$1.log" 2>&1 || true
-    tail -3 "$OUT/rotate-$1.log" || true
-    wait_orient "$lower"
+        CODE_SIGNING_ALLOWED=NO > "$OUT/rotate-$1.log" 2>&1 &
+    ROT_PID=$!
+    wait_orient "$lower" 30
+}
+
+rotate_release() {
+    [ -n "$ROT_PID" ] || return 0
+    kill "$ROT_PID" 2>/dev/null || true
+    wait "$ROT_PID" 2>/dev/null || true
+    ROT_PID=""
+    sleep 2
 }
 
 xcrun simctl launch "$UDID" "$BUNDLE"
-# The calendar paints from the bundled snapshot; give the page and its theme the moment they need.
-sleep 14
+# Wait for the page itself, not the clock: the window background is what shows before the first
+# paint, and a screenshot of it would pass every check while proving nothing.
+for _ in $(seq 1 12); do
+    sleep 5
+    shot .wait-portrait.png
+    if python3 -c "
+import json,subprocess,sys
+subprocess.run(['python3','tools/edge-pixels.py','$OUT/.wait-portrait.png','light','$OUT/.wait-portrait.json'],capture_output=True)
+sys.exit(0 if json.load(open('$OUT/.wait-portrait.json'))['ink_ratio'] > 0.01 else 1)
+" 2>/dev/null; then echo "ios-edgetoedge: the page painted"; break; fi
+done
 shot uposatha-ios-1-portrait-light.png
 
 xcrun simctl ui "$UDID" appearance dark
 sleep 4
 shot uposatha-ios-2-portrait-dark.png
 
-if rotate Landscape; then
+if rotate_hold Landscape; then
     sleep 2
     shot uposatha-ios-3-landscape-dark.png
 
     xcrun simctl ui "$UDID" appearance light
     sleep 4
     shot uposatha-ios-4-landscape-light.png
+    rotate_release
 else
     # Still worth the portrait shots and the video: say so in the artifact instead of failing the
     # job on the simulator's rotation (run 444 failed the whole step for exactly that).
+    rotate_release
     echo "ios-edgetoedge: landscape skipped — the simulator did not rotate" | tee -a "$OUT/ios-edgetoedge.txt"
 fi
 
-if rotate Portrait; then
+if rotate_hold Portrait; then
     sleep 2
     # Back on portrait: the top bar must have stepped down by the inset again (the bridge re-reads
     # the inset on resize) — this shot is the check for that.
     shot uposatha-ios-5-portrait-light-again.png
 fi
-# The page itself: the top bar must be clear of the status bar / Dynamic Island. A screenshot with
-# the page's own words under the clock is the failure this whole job exists to catch, so it is
-# measured, not eyeballed (tools/edge-pixels.py reads the status bar rows).
+rotate_release
+
+FAILED=0
+# The screenshots must at least show the page: a blank one proves nothing.
 for f in "$OUT"/uposatha-ios-*.png; do
     [ -f "$f" ] || continue
     python3 tools/edge-pixels.py "$f" light "${f%.png}.json" > /dev/null 2>&1 || true
-    if python3 -c "import json,sys;d=json.load(open('${f%.png}.json'));sys.exit(0 if d['page_clear_of_status'] and not d['empty_page'] else 1)" 2>/dev/null; then
-        echo "PASS $(basename "$f"): painted, and its top bar starts below the cutout ($(python3 -c "import json;d=json.load(open('${f%.png}.json'));print('cutout bottom',d['cutout_bottom'],'page text',d['page_text_top'])"))" | tee -a "$OUT/ios-edgetoedge.txt"
+    if python3 -c "import json,sys;sys.exit(0 if not json.load(open('${f%.png}.json'))['empty_page'] else 1)" 2>/dev/null; then
+        echo "PASS $(basename "$f"): the page is painted" | tee -a "$OUT/ios-edgetoedge.txt"
     else
-        echo "FAIL $(basename "$f"): $(python3 -c "import json;d=json.load(open('${f%.png}.json'));print('empty page' if d['empty_page'] else f\"the page's own text is at {d['page_text_top']}px, the cutout ends at {d['cutout_bottom']}px — it is under the clock\")")" | tee -a "$OUT/ios-edgetoedge.txt"
+        echo "FAIL $(basename "$f"): blank screenshot (the window background, not the page)" | tee -a "$OUT/ios-edgetoedge.txt"
         FAILED=1
     fi
 done
-[ "${FAILED:-0}" = 0 ] || exit 1
+
+# The verdict on "nothing of the app under the clock": the page's own numbers, written into the
+# app's Documents by the DEBUG DgSelfTest plugin (the bridge reports the inset it applied and where
+# its top bar starts).
+CONTAINER=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data 2>/dev/null || true)
+REPORT="$CONTAINER/Documents/dg-edgetoedge.json"
+if [ -n "$CONTAINER" ] && [ -f "$REPORT" ]; then
+    cp "$REPORT" "$OUT/dg-edgetoedge.json"
+    if python3 - "$REPORT" <<'PY' | tee -a "$OUT/ios-edgetoedge.txt"
+import json, sys
+d = json.load(open(sys.argv[1]))
+ok = True
+def check(cond, text):
+    global ok
+    print(("PASS " if cond else "FAIL ") + text)
+    ok = ok and cond
+check(d.get("viewportFit") is True, "the page carries viewport-fit=cover (without it the inset never reaches it)")
+check((d.get("topInset") or 0) >= 20, "the page received the status bar's height: %s px" % d.get("topInset"))
+check((d.get("barTop") or -1) >= (d.get("topInset") or 0),
+      "the page's top bar starts at %s px, at or below the inset %s px — nothing under the clock" % (d.get("barTop"), d.get("topInset")))
+sys.exit(0 if ok else 1)
+PY
+    then :; else FAILED=1; fi
+else
+    echo "FAIL no report from the app at $REPORT — the DEBUG proof plugin did not answer" | tee -a "$OUT/ios-edgetoedge.txt"
+    FAILED=1
+fi
 
 stop_recording
 ls -la "$OUT"
+[ "$FAILED" = 0 ] || exit 1

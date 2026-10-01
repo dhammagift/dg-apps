@@ -20,17 +20,20 @@ final class RotateTests: XCTestCase {
         return XCUIApplication(bundleIdentifier: bundle)
     }
 
+    // The sleep is the point: the caller (tools/ios-edgetoedge.sh) takes its screenshots WHILE the
+    // orientation is held by this test, and stops the test afterwards. The simulator goes back to
+    // portrait as soon as the session ends (run 445: the rotation took, the shots came out portrait).
     func testRotateLandscape() {
         frontmostApp().activate()
         sleep(2)
         XCUIDevice.shared.orientation = .landscapeLeft
-        sleep(3)
+        sleep(75)
     }
 
     func testRotatePortrait() {
         frontmostApp().activate()
         sleep(2)
         XCUIDevice.shared.orientation = .portrait
-        sleep(3)
+        sleep(20)
     }
 }

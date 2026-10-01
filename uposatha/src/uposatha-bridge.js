@@ -595,6 +595,31 @@
     var top = inset || (isNaN(native) ? 0 : native);
     css.textContent = top > 0 ? 'body.app .tbar{padding-top:calc(10px + ' + top + 'px)}' : '';
     if (top > 0) document.body.classList.add('dg-safe-top-on');
+    // Let the layout settle, then hand the numbers to the DEBUG proof plugin (iOS: the file
+    // tools/ios-edgetoedge.sh reads back). The screenshot's pixels cannot tell the page's own text
+    // from the system clock: run 444's verdict was read that way and twice came out wrong.
+    setTimeout(function () { reportInset(top); }, 60);
+  }
+
+  // The page's own measurements, for an automated proof. DgSelfTest is registered in DEBUG builds
+  // only (uposatha/ios/App/App/DgSelfTestPlugin.swift), so a shipped app and Android ignore this.
+  function reportInset(top) {
+    var Self = Cap.Plugins && Cap.Plugins.DgSelfTest;
+    if (!Self || typeof Self.report !== 'function') return;
+    var meta = document.querySelector('meta[name=viewport]');
+    var bar = document.querySelector('.tbar');
+    var rect = bar ? bar.getBoundingClientRect() : null;
+    // The bar is sticky at top: 0 and its padding is what keeps it clear of the status bar, so what
+    // matters is where its CONTENT starts, not the (always 0) top of the element.
+    var padTop = bar ? (parseFloat(getComputedStyle(bar).paddingTop) || 0) : 0;
+    Self.report({
+      topInset: top,
+      viewportFit: !!(meta && /viewport-fit\s*=\s*cover/.test(meta.getAttribute('content') || '')),
+      barTop: rect ? Math.round(rect.top + padTop) : -1,
+      barContentTop: rect ? Math.round(rect.top + padTop) : -1,
+      barBottom: rect ? Math.round(rect.bottom) : -1,
+      theme: document.documentElement.getAttribute('data-theme') || ''
+    }).catch(function () { /* no proof plugin: a release build, or Android */ });
   }
 
   function start() {

@@ -135,7 +135,7 @@ const server = http.createServer((req, res) => {
 });
 
 function capacitorStub() {
-    window.__calls = { styles: [], dgbars: 0 };
+    window.__calls = { styles: [], dgbars: 0, report: null };
     window.Capacitor = {
         getPlatform: () => 'android', isNativePlatform: () => true,
         Plugins: {
@@ -143,6 +143,8 @@ function capacitorStub() {
             DgShortcuts: { set: (o) => Promise.resolve({ count: o.items.length }) },
             DgSound: { pick: () => Promise.resolve({}), channel: () => Promise.resolve() },
             DgSite: { put: () => Promise.resolve(), list: () => Promise.resolve({ files: [] }), clear: () => Promise.resolve() },
+            // the DEBUG proof plugin (iOS): the bridge reports the inset it applied
+            DgSelfTest: { report: (o) => { window.__calls.report = o; return Promise.resolve(o); } },
             // addListener as well: the bridge wraps the plugin's own listeners, and Capacitor's real
             // plugin has it — the site's current page calls it as soon as it loads.
             LocalNotifications: { addListener: () => ({ remove() {} }), requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: () => Promise.resolve() },
@@ -203,6 +205,9 @@ function fakeInsets(px) {
             await page.waitForTimeout(200);
             check('a 30px inset: the top bar steps down by it',
                 await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '40px');
+            const rep = await page.evaluate(() => window.__calls.report);
+            check('the page reports its measurements for the proof (what the screenshot cannot tell)',
+                [rep && rep.topInset, rep && rep.viewportFit, rep && rep.barTop >= rep.topInset], [30, true, true]);
             check('the inset is written where the platform really pays it (no double padding without one)',
                 await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || ''), 'body.app .tbar{padding-top:calc(10px + 30px)}');
             // The theme the page itself switches (uposatha-calendar.js setTheme): data-theme on <html>.

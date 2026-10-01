@@ -2412,10 +2412,14 @@ jobs:
   # retry it would have put a second, identical build in TestFlight for nothing (owner: "жди эпл,
   # не перезаливай"). Retrying one store must not disturb the other.
   # push never runs this — push builds are for the installable APK, not for the stores.
+  # Every manual Dhamma.Gift build also archives a signed IPA and keeps it as an artifact, so an
+  # already built and tested build can go to TestFlight later without building again (ios-upload.yml,
+  # the iOS twin of play-upload.yml; owner, 2026-10-01: "чтобы можно было Apple существующую сборку
+  # отправить, а не новую собирать"). The IPA is sent to TestFlight here only on dg-ios / dg-both / a tag.
   ios-release:
-    name: iOS release (TestFlight)
+    name: iOS archive (IPA; TestFlight on release)
     needs: build
-    if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'dg-ios' || inputs.release == 'dg-both')) || startsWith(github.ref, 'refs/tags/')
+    if: (github.event_name == 'workflow_dispatch' && !inputs.dict_only && !contains(fromJSON('["dict","dict-ios","uposatha","uposatha-ios"]'), inputs.release)) || startsWith(github.ref, 'refs/tags/')
     runs-on: macos-26
     steps:
       - name: Checkout this repo (the app)
@@ -2587,7 +2591,7 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
+            <key>destination</key><string>export</string>
             <key>signingStyle</key><string>automatic</string>
             <key>uploadSymbols</key><true/>
           </dict>
@@ -2604,9 +2608,54 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             2>&1 | tee ios-export.log | tail -30
-          # destination=upload sends the build straight from the export and writes no IPA to disk
-          # (run 170), so the log line is the only proof that something reached App Store Connect.
-          grep -q "Upload succeeded" ios-export.log
+          # destination=export writes the IPA to disk (destination=upload sent it straight away and left
+          # nothing, run 170): it is kept as an artifact and uploaded by the step below or by ios-upload.yml.
+          ls -la ios/build/export/*.ipa
+
+      - name: Keep the IPA
+        if: steps.asc.outputs.have == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dg-app-full-ipa-${{ github.run_number }}
+          path: ios/build/export/*.ipa
+          retention-days: 30
+          if-no-files-found: error
+
+      # The same altool call ios-upload.yml uses, as --validate-app: proves on every build that the IPA
+      # and the key would be accepted, without putting a build into TestFlight.
+      - name: Validate the IPA with App Store Connect (no upload)
+        if: steps.asc.outputs.have == 'yes'
+        continue-on-error: true
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cp "$RUNNER_TEMP/asc/AuthKey.p8" "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8"
+          API_PRIVATE_KEYS_DIR="$RUNNER_TEMP/asc" xcrun altool --validate-app -t ios \
+            -f "$(ls ios/build/export/*.ipa | head -1)" \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
+
+      # The release itself keeps the export path that has worked since run 170 (destination=upload,
+      # "Upload succeeded" in the log), so adding the IPA artifact above changes nothing about a release.
+      - name: Upload to TestFlight
+        if: steps.asc.outputs.have == 'yes' && ((github.event_name == 'workflow_dispatch' && (inputs.release == 'dg-ios' || inputs.release == 'dg-both')) || startsWith(github.ref, 'refs/tags/'))
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          sed 's#<string>export</string>#<string>upload</string>#' "$RUNNER_TEMP/ExportOptions.plist" > "$RUNNER_TEMP/ExportUpload.plist"
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath ios/build/App.xcarchive \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportUpload.plist" \
+            -exportPath ios/build/upload \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee ios-upload.log | tail -30
+          grep -q "Upload succeeded" ios-upload.log
 
       - name: Revoke this job's development certificate
         if: always() && steps.asc.outputs.have == 'yes'
@@ -2623,14 +2672,15 @@ jobs:
           path: |
             ios-archive.log
             ios-export.log
+            ios-upload.log
           retention-days: 7
           if-no-files-found: ignore
 
       - name: Say what went to TestFlight
         if: success() && steps.asc.outputs.have == 'yes'
         run: |
-          {
-            echo "### iOS release: uploaded"
-            echo ""
-            echo "Build ${{ github.run_number }} was archived and sent to TestFlight (processing takes 5–15 minutes)."
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -f ios-upload.log ]; then
+            printf '### iOS release: uploaded\n\nBuild %s was archived and sent to TestFlight (processing takes 5–15 minutes).\n' "${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '### iOS: IPA kept, not uploaded\n\nArtifact dg-app-full-ipa-%s. To send it to TestFlight later: ios-upload.yml with this run id.\n' "${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
+          fi

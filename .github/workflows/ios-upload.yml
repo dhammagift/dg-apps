@@ -1,0 +1,56 @@
+# Send an IPA that an earlier Build App run already made to TestFlight, instead of building again —
+# the iOS twin of play-upload.yml (owner, 2026-10-01: "чтобы можно было Apple существующую сборку
+# отправить, а не новую собирать"). The build number is that run's number, the same as the Android
+# versionCode of the same run. Only on the owner's explicit yes (CLAUDE.md); production is the owner's step.
+name: iOS upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: 'build-app.yml run id whose IPA (dg-app-full-ipa-<run number>) to send to TestFlight'
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  upload:
+    runs-on: macos-26
+    steps:
+      - name: Which run
+        id: run
+        env:
+          RUN_ID: ${{ inputs.build_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          n=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID" --jq .run_number)
+          echo "run_number=$n" >> "$GITHUB_OUTPUT"
+          echo "build run $RUN_ID = #$n"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dg-app-full-ipa-${{ steps.run.outputs.run_number }}
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ipa
+
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8"
+          set -o pipefail
+          API_PRIVATE_KEYS_DIR="$RUNNER_TEMP/asc" xcrun altool --upload-app -t ios \
+            -f "$(ls ipa/*.ipa | head -1)" \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee ios-upload.log | tail -20
+          grep -qiE "No errors uploading|UPLOAD SUCCEEDED" ios-upload.log
+
+      - name: Summary
+        run: echo "### build ${{ steps.run.outputs.run_number }} -> TestFlight (processing takes 5–15 minutes)" >> "$GITHUB_STEP_SUMMARY"

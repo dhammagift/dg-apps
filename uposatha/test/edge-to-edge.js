@@ -79,6 +79,23 @@ check('... and the dark one in night mode',
 check('the first frame takes its icon colour from the theme, never a fixed choice',
     (read(path.join(APP, 'res/values/styles.xml')).match(/windowLightStatusBar">@bool\/dg_light_bar/g) || []).length, 3);
 
+// The resources this change touches (and any others): aapt refuses an XML comment with a double
+// hyphen in it ("The string \"--\" is not permitted within comments"), which is a build failure
+// with a confusing message — cheap to catch here.
+function commentProblems(dir) {
+    const bad = [];
+    for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith('.xml')) continue;
+        const text = read(path.join(dir, f));
+        for (const m of text.matchAll(/<!--([\s\S]*?)-->/g)) {
+            if (m[1].includes('--')) bad.push(`${dir.split('/').pop()}/${f}: ${m[1].trim().slice(0, 40)}…`);
+        }
+    }
+    return bad;
+}
+check('no resource comment contains a double hyphen (aapt rejects it)',
+    [...commentProblems(path.join(APP, 'res/values')), ...commentProblems(path.join(APP, 'res/values-night'))], []);
+
 // ---- the page, with the real bridge and a recorder for the plugins -------------------------------
 
 const TYPES = { html: 'text/html', js: 'application/javascript', css: 'text/css', json: 'application/json', svg: 'image/svg+xml', woff2: 'font/woff2', png: 'image/png', wasm: 'application/wasm' };

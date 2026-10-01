@@ -48,13 +48,14 @@ def main():
     # own background — the window background showing through, which is what the DgBars plugin and the
     # navy @color/dg_navbar were for. A flat band that IS the page's background is the page itself
     # (an empty top area of a dark theme), so it does not count.
-    def strip(edge_y, step):
-        edge = dominant([px[x, edge_y] for x in range(0, w, 4)])
+    def strip(edge_y, step, vertical=True):
+        edge = dominant([px[x, edge_y] for x in range(0, w, 4)]) if vertical else dominant([px[edge_y, y] for y in range(0, h, 4)])
         if near(edge, page_bg, 32):
             return 0
         n = 0
         y = edge_y
-        while 0 <= y < h and all(near(px[x, y], edge, 12) for x in range(0, w, 8)):
+        while 0 <= y < (h if vertical else w) and all(
+                near((px[x, y] if vertical else px[y, x]), edge, 12) for x in range(0, (w if vertical else h), 8)):
             n += 1
             y += step
             if n >= 80:
@@ -63,6 +64,9 @@ def main():
 
     frame_top = strip(0, 1)
     frame_bottom = strip(h - 1, -1)
+    # Landscape: the camera cutout is on a side, so the left/right edges matter as much.
+    frame_left = strip(0, 1, vertical=False)
+    frame_right = strip(w - 1, -1, vertical=False)
 
     # The page's own content: any pixel in the body that is not the page background. A blank page
     # (the WebView before its first paint) would satisfy every edge test, so it is asked about first.
@@ -104,6 +108,9 @@ def main():
         "edge_to_edge": frame_top == 0 and frame_bottom == 0 and near(top, page_bg, 32),
         "frame_top": frame_top,
         "frame_bottom": frame_bottom,
+        "frame_left": frame_left,
+        "frame_right": frame_right,
+        "landscape": w > h,
         "top_color": "#%02x%02x%02x" % top[:3],
         "bottom_color": "#%02x%02x%02x" % bottom[:3],
         "page_bg": "#%02x%02x%02x" % page_bg[:3],
@@ -123,7 +130,7 @@ def main():
         json.dump(verdict, f, indent=2)
     print(json.dumps(verdict))
     for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg",
-              "top_matches_page", "bottom_matches_page", "text_top", "status_rows",
+              "top_matches_page", "bottom_matches_page", "frame_left", "frame_right", "text_top", "status_rows",
               "empty_page", "ink_ratio", "top_row_uniform"):
         print(f"{k}={verdict[k]}")
 

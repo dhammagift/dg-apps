@@ -27,16 +27,23 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = edgetoedge ]; then
     (cd "$OUT" && ffmpeg -loglevel error -y -f concat -safe 0 -i rec.txt -c copy flow.mp4 && rm -f rec-*.mp4 rec.txt) || true
   }
   launch() { adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep "${1:-14}"; }
-  # Wait until the page has really painted. A cold start on a CI emulator is slow (the first frame
-  # was blank for ~40 s in run 18), and a screenshot of the window background would "pass" every
-  # edge test while proving nothing. The page's own title is on screen when it is up.
+  # Wait until the page has really painted. A cold start on a CI emulator is slow (the first paint
+  # came at ~35-40 s in runs 18 and 19; before it the WebView shows the window background), and a
+  # screenshot of that background "passes" every edge test while proving nothing. What decides is
+  # the screenshot itself: tools/edge-pixels.py reports the share of the screen that is not the
+  # page's background, and a painted page is well above 1% (a blank one is 0.0).
   wait_page() {
-    for i in $(seq 1 "${1:-20}"); do
-      adb shell uiautomator dump /sdcard/e.xml > /dev/null 2>&1
-      if adb shell cat /sdcard/e.xml 2>/dev/null | grep -qi "uposatha"; then echo "page up after $((i * 5))s"; return 0; fi
+    local i
+    for i in $(seq 1 "${1:-30}"); do
+      adb exec-out screencap -p > "$OUT/.wait.png" 2>/dev/null
+      if python3 "$REPO/tools/edge-pixels.py" "$OUT/.wait.png" light "$OUT/.wait.json" > /dev/null 2>&1 &&
+         python3 -c "import json,sys; sys.exit(0 if json.load(open('$OUT/.wait.json'))['ink_ratio'] > 0.01 else 1)"; then
+        echo "page painted after $((i * 5))s"
+        return 0
+      fi
       sleep 5
     done
-    echo "page did not paint within $(( ${1:-20} * 5 ))s"
+    echo "page did not paint within $(( ${1:-30} * 5 ))s"
     return 1
   }
   measure() { # $1 = name, $2 = light|dark
@@ -50,8 +57,8 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = edgetoedge ]; then
 import json, sys
 v = json.load(open(sys.argv[1]))
 for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg",
-          "top_matches_page", "bottom_matches_page", "top_row_uniform", "text_top", "status_rows",
-          "empty_page", "ink_ratio"):
+          "top_matches_page", "bottom_matches_page", "top_row_uniform", "frame_left", "frame_right",
+          "landscape", "text_top", "status_rows", "empty_page", "ink_ratio"):
     print("v_%s=%s" % (k, "true" if v[k] is True else v[k]))
 PY
 )"
@@ -84,6 +91,11 @@ w = [int(sys.argv[2][i:i+2], 16) for i in (1, 3, 5)]
 sys.exit(0 if all(abs(a - b) <= 8 for a, b in zip(c, w)) else 1)
 PY
     [ "$v_bottom_matches_page" = true ] && ok "$1: the bottom edge is the page's own background too" || ko "$1: the bottom edge is $v_bottom_color, not the page's $v_page_bg"
+    # 4. Landscape: the camera cutout is on a side there, so the left and right edges are checked too.
+    if [ "$v_landscape" = true ]; then
+      [ "$v_frame_left" = 0 ] && ok "$1: the page reaches the left edge (no cutout strip)" || ko "$1: $v_frame_left px of a strip at the left"
+      [ "$v_frame_right" = 0 ] && ok "$1: the page reaches the right edge" || ko "$1: $v_frame_right px of a strip at the right"
+    fi
   }
   adb logcat -c 2>/dev/null || true
   adb shell settings put system accelerometer_rotation 0
@@ -91,18 +103,34 @@ PY
   adb shell pm clear "$PKG" > /dev/null 2>&1 || true   # first run: the default light theme, no stored state
   measure light light
   measure dark dark
+  # Landscape and the tablet width (owner: "нужно посмотреть в альбомной и планшетной"). One
+  # profile per run (the workflow's "profile" input), so this part is marked skipped when the
+  # emulator was not started as a tablet.
+  TABLET=$([ "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | head -1)" = "2560x1600" ] && echo yes || echo no)
+  adb shell cmd uimode night no > /dev/null 2>&1
+  adb shell settings put system user_rotation 1
+  sleep 6
+  measure landscape light
+  adb exec-out screencap -p > "$OUT/edge-landscape-flow.png"
+  adb shell settings put system user_rotation 0
+  sleep 4
   # A short tour for the video: the app layer, a tab, then the dark theme (the page follows the
   # system appearance through prefers-color-scheme, so the same path a reader takes is exercised).
-  adb shell cmd uimode night no > /dev/null 2>&1; launch 8; wait_page 30 || true
+  launch 8; wait_page 30 || true
   adb shell input tap 250 1790; sleep 4     # the Calendar tab
   adb shell input swipe 540 700 540 1500 300; sleep 3
   adb shell cmd uimode night yes > /dev/null 2>&1; sleep 3
   adb exec-out screencap -p > "$OUT/edge-light-to-dark.png"
   launch 8; wait_page 30 || true
   adb shell input tap 250 1790; sleep 4     # the Calendar tab, on the dark page
+  # Landscape again, on the dark page, while the video is still running (the cutout and the bars).
+  adb shell settings put system user_rotation 1; sleep 5
+  adb exec-out screencap -p > "$OUT/edge-landscape-dark.png"
+  adb shell settings put system user_rotation 0; sleep 3
   adb shell input keyevent KEYCODE_HOME; sleep 2
   stop_rec
   [ -s "$OUT/flow.mp4" ] && echo "video: flow.mp4 ($(du -h "$OUT/flow.mp4" | cut -f1))" >> "$res"
+  echo "tablet_profile=$TABLET" >> "$res"
   adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true
   grep -iE "Uncaught|TypeError|ReferenceError" "$OUT/logcat.txt" | head -5 >> "$res" || true
   cat "$res"; exit $fail

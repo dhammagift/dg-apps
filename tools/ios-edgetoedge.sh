@@ -179,7 +179,15 @@ FAILED=0
 for f in "$OUT"/uposatha-ios-*.png; do
     [ -f "$f" ] || continue
     if ! python3 tools/edge-pixels.py "$f" light "${f%.png}.json" > /dev/null 2>&1; then
-        echo "SKIP $(basename "$f"): not measured (tools/edge-pixels.py needs Pillow on this runner)" | tee -a "$OUT/ios-edgetoedge.txt"
+        # No Pillow on this runner: fall back to the file's size (a screenshot of a blank page
+        # compresses to a few KB, a painted one to hundreds), and never fail the job over it.
+        size=$(stat -f%z "$f" 2>/dev/null || stat -c%s "$f" 2>/dev/null || echo 0)
+        if [ "$size" -gt 100000 ]; then
+            echo "PASS $(basename "$f"): not measured (no Pillow), but ${size} bytes is a painted page" | tee -a "$OUT/ios-edgetoedge.txt"
+        else
+            echo "FAIL $(basename "$f"): not measured (no Pillow) and only ${size} bytes — looks blank" | tee -a "$OUT/ios-edgetoedge.txt"
+            FAILED=1
+        fi
         continue
     fi
     if python3 -c "import json,sys;sys.exit(0 if not json.load(open('${f%.png}.json'))['empty_page'] else 1)" 2>/dev/null; then

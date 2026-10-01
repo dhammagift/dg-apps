@@ -1328,6 +1328,11 @@ jobs:
           brew install xcodegen >/dev/null 2>&1 || brew install xcodegen
           (cd uposatha/test/ios-sim/rotatetest && xcodegen generate)
 
+      # tools/ios-edgetoedge.sh measures each screenshot (tools/edge-pixels.py) — a blank page must
+      # not pass as evidence. Without Pillow the runner reported every shot "blank" (run 446).
+      - name: Python imaging for the screenshot checks
+        run: python3 -m pip install --user --quiet pillow
+
       # Edge to edge (dg-apps#41), the iOS proof: portrait and landscape, light and dark, one
       # screenshot per combination, plus the whole pass as a video on request. tools/ios-edgetoedge.sh
       # rotates through the XCUI test above (simctl cannot) and verifies each rotation from the

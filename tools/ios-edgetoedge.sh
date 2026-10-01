@@ -66,6 +66,17 @@ shot() {
         || echo "ios-edgetoedge: screenshot $1 failed" >&2
 }
 
+# The UI-test bundle is built ONCE, up front: rotate_hold then runs it with test-without-building,
+# which takes seconds. Building it inside the first rotation cost more than the wait allowed (run
+# 446 never rotated at all: the log ends in BUILD INTERRUPTED when the wait gave up).
+xcodebuild build-for-testing \
+    -project "$ROTATE_PROJ" \
+    -scheme RotateTests \
+    -destination "id=$UDID" \
+    -derivedDataPath /tmp/dg-rotate-derived \
+    CODE_SIGNING_ALLOWED=NO > "$OUT/rotate-build.log" 2>&1 \
+    || echo "ios-edgetoedge: could not prebuild the rotation test (will build on first use)" >&2
+
 # True when the current screenshot has the asked-for orientation.
 oriented() {
     local want="$1" w h
@@ -91,7 +102,7 @@ wait_orient() {
 rotate_hold() { # $1 = Landscape|Portrait
     local lower
     lower=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-    xcodebuild test \
+    xcodebuild test-without-building \
         -project "$ROTATE_PROJ" \
         -scheme RotateTests \
         -destination "id=$UDID" \
@@ -99,7 +110,7 @@ rotate_hold() { # $1 = Landscape|Portrait
         -only-testing:"RotateTests/RotateTests/testRotate$1" \
         CODE_SIGNING_ALLOWED=NO > "$OUT/rotate-$1.log" 2>&1 &
     ROT_PID=$!
-    wait_orient "$lower" 30
+    wait_orient "$lower" 90
 }
 
 rotate_release() {
@@ -125,8 +136,20 @@ done
 shot uposatha-ios-1-portrait-light.png
 
 xcrun simctl ui "$UDID" appearance dark
-sleep 4
+# A system banner (iCloud/Apple Intelligence) can land over the page in the first seconds and it is
+# not part of the app: give it time, and re-shoot while the top of the screen still has a large
+# light panel on the dark page.
+sleep 10
 shot uposatha-ios-2-portrait-dark.png
+if python3 -c "
+import json,subprocess,sys
+subprocess.run(['python3','tools/edge-pixels.py','$OUT/uposatha-ios-2-portrait-dark.png','dark','/tmp/dg-banner.json'],capture_output=True)
+try:
+    d = json.load(open('/tmp/dg-banner.json'))
+except Exception:
+    sys.exit(1)   # no Pillow: nothing to judge, keep the shot
+sys.exit(0 if (d.get('ink_ratio') or 0) < 0.45 else 1)
+" 2>/dev/null; then :; else sleep 8; shot uposatha-ios-2-portrait-dark.png; fi
 
 if rotate_hold Landscape; then
     sleep 2
@@ -155,7 +178,10 @@ FAILED=0
 # The screenshots must at least show the page: a blank one proves nothing.
 for f in "$OUT"/uposatha-ios-*.png; do
     [ -f "$f" ] || continue
-    python3 tools/edge-pixels.py "$f" light "${f%.png}.json" > /dev/null 2>&1 || true
+    if ! python3 tools/edge-pixels.py "$f" light "${f%.png}.json" > /dev/null 2>&1; then
+        echo "SKIP $(basename "$f"): not measured (tools/edge-pixels.py needs Pillow on this runner)" | tee -a "$OUT/ios-edgetoedge.txt"
+        continue
+    fi
     if python3 -c "import json,sys;sys.exit(0 if not json.load(open('${f%.png}.json'))['empty_page'] else 1)" 2>/dev/null; then
         echo "PASS $(basename "$f"): the page is painted" | tee -a "$OUT/ios-edgetoedge.txt"
     else

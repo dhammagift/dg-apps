@@ -38,6 +38,15 @@ xcrun simctl uninstall "$UDID" "$BUNDLE" 2>/dev/null || true
 xcrun simctl install "$UDID" "$APP"
 
 REC=""
+stop_recording() {
+    [ -n "$REC" ] || return 0
+    kill -INT "$REC" 2>/dev/null || true
+    wait "$REC" 2>/dev/null || true
+    REC=""
+}
+# Whatever happens next — a failed rotation, a missing screenshot — the video has to be closed, or
+# the artifact is a 0-byte file beside a large ".sb-…" partial (run 444).
+trap stop_recording EXIT
 if [ "$VIDEO" = "1" ]; then
     xcrun simctl io "$UDID" recordVideo --codec h264 --force "$OUT/ios-flow.mp4" &
     REC=$!
@@ -92,22 +101,39 @@ xcrun simctl ui "$UDID" appearance dark
 sleep 4
 shot uposatha-ios-2-portrait-dark.png
 
-rotate Landscape
-sleep 2
-shot uposatha-ios-3-landscape-dark.png
+if rotate Landscape; then
+    sleep 2
+    shot uposatha-ios-3-landscape-dark.png
 
-xcrun simctl ui "$UDID" appearance light
-sleep 4
-shot uposatha-ios-4-landscape-light.png
-
-rotate Portrait
-sleep 2
-# Back on portrait: the top bar must have stepped down by the inset again (the bridge re-reads the
-# inset on resize) — this shot is the check for that.
-shot uposatha-ios-5-portrait-light-again.png
-
-if [ -n "$REC" ]; then
-    kill -INT "$REC" 2>/dev/null || true
-    wait "$REC" 2>/dev/null || true
+    xcrun simctl ui "$UDID" appearance light
+    sleep 4
+    shot uposatha-ios-4-landscape-light.png
+else
+    # Still worth the portrait shots and the video: say so in the artifact instead of failing the
+    # job on the simulator's rotation (run 444 failed the whole step for exactly that).
+    echo "ios-edgetoedge: landscape skipped — the simulator did not rotate" | tee -a "$OUT/ios-edgetoedge.txt"
 fi
+
+if rotate Portrait; then
+    sleep 2
+    # Back on portrait: the top bar must have stepped down by the inset again (the bridge re-reads
+    # the inset on resize) — this shot is the check for that.
+    shot uposatha-ios-5-portrait-light-again.png
+fi
+# The page itself: the top bar must be clear of the status bar / Dynamic Island. A screenshot with
+# the page's own words under the clock is the failure this whole job exists to catch, so it is
+# measured, not eyeballed (tools/edge-pixels.py reads the status bar rows).
+for f in "$OUT"/uposatha-ios-*.png; do
+    [ -f "$f" ] || continue
+    python3 tools/edge-pixels.py "$f" light "${f%.png}.json" > /dev/null 2>&1 || true
+    if python3 -c "import json,sys;d=json.load(open('${f%.png}.json'));sys.exit(0 if d['top_row_uniform'] and not d['empty_page'] else 1)" 2>/dev/null; then
+        echo "PASS $(basename "$f"): the page is painted and nothing of it is under the status bar" | tee -a "$OUT/ios-edgetoedge.txt"
+    else
+        echo "FAIL $(basename "$f"): the page is empty or its content is under the status bar" | tee -a "$OUT/ios-edgetoedge.txt"
+        FAILED=1
+    fi
+done
+[ "${FAILED:-0}" = 0 ] || exit 1
+
+stop_recording
 ls -la "$OUT"

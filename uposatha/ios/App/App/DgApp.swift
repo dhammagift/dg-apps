@@ -171,6 +171,21 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         ["Content-Type": type, "Content-Length": String(length), "Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"]
     }
 
+    // Edge to edge (dg-apps#41): the page has to carry viewport-fit=cover or WKWebView reports
+    // env(safe-area-inset-top) as 0 and the bridge's top-bar padding comes out 0 too — the run 444
+    // screenshots show the page's own bar drawn under the Dynamic Island. build.js patches the
+    // BUILD's index.html, but this router answers "/" with the site's own /uposatha-calendar.html
+    // (both the bundled snapshot and, after an update, the copy DgSite downloaded), which is the
+    // page as dhamma.gift serves it: the meta is added here, where every copy passes through.
+    private static func withViewportCover(_ data: Data, type: String) -> Data {
+        guard type.hasPrefix("text/html") else { return data }
+        guard let html = String(data: data, encoding: .utf8), !html.contains("viewport-fit=cover") else { return data }
+        let patched = html.replacingOccurrences(
+            of: "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+            with: "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">")
+        return patched == html ? data : (patched.data(using: .utf8) ?? data)
+    }
+
     private func isStopped(_ task: WKURLSchemeTask) -> Bool {
         lock.lock(); defer { lock.unlock() }
         return stopped.contains(ObjectIdentifier(task))
@@ -188,9 +203,10 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         }
         if let file = DgSiteStore.file(for: path), let data = try? Data(contentsOf: file), !data.isEmpty {
             let type = Self.typeOf(path)
-            if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: data.count)) {
+            let body = Self.withViewportCover(data, type: type)
+            if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: body.count)) {
                 urlSchemeTask.didReceive(response)
-                urlSchemeTask.didReceive(data)
+                urlSchemeTask.didReceive(body)
                 urlSchemeTask.didFinish()
                 return
             }
@@ -200,9 +216,10 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         // (index.html, the offline splash) instead of the calendar page every "/" request actually wants.
         if let bundle = Bundle.main.url(forResource: "public" + path, withExtension: nil), let data = try? Data(contentsOf: bundle) {
             let type = Self.typeOf(path)
-            if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: data.count)) {
+            let body = Self.withViewportCover(data, type: type)
+            if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: body.count)) {
                 urlSchemeTask.didReceive(response)
-                urlSchemeTask.didReceive(data)
+                urlSchemeTask.didReceive(body)
                 urlSchemeTask.didFinish()
                 return
             }

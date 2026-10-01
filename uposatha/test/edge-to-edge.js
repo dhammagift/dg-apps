@@ -115,6 +115,12 @@ check('iOS: behind the first paint is the page background (white / #111111), not
     /dgPageBackground/.test(dgApp) && /0x11 \/ 255/.test(dgApp), true);
 check('the bridge pads the top bar on iOS too (no platform skip in applyTopInset)',
     /function applyTopInset\(\) \{\n\s*if \(IOS\) return;/.test(BRIDGE), false);
+// iOS is served by DgSiteRouter, which answers "/" with /uposatha-calendar.html — the site's own
+// snapshot, which build.js does NOT patch (it patches index.html). Without viewport-fit=cover on
+// that copy WKWebView reports env(safe-area-inset-top) as 0 and the page's top bar ends up under
+// the Dynamic Island (run 444's screenshots). The router patches it where every copy passes.
+check('iOS: the served page gets viewport-fit=cover at serve time',
+    /withViewportCover/.test(dgApp) && /viewport-fit=cover/.test(dgApp), true);
 
 // ---- the page, with the real bridge and a recorder for the plugins -------------------------------
 

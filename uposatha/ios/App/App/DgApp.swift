@@ -31,8 +31,11 @@ final class DgRootViewController: UIViewController {
     // preferredStatusBarStyle. UIKit asks the WINDOW'S root (this VC), so the query has to be
     // forwarded or this VC's implicit .default would win and the icons would stay dark on the
     // page's dark theme.
-    override var childViewControllerForStatusBarStyle: UIViewController? { bridgeController }
-    override var childViewControllerForStatusBarHidden: UIViewController? { bridgeController }
+    // The names are Swift's, not the Objective-C ones: the Xcode 26 SDK no longer takes the older
+    // `childViewControllerForStatusBarStyle`/`...Hidden` spellings (the iOS build failed on them,
+    // dg-apps#41) — `childForStatusBarStyle`/`childForStatusBarHidden` is the same property.
+    override var childForStatusBarStyle: UIViewController? { bridgeController }
+    override var childForStatusBarHidden: UIViewController? { bridgeController }
 
     override func viewDidLoad() {
         super.viewDidLoad()

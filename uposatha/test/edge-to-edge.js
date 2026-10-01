@@ -15,7 +15,26 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
-const { chromium } = require('/usr/lib/node_modules/@playwright/cli/node_modules/playwright');
+// The app's own playwright (uposatha/node_modules, where the build job's `npx playwright install`
+// puts the matching browser), or the global CLI of a dev box — whichever can really launch, so the
+// test runs the same way in CI and by hand.
+function playwrightCandidates() {
+    const list = [process.env.DG_PLAYWRIGHT].filter(Boolean);
+    try { list.push(require.resolve('playwright', { paths: [process.cwd(), __dirname] })); } catch (e) { /* not installed */ }
+    list.push('/usr/lib/node_modules/@playwright/cli/node_modules/playwright');
+    return list;
+}
+async function launchChromium() {
+    const tried = [];
+    for (const mod of playwrightCandidates()) {
+        try {
+            return await require(mod).chromium.launch({ args: ['--no-sandbox'] });
+        } catch (e) {
+            tried.push(`${mod}: ${String(e.message).split('\n')[0]}`);
+        }
+    }
+    throw new Error('no usable playwright:\n  ' + tried.join('\n  '));
+}
 
 const ROOT = path.join(__dirname, '..');
 const APP = path.join(ROOT, 'android', 'app', 'src', 'main');
@@ -101,7 +120,7 @@ function fakeInsets(px) {
 
 (async () => {
     await new Promise((r) => server.listen(PORT, '127.0.0.1', r));
-    const browser = await chromium.launch({ args: ['--no-sandbox'] });
+    const browser = await launchChromium();
     const BRIDGE = bridgeSource();
     try {
         // 1. No insets reach the page (an old WebView: Capacitor pads it): the bar keeps its own padding.

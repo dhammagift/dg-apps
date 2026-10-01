@@ -28,6 +28,11 @@ public class DgSignInPlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorizationControl
 
     private var appleCall: CAPPluginCall?
     private var appleNonce = ""
+    // Held for the whole request. A controller released while a request is in flight takes the
+    // delegate callbacks with it: no sheet, no error, and the JS promise never settles — the app
+    // just sits there with nothing in the log (owner's tester, 2026-10-01: "stuck here after
+    // tapping the Apple login button"). The Google flow below always kept its session; Apple did not.
+    private var appleController: ASAuthorizationController?
     private var googleSession: ASWebAuthenticationSession?
 
     private static func randomToken(_ bytes: Int) -> String {
@@ -60,13 +65,14 @@ public class DgSignInPlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorizationControl
             let controller = ASAuthorizationController(authorizationRequests: [request])
             controller.delegate = self
             controller.presentationContextProvider = self
+            self.appleController = controller
             controller.performRequests()
         }
     }
 
     public func authorizationController(controller: ASAuthorizationController,
                                         didCompleteWithAuthorization authorization: ASAuthorization) {
-        defer { appleCall = nil }
+        defer { appleCall = nil; appleController = nil }
         guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
               let data = credential.identityToken, let token = String(data: data, encoding: .utf8) else {
             appleCall?.reject("Apple returned no identity token", "credential")
@@ -83,6 +89,7 @@ public class DgSignInPlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorizationControl
         let code = (error as? ASAuthorizationError)?.code == .canceled ? "cancelled" : "apple"
         appleCall?.reject(error.localizedDescription, code)
         appleCall = nil
+        appleController = nil
     }
 
     public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {

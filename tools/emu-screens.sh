@@ -27,35 +27,49 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = edgetoedge ]; then
     (cd "$OUT" && ffmpeg -loglevel error -y -f concat -safe 0 -i rec.txt -c copy flow.mp4 && rm -f rec-*.mp4 rec.txt) || true
   }
   launch() { adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep "${1:-14}"; }
-  # The status bar's height, straight from the window manager (the device's own value, not a guess).
-  sbar() { adb shell dumpsys window displays 2>/dev/null | grep -m1 -o "statusBars[^}]*frame=\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]" | grep -o "\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]" | tr -d '[]' | awk -F, '{print $4}' | head -1; }
-  measure() { # $1 = name, $2 = light|dark, $3 = seconds to let the page paint
+  # Wait until the page has really painted. A cold start on a CI emulator is slow (the first frame
+  # was blank for ~40 s in run 18), and a screenshot of the window background would "pass" every
+  # edge test while proving nothing. The page's own title is on screen when it is up.
+  wait_page() {
+    for i in $(seq 1 "${1:-20}"); do
+      adb shell uiautomator dump /sdcard/e.xml > /dev/null 2>&1
+      if adb shell cat /sdcard/e.xml 2>/dev/null | grep -qi "uposatha"; then echo "page up after $((i * 5))s"; return 0; fi
+      sleep 5
+    done
+    echo "page did not paint within $(( ${1:-20} * 5 ))s"
+    return 1
+  }
+  measure() { # $1 = name, $2 = light|dark
     adb shell cmd uimode night "$([ "$2" = dark ] && echo yes || echo no)" > /dev/null 2>&1
-    launch "${3:-14}"
+    launch 8
+    wait_page 30 || ko "$1: the page never painted"
+    sleep 3
     adb exec-out screencap -p > "$OUT/edge-$1.png"
     python3 "$REPO/tools/edge-pixels.py" "$OUT/edge-$1.png" "$2" "$OUT/edge-$1.json" > /dev/null
     eval "$(python3 - "$OUT/edge-$1.json" <<'PY'
 import json, sys
 v = json.load(open(sys.argv[1]))
-for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg", "top_matches_page", "bottom_matches_page", "text_top"):
+for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg",
+          "top_matches_page", "bottom_matches_page", "top_row_uniform", "text_top", "status_rows",
+          "empty_page", "ink_ratio"):
     print("v_%s=%s" % (k, "true" if v[k] is True else v[k]))
 PY
 )"
-    bar=$(sbar)
+    echo "$1: page_bg=$v_page_bg status_bar_rows=$v_status_rows top_bar_text=$v_text_top ink=$v_ink_ratio" >> "$res"
+    # 0. The screenshot must be the page, not its background: a blank page would satisfy every edge
+    #    test below (the only ink on it is the status bar's own clock). A cold start on a CI emulator
+    #    painted its first frame after ~40 s in run 18.
+    [ "$v_empty_page" = false ] && ok "$1: the page has painted (content, not just the background)" || ko "$1: the screenshot is an empty page ($v_page_bg) — nothing to judge"
     # 1. The page must reach both edges: no flat painted band at the top or the bottom, and the very
     #    first row of the screen must be the page's own background.
     [ "$v_frame_top" = 0 ] && ok "$1: the page reaches the top edge (no painted strip)" || ko "$1: $v_frame_top px of a strip at the top (top_color $v_top_color, page $v_page_bg)"
     [ "$v_frame_bottom" = 0 ] && ok "$1: the page reaches the bottom edge" || ko "$1: $v_frame_bottom px of a strip at the bottom (bottom_color $v_bottom_color, page $v_page_bg)"
     [ "$v_top_matches_page" = true ] && ok "$1: the first row of the screen is the page's own background ($v_page_bg)" || ko "$1: the first row is $v_top_color, not the page's $v_page_bg"
     [ "$v_edge_to_edge" = true ] && ok "$1: edge to edge (page background $v_page_bg)" || ko "$1: not edge to edge"
-    # 2. The top bar must sit BELOW the status bar, not behind it: its first text is at least the
-    #    status bar's own height down (text higher than that is covered by the clock).
-    if [ -n "$bar" ] && [ -n "$v_text_top" ] && [ "$v_text_top" != None ]; then
-      [ "$v_text_top" -ge "$bar" ] && ok "$1: the top bar starts below the status bar (text at ${v_text_top}px, status bar ${bar}px)" \
-                                  || ko "$1: the top bar text is at ${v_text_top}px, inside the status bar (${bar}px) — the clock covers it"
-    else
-      ko "$1: could not read the status-bar height ($bar) or the top bar's text ($v_text_top)"
-    fi
+    # 2. The status bar shows the page and nothing but the system's own glyphs: its top rows are one
+    #    colour (the page's background) all the way across. Page content there — a heading, the search
+    #    field of a top bar that ignored the inset — breaks that up, and the clock covers it.
+    [ "$v_top_row_uniform" = true ] && ok "$1: nothing of the page is drawn inside the status bar" || ko "$1: the status bar rows are not uniform — page content is under the clock"
     # 3. The status bar area carries the page's own colour: its white by day, its #111111 at night
     #    (the old build painted the navy #1b2836 there). The screenshot rounds 8-bit colours, so the
     #    comparison allows a few levels.
@@ -75,16 +89,16 @@ PY
   adb shell settings put system accelerometer_rotation 0
   adb shell settings put system user_rotation 0
   adb shell pm clear "$PKG" > /dev/null 2>&1 || true   # first run: the default light theme, no stored state
-  measure light light 16
-  measure dark dark 8
-  adb shell cmd uimode night no > /dev/null 2>&1; launch 8
+  measure light light
+  measure dark dark
   # A short tour for the video: the app layer, a tab, then the dark theme (the page follows the
   # system appearance through prefers-color-scheme, so the same path a reader takes is exercised).
+  adb shell cmd uimode night no > /dev/null 2>&1; launch 8; wait_page 30 || true
   adb shell input tap 250 1790; sleep 4     # the Calendar tab
   adb shell input swipe 540 700 540 1500 300; sleep 3
   adb shell cmd uimode night yes > /dev/null 2>&1; sleep 3
   adb exec-out screencap -p > "$OUT/edge-light-to-dark.png"
-  launch 8
+  launch 8; wait_page 30 || true
   adb shell input tap 250 1790; sleep 4     # the Calendar tab, on the dark page
   adb shell input keyevent KEYCODE_HOME; sleep 2
   stop_rec

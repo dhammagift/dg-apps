@@ -64,12 +64,37 @@ def main():
     frame_top = strip(0, 1)
     frame_bottom = strip(h - 1, -1)
 
-    # The first row of page text: the top bar's dark (light theme) or light (dark theme) glyphs.
+    # The page's own content: any pixel in the body that is not the page background. A blank page
+    # (the WebView before its first paint) would satisfy every edge test, so it is asked about first.
+    ink = 0
+    total = 0
+    for y in range(int(h * 0.08), int(h * 0.92), 6):
+        for x in range(0, w, 6):
+            total += 1
+            if not near(px[x, y], page_bg, 32):
+                ink += 1
+    ink_ratio = ink / max(1, total)
+    empty_page = ink_ratio < 0.005
+
+    # The status bar's own height: the fixed inset Android reserves for it, which is also what the
+    # page gets as env(safe-area-inset-top) (~51 px of a 2400 px screen). The window manager's value
+    # is the authority; this is the layout one for when there is none, and it only decides WHERE the
+    # status bar is, never passes or fails anything by itself (the caller's own checks do that).
+    def ink_row(y, step=4):
+        row = [px[x, y] for x in range(0, w, step)]
+        return sum(1 for p in row if not near(p, page_bg, 32))
+
+    status_rows = int(round(h * 0.024))   # 58 px of 2400: the status bar and its glyphs
+
+    # The first row of the page's own text (the top bar), for the record: ink on the page's own
+    # background, below the status bar's area.
+    def ink_count(y):
+        row = [px[x, y] for x in range(0, w)]
+        return sum(1 for p in row if (p[0] < 110 if not dark_page else p[0] > 200))
+
     text_top = None
-    for y in range(0, min(400, h)):
-        row = [px[x, y] for x in range(0, w, 2)]
-        ink = sum(1 for p in row if (p[0] < 110 if not dark_page else p[0] > 200))
-        if ink >= max(6, w // 60):
+    for y in range(status_rows, min(status_rows + 400, h)):
+        if ink_count(y) > 8:
             text_top = y
             break
 
@@ -83,15 +108,23 @@ def main():
         "bottom_color": "#%02x%02x%02x" % bottom[:3],
         "page_bg": "#%02x%02x%02x" % page_bg[:3],
         "top_matches_page": near(top, page_bg, 32),
+        # How uniform the screen's first rows are: page content (a heading, a search field) would
+        # break the page background up; the transparent status bar shows nothing but its own icons.
+        "top_row_uniform": all(near(px[x, y], top, 48) for y in range(0, max(2, status_rows // 3)) for x in range(0, w, 6)),
         "bottom_matches_page": near(bottom, page_bg, 32),
         "text_top": text_top,
+        "status_rows": status_rows,
+        "empty_page": empty_page,
+        "ink_ratio": round(ink_ratio, 5),
         "theme": theme,
         "size": [w, h],
     }
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(verdict, f, indent=2)
     print(json.dumps(verdict))
-    for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg", "top_matches_page", "bottom_matches_page", "text_top"):
+    for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg",
+              "top_matches_page", "bottom_matches_page", "text_top", "status_rows",
+              "empty_page", "ink_ratio", "top_row_uniform"):
         print(f"{k}={verdict[k]}")
 
 

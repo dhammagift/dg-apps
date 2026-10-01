@@ -532,29 +532,71 @@
 
   // @rate-prompt (inlined from src/native-bridge.js by uposatha/build.js)
 
-  // The OS status/navigation bar icon style is fixed at native start (capacitor.config.json ->
-  // plugins.SystemBars.style: 'DARK', light icons for a permanently dark background) — it never
-  // followed the page's own theme switch, so picking the light theme left light (near-invisible)
-  // system-bar icons over a now-light page (dg-apps#38: "Тема не меняет хедер и футер ОС"). Synced
-  // here, not in the shared themeswitch.js: the reader's own status-bar strip is deliberately always
-  // dark regardless of theme (issue #15), so this stays Uposatha-only.
-  function syncSystemBars() {
+  // The OS status/navigation bar ICON STYLE. Edge to edge (dg-apps#41): the page now runs under the
+  // transparent bars itself, so there is no strip to paint (the DgBars plugin is gone) — only the
+  // icons have to stay readable on what the page shows there. The page's own theme decides it:
+  // data-theme on <html> (uposatha-calendar.js setTheme) with data-bs-theme as the fallback the
+  // shared scripts write. Both bars in one go: the bottom one sits over the page background too
+  // (app-refresh.css pads the tab bar with env(safe-area-inset-bottom)). Sent only when it changes,
+  // and again when the app comes back to the front (a system dialog may have reset it).
+  // The old code read data-bs-theme only: the page never set it itself, so the icons stayed light
+  // (near-invisible) on the light theme — one of the reasons the plugin painted strips instead.
+  function syncSystemBars(force) {
     var SystemBars = Cap.Plugins && Cap.Plugins.SystemBars;
-    if (!SystemBars) return;
-    var dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-    SystemBars.setStyle({ style: dark ? 'DARK' : 'LIGHT' }).catch(function () { /* no-op */ });
+    if (!SystemBars || typeof SystemBars.setStyle !== 'function') return;
+    var root = document.documentElement;
+    var theme = root.getAttribute('data-theme') || root.getAttribute('data-bs-theme');
+    var style = (theme || document.body.classList.contains('dark')) === 'dark' ? 'DARK' : 'LIGHT';
+    if (!force && style === lastBarStyle) return;
+    lastBarStyle = style;
+    SystemBars.setStyle({ style: style, bar: 'StatusBar' }).catch(function () { lastBarStyle = ''; });
+    SystemBars.setStyle({ style: style, bar: 'NavigationBar' }).catch(function () { lastBarStyle = ''; });
   }
+  var lastBarStyle = '';
   function watchSystemBars() {
-    syncSystemBars();
+    syncSystemBars(true);
     var mo = new MutationObserver(function (muts) {
-      for (var i = 0; i < muts.length; i++) if (muts[i].attributeName === 'data-bs-theme') { syncSystemBars(); return; }
+      for (var i = 0; i < muts.length; i++) {
+        if (muts[i].attributeName === 'data-theme' || muts[i].attributeName === 'data-bs-theme') { syncSystemBars(false); return; }
+      }
     });
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-bs-theme', 'class'] });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') syncSystemBars(true); });
+    window.addEventListener('focus', function () { syncSystemBars(true); });
+    // The inset is re-read when the view changes (rotation, a cutout moving to the side): the bar
+    // padding lives in a style tag of its own, so a stale value would stay for the whole session.
+    window.addEventListener('resize', function () { applyTopInset(); });
+  }
+
+  // The page's own top bar (.tbar, sticky at top: 0) has no top inset: the site never needed one
+  // while Capacitor padded the WebView away from the status bar. With viewport-fit=cover it reaches
+  // under it, so the search row would sit behind the clock. Only where the insets really reach the
+  // page is anything added — a WebView too old to pass them through (SystemBars pads it instead,
+  // env() there is 0) must NOT get a second pad. The value is written as a plain px padding on the
+  // bar; env(safe-area-inset-top) cannot be used for it, see below.
+  function applyTopInset() {
+    if (IOS) return;   // iOS pads the page through its own safe area, never under the status bar
+    if (!document.body) return;
+    var probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top,0px);';
+    (document.body || document.documentElement).appendChild(probe);
+    var inset = Math.round(probe.getBoundingClientRect().height);
+    probe.remove();
+    var css = document.getElementById('dg-safe-top');
+    if (!css) { css = document.createElement('style'); css.id = 'dg-safe-top'; document.head.appendChild(css); }
+    // Capacitor's SystemBars reports the same number as a custom property; the padding is written
+    // from whichever is there, so the native value survives a WebView whose env() is broken (the
+    // Chromium bug the plugin works around for versions below 140).
+    var native = parseInt((getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top') || '').trim(), 10);
+    var top = inset || (isNaN(native) ? 0 : native);
+    css.textContent = top > 0 ? 'body.app .tbar{padding-top:calc(10px + ' + top + 'px)}' : '';
+    if (top > 0) document.body.classList.add('dg-safe-top-on');
   }
 
   function start() {
     if (!onCalendar) { if (!IOS) wireBackButton(); return; }
     watchSystemBars();
+    applyTopInset();
     if (IOS) { wrapIosNotifications(); wireIosShortcutTaps(); }
     else { wireBackButton(); wrapLocalNotifications(); watchStreamRow(); }
     // #up-rate's href is dg-node's own static markup (uposatha-calendar.html) — the Play Store URL,
@@ -571,7 +613,7 @@
       if (a) { try { localStorage.setItem(RATE_FLAG, '1'); } catch (err) { /* no storage */ } }
     }, true);
     // UposathaCore is loaded by the page: give it until the page has finished loading.
-    function afterLoad() { pushShortcuts(); setTimeout(updateSite, 6000); }
+    function afterLoad() { pushShortcuts(); setTimeout(updateSite, 6000); applyTopInset(); }
     if (document.readyState === 'complete') afterLoad();
     else window.addEventListener('load', afterLoad, { once: true });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') pushShortcuts(); });
@@ -580,58 +622,4 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
-})();
-
-// The strips behind the system bars (status bar, gesture bar, the camera cutout in landscape) in the
-// page's own colours instead of a fixed navy frame (owner, dg-apps#40: "борода"). The native DgBars
-// plugin paints them; this reports the colour at the page's top edge and of its body when the theme
-// or the view has changed it. Not on scroll, and not for a shade nobody can see (#fff vs #fdfdfd):
-// each report repaints native chrome, and a stream of them made page switches jump (owner, 380).
-// Android only — iOS has no such plugin.
-(function syncSystemBars() {
-  var Cap = window.Capacitor;
-  if (!Cap || !Cap.isPluginAvailable || !Cap.isPluginAvailable('DgBars')) return;
-  var last = '', timer = 0;
-  function hex(c) {
-    var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/.exec(c || '');
-    if (!m || (m[4] !== undefined && +m[4] < 0.95)) return '';   // see-through (a sheet's scrim too): look further up
-    return '#' + [m[1], m[2], m[3]].map(function (v) { return ('0' + (Math.round(+v)).toString(16)).slice(-2); }).join('');
-  }
-  // The first element up the tree with a solid background: its colour, and the element itself.
-  function paint(el) {
-    for (; el && el.nodeType === 1; el = el.parentElement) { var h = hex(getComputedStyle(el).backgroundColor); if (h) return { c: h, el: el }; }
-    return { c: '', el: null };
-  }
-  function bgOf(el) { return paint(el).c; }
-  // Two colours closer than this read as one: report the body colour, not a near-twin of it.
-  function near(a, b) {
-    if (!a || !b) return false;
-    var d = 0;
-    for (var i = 1; i < 7; i += 2) d += Math.abs(parseInt(a.substr(i, 2), 16) - parseInt(b.substr(i, 2), 16));
-    return d < 24;
-  }
-  function run() {
-    if (!document.body) return;
-    var bottom = bgOf(document.body) || bgOf(document.documentElement) || '#111111';
-    var hit = paint(document.elementFromPoint(window.innerWidth / 2, 1)), top = hit.c || bottom;
-    if (near(top, bottom)) { top = bottom; hit.el = null; }
-    // A header band (not the page itself): how far down it reaches, so a landscape cutout strip beside it matches.
-    var band = hit.el && hit.el !== document.body && hit.el !== document.documentElement && top !== bottom
-      ? Math.max(0, Math.round(hit.el.getBoundingClientRect().bottom)) : 0;
-    var key = top + bottom + band;
-    if (key === last) return;
-    last = key;
-    Cap.Plugins.DgBars.set({ top: top, bottom: bottom, band: band }).catch(function () { last = ''; });
-  }
-  function soon() { clearTimeout(timer); timer = setTimeout(run, 300); }
-  function watch() {
-    var mo = new MutationObserver(soon);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-bs-theme', 'data-theme'] });
-    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    soon();
-  }
-  if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
-  window.addEventListener('load', soon);
-  window.addEventListener('resize', soon);
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { last = ''; soon(); } });
 })();

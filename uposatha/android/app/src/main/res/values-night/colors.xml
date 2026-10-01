@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dark page background (uposatha-calendar.css --dg-page, [data-theme="dark"]): see
+         values/colors.xml. The same colour as @color/dg_splash_bg in this folder. -->
+    <color name="dg_navbar">#111111</color>
+</resources>

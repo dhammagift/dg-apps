@@ -2,11 +2,97 @@
 # Screens of the built Dhamma.Gift APK on an Android emulator (workflow android-screens.yml), so a
 # change can be looked at on a real Android WebView before it reaches the owner or a store
 # (owner, 2026-09-29: "сними себе сам ... проверь, пришли скриншоты").
-# Usage: tools/emu-screens.sh <apk> <out-dir>
+# Usage: tools/emu-screens.sh <apk> <out-dir> [package] [screens|shortcuts|edgetoedge]
 set -u
 APK=$1; OUT=$2; PKG=${3:-gift.dhamma.mobile}
+REPO=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$OUT"
 adb install -r "$APK" || exit 1
+# Edge to edge (dg-apps#41): the Uposatha app must run UNDER the transparent system bars instead of
+# showing the painted strips the DgBars plugin used to draw. Only a real device answers whether it
+# does — the WebView's own env(safe-area-inset-*), the status bar's transparency and the window
+# background are all native — so the question is settled here, by looking at the pixels of a
+# screenshot, and the whole pass is recorded as flow.mp4 (workflow input "video").
+if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = edgetoedge ]; then
+  res="$OUT/edgetoedge-result.txt"; : > "$res"; fail=0
+  ok() { echo "PASS $*" >> "$res"; }; ko() { echo "FAIL $*" >> "$res"; fail=1; }
+  # screenrecord stops at 180 s: restarted in a loop while the flag file exists, joined at the end.
+  [ "${VIDEO:-0}" = 1 ] && touch "$OUT/.rec"
+  ( i=0; while [ -f "$OUT/.rec" ]; do adb shell screenrecord --bit-rate 4000000 --time-limit 170 "/sdcard/rec-$i.mp4"; i=$((i+1)); done ) &
+  RECPID=$!
+  stop_rec() {
+    [ "${VIDEO:-0}" = 1 ] || return 0
+    rm -f "$OUT/.rec"; adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null
+    for f in $(adb shell ls /sdcard/ | tr -d '\r' | grep '^rec-.*\.mp4$' | sort -V); do adb pull "/sdcard/$f" "$OUT/$f" > /dev/null; echo "file '$f'" >> "$OUT/rec.txt"; done
+    (cd "$OUT" && ffmpeg -loglevel error -y -f concat -safe 0 -i rec.txt -c copy flow.mp4 && rm -f rec-*.mp4 rec.txt) || true
+  }
+  launch() { adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep "${1:-14}"; }
+  # The status bar's height, straight from the window manager (the device's own value, not a guess).
+  sbar() { adb shell dumpsys window displays 2>/dev/null | grep -m1 -o "statusBars[^}]*frame=\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]" | grep -o "\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]" | tr -d '[]' | awk -F, '{print $4}' | head -1; }
+  measure() { # $1 = name, $2 = light|dark, $3 = seconds to let the page paint
+    adb shell cmd uimode night "$([ "$2" = dark ] && echo yes || echo no)" > /dev/null 2>&1
+    launch "${3:-14}"
+    adb exec-out screencap -p > "$OUT/edge-$1.png"
+    python3 "$REPO/tools/edge-pixels.py" "$OUT/edge-$1.png" "$2" "$OUT/edge-$1.json" > /dev/null
+    eval "$(python3 - "$OUT/edge-$1.json" <<'PY'
+import json, sys
+v = json.load(open(sys.argv[1]))
+for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg", "top_matches_page", "bottom_matches_page", "text_top"):
+    print("v_%s=%s" % (k, "true" if v[k] is True else v[k]))
+PY
+)"
+    bar=$(sbar)
+    # 1. The page must reach both edges: no flat painted band at the top or the bottom, and the very
+    #    first row of the screen must be the page's own background.
+    [ "$v_frame_top" = 0 ] && ok "$1: the page reaches the top edge (no painted strip)" || ko "$1: $v_frame_top px of a strip at the top (top_color $v_top_color, page $v_page_bg)"
+    [ "$v_frame_bottom" = 0 ] && ok "$1: the page reaches the bottom edge" || ko "$1: $v_frame_bottom px of a strip at the bottom (bottom_color $v_bottom_color, page $v_page_bg)"
+    [ "$v_top_matches_page" = true ] && ok "$1: the first row of the screen is the page's own background ($v_page_bg)" || ko "$1: the first row is $v_top_color, not the page's $v_page_bg"
+    [ "$v_edge_to_edge" = true ] && ok "$1: edge to edge (page background $v_page_bg)" || ko "$1: not edge to edge"
+    # 2. The top bar must sit BELOW the status bar, not behind it: its first text is at least the
+    #    status bar's own height down (text higher than that is covered by the clock).
+    if [ -n "$bar" ] && [ -n "$v_text_top" ] && [ "$v_text_top" != None ]; then
+      [ "$v_text_top" -ge "$bar" ] && ok "$1: the top bar starts below the status bar (text at ${v_text_top}px, status bar ${bar}px)" \
+                                  || ko "$1: the top bar text is at ${v_text_top}px, inside the status bar (${bar}px) — the clock covers it"
+    else
+      ko "$1: could not read the status-bar height ($bar) or the top bar's text ($v_text_top)"
+    fi
+    # 3. The status bar area carries the page's own colour: its white by day, its #111111 at night
+    #    (the old build painted the navy #1b2836 there). The screenshot rounds 8-bit colours, so the
+    #    comparison allows a few levels.
+    case "$2" in
+      light) want="#ffffff";;
+      dark)  want="#111111";;
+    esac
+    python3 - "$v_top_color" "$want" <<'PY' && ok "$1: the status bar strip is the page's $want ($v_top_color)" || ko "$1: the status bar strip is $v_top_color, not $want"
+import sys
+c = [int(sys.argv[1][i:i+2], 16) for i in (1, 3, 5)]
+w = [int(sys.argv[2][i:i+2], 16) for i in (1, 3, 5)]
+sys.exit(0 if all(abs(a - b) <= 8 for a, b in zip(c, w)) else 1)
+PY
+    [ "$v_bottom_matches_page" = true ] && ok "$1: the bottom edge is the page's own background too" || ko "$1: the bottom edge is $v_bottom_color, not the page's $v_page_bg"
+  }
+  adb logcat -c 2>/dev/null || true
+  adb shell settings put system accelerometer_rotation 0
+  adb shell settings put system user_rotation 0
+  adb shell pm clear "$PKG" > /dev/null 2>&1 || true   # first run: the default light theme, no stored state
+  measure light light 16
+  measure dark dark 8
+  adb shell cmd uimode night no > /dev/null 2>&1; launch 8
+  # A short tour for the video: the app layer, a tab, then the dark theme (the page follows the
+  # system appearance through prefers-color-scheme, so the same path a reader takes is exercised).
+  adb shell input tap 250 1790; sleep 4     # the Calendar tab
+  adb shell input swipe 540 700 540 1500 300; sleep 3
+  adb shell cmd uimode night yes > /dev/null 2>&1; sleep 3
+  adb exec-out screencap -p > "$OUT/edge-light-to-dark.png"
+  launch 8
+  adb shell input tap 250 1790; sleep 4     # the Calendar tab, on the dark page
+  adb shell input keyevent KEYCODE_HOME; sleep 2
+  stop_rec
+  [ -s "$OUT/flow.mp4" ] && echo "video: flow.mp4 ($(du -h "$OUT/flow.mp4" | cut -f1))" >> "$res"
+  adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true
+  grep -iE "Uncaught|TypeError|ReferenceError" "$OUT/logcat.txt" | head -5 >> "$res" || true
+  cat "$res"; exit $fail
+fi
 if [ "$PKG" = gift.dhamma.uposatha ]; then
   # Uposatha: the long-press menu is dynamic shortcuts the page's bridge pushes, so what proves it is the
   # system's own list after one launch (and the version row the bridge fills in).

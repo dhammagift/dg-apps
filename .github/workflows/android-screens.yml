@@ -1,6 +1,11 @@
 # Screens of a built Dhamma.Gift APK on an Android emulator: what the app really shows, on a real
 # Android WebView, before the owner has to install it (owner, 2026-09-29). Run by hand with the id
 # of a build-app.yml run; the screenshots come back as the artifact android-screens-<run>.
+#
+# mode=edgetoedge adds a PASS/FAIL check for the Uposatha app (dg-apps#41): the page must run under
+# the transparent system bars — no painted strip at either edge, the top bar below the status bar,
+# the strip behind it in the page's own colour — and with "video" the whole pass comes back as
+# flow.mp4.
 name: Android screens
 
 on:
@@ -25,7 +30,7 @@ on:
         type: string
         default: 'google_apis'
       package:
-        description: 'Package of the APK: gift.dhamma.mobile (screens) or gift.dhamma.uposatha (shortcuts check)'
+        description: 'Package of the APK: gift.dhamma.mobile (screens) or gift.dhamma.uposatha (shortcuts / edge to edge check)'
         required: false
         type: string
         default: 'gift.dhamma.mobile'
@@ -35,7 +40,7 @@ on:
         type: boolean
         default: false
       mode:
-        description: 'screens, or shortcuts (Dhamma.Gift launcher shortcuts test: PASS/FAIL, red run on a failure)'
+        description: 'screens, shortcuts (Dhamma.Gift launcher shortcuts test), or edgetoedge (Uposatha edge-to-edge check: PASS/FAIL, red run on a failure)'
         required: false
         type: string
         default: 'screens'
@@ -62,6 +67,15 @@ jobs:
       - name: OCR for the shortcuts test
         if: inputs.mode == 'shortcuts'
         run: sudo apt-get install -y -qq tesseract-ocr ${{ inputs.video && 'ffmpeg' || '' }} > /dev/null
+
+      # The edge-to-edge verdict is read out of the screenshot's own pixels (tools/edge-pixels.py).
+      - name: Python imaging for the edge-to-edge check
+        if: inputs.mode == 'edgetoedge'
+        run: python3 -m pip install --quiet --user pillow
+
+      - name: ffmpeg for the video
+        if: inputs.mode == 'edgetoedge' && inputs.video
+        run: sudo apt-get install -y -qq ffmpeg > /dev/null
 
       - name: Enable KVM
         run: |

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window background, seen round the page before the first paint and on a WebView too old to
+         pass the system-bar insets through (there Capacitor still pads the WebView away from the bars,
+         dg-apps#41). Edge to edge, so it is the page's own background — light #ffffff here, dark
+         #111111 in values-night/colors.xml — and not a navy frame. Android 15 ignores
+         android:statusBarColor (targetSdk 36); this is what shows instead. -->
+    <color name="dg_navbar">#ffffff</color>
+</resources>

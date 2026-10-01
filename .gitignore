@@ -48,6 +48,9 @@ test/snapshots/after/
 .android-home/
 .tmp/
 
+# Python bytecode of the helpers under tools/ (tools/edge-pixels.py reads the emulator screenshots).
+__pycache__/
+
 # Screenshots and the report copied out of a simulator run, so they can be reviewed as files instead
 # of only inside a CI run's artifacts (the run keeps its own copy for 30 days).
 ios-screenshots/

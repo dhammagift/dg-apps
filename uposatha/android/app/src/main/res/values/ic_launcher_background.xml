@@ -2,7 +2,6 @@
 <resources>
     <!-- The launcher icon's plate: the site's own navy (the navy of the page header), behind the moon. -->
     <color name="ic_launcher_background">#243448</color>
-    <!-- The strip behind the status / navigation bar (Android 15 ignores android:statusBarColor):
-         the page's own dark #111111, the same as the WebView background. -->
-    <color name="dg_navbar">#111111</color>
+    <!-- dg_navbar (the window background behind the system bars) moved to colors.xml / values-night:
+         it now follows the page's own background (dg-apps#41, edge to edge). -->
 </resources>

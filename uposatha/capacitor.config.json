@@ -7,11 +7,12 @@
     "hostname": "uposatha.dhamma.gift"
   },
   "android": {
-    "backgroundColor": "#111111"
+    "backgroundColor": "#ffffff"
   },
   "plugins": {
     "SystemBars": {
-      "style": "DARK"
+      "style": "DEFAULT",
+      "initialViewportFitValueHint": "cover"
     },
     "LocalNotifications": {
       "smallIcon": "ic_stat_uposatha",

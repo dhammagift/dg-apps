@@ -66,8 +66,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgSoundPlugin.class);
         registerPlugin(DgSitePlugin.class);
         registerPlugin(DgAlarmPlugin.class);
-        // The strips behind the system bars in the page's colours (dg-apps#40, see DgBarsPlugin).
-        registerPlugin(DgBarsPlugin.class);
+        // No DgBars any more (dg-apps#41): the page runs edge to edge under transparent system bars
+        // (viewport-fit=cover, capacitor.config.json -> SystemBars) and only the bar ICONS are set
+        // from the page, by Capacitor's own SystemBars plugin (uposatha-bridge.js).
         // The launch splash is the animated mark (res/drawable/dg_splash_icon.xml, 890 ms). The system takes the
         // splash down the moment the first frame is ready, which on a warm start is before the mark has drawn;
         // holding it for the length of the animation is what lets it play, and costs a cold start nothing it
@@ -79,10 +80,12 @@ public class MainActivity extends BridgeActivity {
 
         serveUpdatedFiles();
         injectBridge();
-        // What the WebView shows before the site's first paint is the launch screen's own colour
-        // (light/dark by the system theme), so native splash -> web splash has no gap.
+        // What the WebView shows before the site's first paint. Edge to edge (dg-apps#41): the page
+        // itself reaches under the transparent bars, so this is only the page's own background
+        // (light/dark by the system theme) — not a navy frame round it. The splash keeps
+        // @color/dg_splash_bg, which is the same pair of colours.
         if (getBridge() != null && getBridge().getWebView() != null) {
-            getBridge().getWebView().setBackgroundColor(getColor(R.color.dg_splash_bg));
+            getBridge().getWebView().setBackgroundColor(getColor(R.color.dg_navbar));
             // No scrollbars, no overscroll glow: the WebView draws its own scroll indicator ABOVE the page
             // (and above the splash), which showed as a strip down the launch screen. The page is the app's
             // whole interface here, and a phone app has no scrollbars on it.
@@ -92,25 +95,6 @@ public class MainActivity extends BridgeActivity {
             bare.setOverScrollMode(View.OVER_SCROLL_NEVER);
         }
         // Deliberately no handleIntent(getIntent()) here — see handledIntent above.
-    }
-
-    // SystemBars puts the theme's window background back on these occasions — re-paint the page's colours.
-    @Override
-    public void onResume() {
-        super.onResume();
-        DgBarsPlugin.apply(this);
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) DgBarsPlugin.apply(this);
-    }
-
-    @Override
-    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        DgBarsPlugin.apply(this);
     }
 
     @Override

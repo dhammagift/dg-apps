@@ -81,6 +81,11 @@ on:
         required: false
         type: boolean
         default: false
+      ios_video:
+        description: 'Record the iOS simulator check as a video (ios-flow.mp4) as well as screenshots (dg-apps#41: edge to edge, to be looked at without a phone)'
+        required: false
+        type: boolean
+        default: false
       dict_only:
         description: 'Run ONLY the dictionary app jobs and skip the reader app entirely. For checking a change under dict/ without building the offline library: minutes instead of the better part of an hour. A tag ignores it — a release builds everything.'
         required: false
@@ -1077,6 +1082,14 @@ jobs:
         working-directory: uposatha
         run: npm run sync-android
 
+      # Edge to edge (dg-apps#41): the bundled page must carry viewport-fit=cover, the DgBars plugin
+      # must be gone, the bar icons must follow the page's theme and the top bar must step down by
+      # the inset only where the platform really pays it. Runs on the just-built www/ (the same files
+      # the APK packages) and needs no network. The real proof is the emulator check
+      # (android-screens.yml, mode=edgetoedge): the pixels of a screenshot on Android.
+      - name: Edge-to-edge checks (bundle, bridge, resources)
+        run: node uposatha/test/edge-to-edge.js
+
       - name: Grant gradlew permissions
         run: chmod +x uposatha/android/gradlew
 
@@ -1296,13 +1309,25 @@ jobs:
           xcrun simctl boot "$DEV" || true
           xcrun simctl bootstatus "$DEV" -b
           xcrun simctl install "$DEV" "$APP"
-          xcrun simctl launch "$DEV" gift.dhamma.uposatha
-          sleep 12
           mkdir -p shots
+          # The whole launch (and a couple of taps) as a video, on request: the same "look at it without
+          # a phone" as the Android emulator's flow.mp4 (dg-apps#41, edge to edge).
+          if [ "${{ inputs.ios_video }}" = "true" ]; then
+            xcrun simctl io "$DEV" recordVideo --codec h264 --force shots/ios-flow.mp4 &
+            REC=$!
+            sleep 2
+          fi
+          xcrun simctl launch "$DEV" gift.dhamma.uposatha
+          sleep 14
           xcrun simctl io "$DEV" screenshot shots/uposatha-ios-1.png
           xcrun simctl ui "$DEV" appearance dark
-          sleep 3
+          sleep 4
           xcrun simctl io "$DEV" screenshot shots/uposatha-ios-2-dark.png
+          if [ "${{ inputs.ios_video }}" = "true" ]; then
+            kill -INT "$REC" 2>/dev/null || true
+            wait "$REC" 2>/dev/null || true
+            ls -la shots
+          fi
 
       - name: Upload the screenshots
         if: always()

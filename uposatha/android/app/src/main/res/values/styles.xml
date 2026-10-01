@@ -10,13 +10,17 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
-        <!-- The strip behind the status bar is the site's own dark band in both themes.
-             Android 15 enforces edge-to-edge and ignores android:statusBarColor (targetSdk is 36),
-             so what actually shows is this window background; light icons on it, never the
-             system's light-mode default. -->
+        <!-- Edge to edge (dg-apps#41): the page paints under the transparent bars, so there is no
+             strip to colour — this window background is only what shows before its first paint and
+             on a WebView too old to pass the insets through. It is the page's own background
+             (@color/dg_navbar: white by day, #111111 at night), not a navy frame. Android 15
+             ignores android:statusBarColor (targetSdk 36), kept here for the older ones.
+             The bar ICONS are the page's (SystemBars.setStyle, uposatha-bridge.js, sent on every
+             theme change); the value below is only what the first frame gets — dark icons on the
+             light theme, light on the dark one (@bool/dg_light_bar), never a fixed choice. -->
         <item name="android:windowBackground">@color/dg_navbar</item>
         <item name="android:statusBarColor">@color/dg_navbar</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar">@bool/dg_light_bar</item>
     </style>
 
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
@@ -25,7 +29,7 @@
         <item name="android:background">@null</item>
         <item name="android:windowBackground">@color/dg_navbar</item>
         <item name="android:statusBarColor">@color/dg_navbar</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar">@bool/dg_light_bar</item>
     </style>
 
     <!-- The launch screen. On the TWA this was a Chrome splash; here it is the launcher icon's own
@@ -38,8 +42,8 @@
         <item name="windowSplashScreenAnimationDuration">890</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
         <item name="android:background">@color/dg_splash_bg</item>
-        <!-- The splash window is dark, so its status bar needs the same light icons as the real
-             theme. -->
-        <item name="android:windowLightStatusBar">@bool/dg_splash_light_bar</item>
+        <!-- The splash shows the page's background and the page's icon choice from the first frame
+             (@bool/dg_light_bar); the page itself takes over once it has painted. -->
+        <item name="android:windowLightStatusBar">@bool/dg_light_bar</item>
     </style>
 </resources>

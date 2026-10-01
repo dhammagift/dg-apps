@@ -516,6 +516,11 @@ const ASSET_LOOSE_FILES = [
     'materials/prat.html',
     'js/nav-component.js', 'js/pmjs.js', 'js/audioLazyLoad.js', 'js/switchView.js',
     'js/lbl.js', 'js/lunar.js', 'js/settings.js', 'js/diacritics.js',
+    // The site's browser error reporter, referenced by the bundled login page. In the app it
+    // returns at once (native-bridge.js is the reporter there, and two would double every report);
+    // it is copied so the page's own <script> tag resolves — a missing path on a device is answered
+    // with index.html instead (verifyReferencedAssets exists for exactly this).
+    'js/error-report.js',
     'js/standalone-dpd/pali-lookup-standalone.js',
     // Datatables (non-min, asked for by abbr.html), Font Awesome, and the PDF-export pair. ~7MB
     // raw between them, and the only reason "Export to PDF" and the abbreviation page worked while

@@ -120,6 +120,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     # The dict_only dispatch input skips this job and everything that needs it (android-release,
     # the three iOS jobs, ios-release): a change under dict/ has nothing to do with the offline
     # library this job builds, and waiting an hour to find out would be the wrong price. A tag push
@@ -796,6 +797,10 @@ jobs:
     name: Android emulator tests (shortcuts, history)
     needs: build
     runs-on: ubuntu-latest
+    # An iOS-only release has nothing to do with the Android half. Without this gate the emulator
+    # suite ran on every dg-ios build, and a flaky launcher check failed the whole run AFTER the
+    # IPA had already been uploaded to TestFlight (owner, 2026-10-01).
+    if: ${{ !endsWith(inputs.release || '', '-ios') }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -838,6 +843,7 @@ jobs:
     needs: [build, android-tests]
     if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'dg' || inputs.release == 'dg-both')) || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Is the service account there?
         id: play
@@ -911,6 +917,10 @@ jobs:
   dict-build:
     name: Dictionary app (Android)
     runs-on: ubuntu-latest
+    # Only when the dictionary is what was asked for (a tag releases everything). Every manual run
+    # used to build all three apps, whatever the release target was (owner, 2026-10-01).
+    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.dict_only || inputs.release == 'dict' || inputs.release == 'dict-ios' }}
+    timeout-minutes: 40
     # Artifacts only — nothing here creates or edits a GitHub release.
     permissions:
       contents: read
@@ -1047,6 +1057,9 @@ jobs:
   uposatha-build:
     name: Uposatha app (Android)
     runs-on: ubuntu-latest
+    # Same gate as dict-build, its own target only (owner, 2026-10-01).
+    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release == 'uposatha' || inputs.release == 'uposatha-ios' }}
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:
@@ -1176,8 +1189,9 @@ jobs:
   uposatha-release:
     name: Uposatha app release (Play internal track)
     needs: uposatha-build
-    if: github.event_name == 'workflow_dispatch' && inputs.release == 'uposatha'
+    if: (github.event_name == 'workflow_dispatch' && inputs.release == 'uposatha') || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Is the service account there?
         id: play
@@ -1231,6 +1245,7 @@ jobs:
     needs: uposatha-build
     if: inputs.ios_checks
     runs-on: macos-26
+    timeout-minutes: 60
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -1359,8 +1374,9 @@ jobs:
   uposatha-ios-release:
     name: Uposatha app iOS release (TestFlight)
     needs: uposatha-build
-    if: github.event_name == 'workflow_dispatch' && inputs.release == 'uposatha-ios'
+    if: (github.event_name == 'workflow_dispatch' && inputs.release == 'uposatha-ios') || startsWith(github.ref, 'refs/tags/')
     runs-on: macos-26
+    timeout-minutes: 90
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -1523,8 +1539,9 @@ jobs:
   dict-ios-release:
     name: Dictionary app iOS release (TestFlight)
     needs: dict-build
-    if: github.event_name == 'workflow_dispatch' && inputs.release == 'dict-ios'
+    if: (github.event_name == 'workflow_dispatch' && inputs.release == 'dict-ios') || startsWith(github.ref, 'refs/tags/')
     runs-on: macos-26
+    timeout-minutes: 90
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -1683,6 +1700,7 @@ jobs:
     needs: dict-build
     if: inputs.screenshots
     runs-on: macos-26
+    timeout-minutes: 45
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -1810,6 +1828,7 @@ jobs:
     needs: uposatha-build
     if: inputs.screenshots
     runs-on: macos-26
+    timeout-minutes: 45
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -1952,6 +1971,7 @@ jobs:
     needs: dict-build
     if: (github.event_name == 'workflow_dispatch' && inputs.release == 'dict') || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Is the service account there?
         id: play
@@ -2027,6 +2047,7 @@ jobs:
     needs: build
     if: inputs.ios_checks || startsWith(github.ref, 'refs/tags/')
     runs-on: macos-26
+    timeout-minutes: 60
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -2162,6 +2183,7 @@ jobs:
     needs: build
     if: inputs.ios_checks || startsWith(github.ref, 'refs/tags/')
     runs-on: macos-26
+    timeout-minutes: 60
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -2307,6 +2329,7 @@ jobs:
     needs: build
     if: inputs.screenshots
     runs-on: macos-26
+    timeout-minutes: 45
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -2452,6 +2475,7 @@ jobs:
     needs: build
     if: (github.event_name == 'workflow_dispatch' && !inputs.dict_only && !contains(fromJSON('["dict","dict-ios","uposatha","uposatha-ios"]'), inputs.release)) || startsWith(github.ref, 'refs/tags/')
     runs-on: macos-26
+    timeout-minutes: 90
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4

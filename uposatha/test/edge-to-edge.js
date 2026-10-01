@@ -7,9 +7,12 @@
 //   * the bar ICONS follow the page's own theme (data-theme, the attribute the page really sets —
 //     the old code watched data-bs-theme and so never saw a theme switch), for BOTH bars;
 //   * the page's top bar is pushed below the status bar exactly when the insets actually reach the
-//     page, and is left alone when they do not (an old WebView, where Capacitor pads it natively);
-//   * the native files agree: SystemBars' cover hint, no DgBars java, the window background is the
-//     page background (light/dark), not the old navy strip.
+//     page, and is left alone when they do not (an old WebView, where Capacitor pads it natively;
+//     a page without viewport-fit=cover on iOS);
+//   * the native files agree on both platforms: SystemBars' cover hint, no DgBars java, the window
+//     background is the page background (light/dark), not the old navy strip; on iOS the root view
+//     controller runs the WKWebView edge to edge and forwards the status bar query to the bridge,
+//     so the page's own theme picks the icon colour there too.
 //
 //   (cd uposatha && node build.js) then:  node uposatha/test/edge-to-edge.js
 const fs = require('fs');
@@ -96,6 +99,23 @@ function commentProblems(dir) {
 check('no resource comment contains a double hyphen (aapt rejects it)',
     [...commentProblems(path.join(APP, 'res/values')), ...commentProblems(path.join(APP, 'res/values-night'))], []);
 
+// ---- the iOS half ---------------------------------------------------------------------------------
+//
+// Android's half is the resources above; iOS's is the root view controller. The bridge is
+// platform-shared, so its checks below cover both.
+const BRIDGE = bridgeSource();
+const dgApp = read(path.join(ROOT, 'ios', 'App', 'App', 'DgApp.swift'));
+check('iOS: the root no longer confines the page to the safe area',
+    /safeAreaLayoutGuide/.test(dgApp), false);
+check('iOS: the page is pinned to the window\'s own edges',
+    /view\.topAnchor/.test(dgApp) && /view\.bottomAnchor/.test(dgApp), true);
+check('iOS: the status bar query reaches the bridge (the page picks its own icon colour)',
+    /childViewControllerForStatusBarStyle/.test(dgApp), true);
+check('iOS: behind the first paint is the page background (white / #111111), not a system colour',
+    /dgPageBackground/.test(dgApp) && /0x11 \/ 255/.test(dgApp), true);
+check('the bridge pads the top bar on iOS too (no platform skip in applyTopInset)',
+    /function applyTopInset\(\) \{\n\s*if \(IOS\) return;/.test(BRIDGE), false);
+
 // ---- the page, with the real bridge and a recorder for the plugins -------------------------------
 
 const TYPES = { html: 'text/html', js: 'application/javascript', css: 'text/css', json: 'application/json', svg: 'image/svg+xml', woff2: 'font/woff2', png: 'image/png', wasm: 'application/wasm' };
@@ -140,7 +160,6 @@ function fakeInsets(px) {
 (async () => {
     await new Promise((r) => server.listen(PORT, '127.0.0.1', r));
     const browser = await launchChromium();
-    const BRIDGE = bridgeSource();
     try {
         // 1. No insets reach the page (an old WebView: Capacitor pads it): the bar keeps its own padding.
         {

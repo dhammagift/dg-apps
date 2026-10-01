@@ -7,23 +7,44 @@ import Capacitor
 // the Home Screen quick actions (DgShortcuts). The same contract as Android's DgAlarm/DgSound and DgShortcuts plugins, as far as
 // iOS has the same things: no notification channels or streams here, no launcher icon change.
 
-// The root: the page sits inside the safe area (under the status bar and above the home indicator) on the page's own colour, so
-// nothing of it is hidden by the Dynamic Island or the home bar.
+// The page's own background (white by day, #111111 at night) — what shows behind the first paint and
+// at the overscroll edges, matching Android's windowBackground pair (values/colors.xml and
+// values-night). A dynamic colour, so the simulator's/simctl's appearance switch re-tints it the way
+// the page re-tints itself.
+private let dgPageBackground = UIColor { traits in
+    traits.userInterfaceStyle == .dark
+        ? UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 1)
+        : UIColor.white
+}
+
+// The root: the page runs EDGE TO EDGE (dg-apps#41) — the WKWebView spans the whole screen, under
+// the transparent status bar and the home indicator, and the page's own CSS keeps its bar clear of
+// both (viewport-fit=cover in the bundled page, env(safe-area-inset-*), the bridge's top-inset
+// padding). What this replaces: the page sat inside the safe area and the fields above and below it
+// were this view's own colour — the iOS half of the "борода" dg-apps#40/#41. The same change as
+// Android's (a706f50, c019579).
 final class DgRootViewController: UIViewController {
     private let bridgeController = DgBridgeViewController()
 
+    // The status bar's icon colour is the page's decision, not ours: the bridge calls
+    // SystemBars.setStyle when its theme changes, which lands on the bridge view controller's
+    // preferredStatusBarStyle. UIKit asks the WINDOW'S root (this VC), so the query has to be
+    // forwarded or this VC's implicit .default would win and the icons would stay dark on the
+    // page's dark theme.
+    override var childViewControllerForStatusBarStyle: UIViewController? { bridgeController }
+    override var childViewControllerForStatusBarHidden: UIViewController? { bridgeController }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = dgPageBackground
         addChild(bridgeController)
         bridgeController.view.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bridgeController.view)
-        let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            bridgeController.view.topAnchor.constraint(equalTo: guide.topAnchor),
-            bridgeController.view.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
-            bridgeController.view.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
-            bridgeController.view.trailingAnchor.constraint(equalTo: guide.trailingAnchor)
+            bridgeController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            bridgeController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            bridgeController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bridgeController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
         bridgeController.didMove(toParent: self)
     }
@@ -66,6 +87,12 @@ class DgBridgeViewController: CAPBridgeViewController {
     }
 
     override func capacitorDidLoad() {
+        // Edge to edge (dg-apps#41): Capacitor would leave the web view on systemBackground; what
+        // shows through before the first paint (and under overscroll) is the page's own background
+        // instead — the same dynamic colour as the root view behind it.
+        webView?.backgroundColor = dgPageBackground
+        webView?.scrollView.backgroundColor = dgPageBackground
+
         // Edge swipe = browser Back (a WKWebView leaves it off), and there is no Back button on iOS.
         webView?.allowsBackForwardNavigationGestures = true
         // No scroll indicators: the page is the whole interface.

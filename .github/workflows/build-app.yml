@@ -1057,8 +1057,10 @@ jobs:
   uposatha-build:
     name: Uposatha app (Android)
     runs-on: ubuntu-latest
-    # Same gate as dict-build, its own target only (owner, 2026-10-01).
-    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release == 'uposatha' || inputs.release == 'uposatha-ios' }}
+    # Same gate as dict-build, its own target only (owner, 2026-10-01), plus ios_checks: the iOS
+    # simulator job below needs this job's web bundle, and a manual ios_checks run asks for nothing
+    # else (release=none uploads nothing anywhere).
+    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release == 'uposatha' || inputs.release == 'uposatha-ios' || inputs.ios_checks }}
     timeout-minutes: 40
     permissions:
       contents: read
@@ -1321,34 +1323,19 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Run it in a simulator and take a screenshot
+      - name: Generate the rotation test project
         run: |
-          APP="uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app"
-          test -d "$APP" || { echo "::error::no App.app was built"; exit 1; }
-          DEV=$(xcrun simctl list devices available | grep -E "iPhone" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
-          echo "simulator $DEV"
-          xcrun simctl boot "$DEV" || true
-          xcrun simctl bootstatus "$DEV" -b
-          xcrun simctl install "$DEV" "$APP"
-          mkdir -p shots
-          # The whole launch (and a couple of taps) as a video, on request: the same "look at it without
-          # a phone" as the Android emulator's flow.mp4 (dg-apps#41, edge to edge).
-          if [ "${{ inputs.ios_video }}" = "true" ]; then
-            xcrun simctl io "$DEV" recordVideo --codec h264 --force shots/ios-flow.mp4 &
-            REC=$!
-            sleep 2
-          fi
-          xcrun simctl launch "$DEV" gift.dhamma.uposatha
-          sleep 14
-          xcrun simctl io "$DEV" screenshot shots/uposatha-ios-1.png
-          xcrun simctl ui "$DEV" appearance dark
-          sleep 4
-          xcrun simctl io "$DEV" screenshot shots/uposatha-ios-2-dark.png
-          if [ "${{ inputs.ios_video }}" = "true" ]; then
-            kill -INT "$REC" 2>/dev/null || true
-            wait "$REC" 2>/dev/null || true
-            ls -la shots
-          fi
+          brew install xcodegen >/dev/null 2>&1 || brew install xcodegen
+          (cd uposatha/test/ios-sim/rotatetest && xcodegen generate)
+
+      # Edge to edge (dg-apps#41), the iOS proof: portrait and landscape, light and dark, one
+      # screenshot per combination, plus the whole pass as a video on request. tools/ios-edgetoedge.sh
+      # rotates through the XCUI test above (simctl cannot) and verifies each rotation from the
+      # screenshot's own dimensions.
+      - name: Run it in a simulator (portrait/landscape, light/dark)
+        env:
+          VIDEO: ${{ inputs.ios_video && '1' || '0' }}
+        run: tools/ios-edgetoedge.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app shots gift.dhamma.uposatha
 
       - name: Upload the screenshots
         if: always()

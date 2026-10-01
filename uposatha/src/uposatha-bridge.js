@@ -537,7 +537,9 @@
   // icons have to stay readable on what the page shows there. The page's own theme decides it:
   // data-theme on <html> (uposatha-calendar.js setTheme) with data-bs-theme as the fallback the
   // shared scripts write. Both bars in one go: the bottom one sits over the page background too
-  // (app-refresh.css pads the tab bar with env(safe-area-inset-bottom)). Sent only when it changes,
+  // (app-refresh.css pads the tab bar with env(safe-area-inset-bottom)). On iOS the two calls set
+  // the same single status bar twice — the bar names are an Android concept the plugin ignores
+  // there. Sent only when it changes,
   // and again when the app comes back to the front (a system dialog may have reset it).
   // The old code read data-bs-theme only: the page never set it itself, so the icons stayed light
   // (near-invisible) on the light theme — one of the reasons the plugin painted strips instead.
@@ -569,13 +571,15 @@
   }
 
   // The page's own top bar (.tbar, sticky at top: 0) has no top inset: the site never needed one
-  // while Capacitor padded the WebView away from the status bar. With viewport-fit=cover it reaches
-  // under it, so the search row would sit behind the clock. Only where the insets really reach the
-  // page is anything added — a WebView too old to pass them through (SystemBars pads it instead,
-  // env() there is 0) must NOT get a second pad. The value is written as a plain px padding on the
-  // bar; env(safe-area-inset-top) cannot be used for it, see below.
+  // while Capacitor padded the WebView away from the status bar. Edge to edge (dg-apps#41) that
+  // padding is gone on BOTH platforms — Android's SystemBars with viewport-fit=cover, iOS's safe
+  // area with it — so the search row would sit behind the clock/Dynamic Island. Only where the
+  // insets really reach the page is anything added: an Android WebView too old to pass them through
+  // (SystemBars pads it instead, env() there is 0) must NOT get a second pad, and neither must a
+  // page without viewport-fit=cover (on iOS env() stays 0 without it). The value is written as a
+  // plain px padding on the bar; a live env() reference would freeze at whatever value some
+  // Android WebViews resolve once (the Chromium bug below).
   function applyTopInset() {
-    if (IOS) return;   // iOS pads the page through its own safe area, never under the status bar
     if (!document.body) return;
     var probe = document.createElement('div');
     probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top,0px);';

@@ -1089,18 +1089,29 @@
         // Firebase with the token — no browser page with a second "Sign in with Google" button. The
         // browser detour below stays as the fallback (no client ID yet, an older app build, a
         // phone without Google Play services, or any error that is not the reader closing the sheet).
+        // Everything after the sheet has no natural deadline of its own: if the Firebase scripts
+        // never finish loading, or the credential exchange stalls, the promise simply sits there —
+        // no error, no report, no fallback, and the app keeps showing the page it already had
+        // (owner's tester on 435: the Apple sheet came up, the sign-in finished, then nothing at all,
+        // with an empty log). The sheet itself is NOT timed: a reader typing a password is not a hang.
+        function withDeadline(promise, ms, what) {
+            return Promise.race([promise, new Promise(function (_, reject) {
+                setTimeout(function () { reject(new Error(what + ' did not finish within ' + ms + ' ms')); }, ms);
+            })]);
+        }
+
         function startNative() {
             var plugin = nativeSignIn[name];
             if (!plugin) return null;
             return plugin().then(function (r) {
-                return Promise.resolve(typeof window.initFirebase === 'function' && window.initFirebase()).then(function () {
+                return withDeadline(Promise.resolve(typeof window.initFirebase === 'function' && window.initFirebase()).then(function () {
                     // Apple's native token carries the nonce the plugin hashed into the request: Firebase
                     // wants the raw one alongside it.
                     var credential = r.rawNonce
                         ? new firebase.auth.OAuthProvider('apple.com').credential({ idToken: r.idToken, rawNonce: r.rawNonce })
                         : credentialFromToken(r.idToken);
                     return firebase.auth().signInWithCredential(credential);
-                });
+                }), 20000, 'Firebase sign-in');
             }).then(function () {
                 localStorage.setItem('dg_cloud_session', 'true');
             }, function (e) {

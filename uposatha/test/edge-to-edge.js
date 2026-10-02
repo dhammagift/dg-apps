@@ -204,8 +204,14 @@ function fakeInsets(px) {
                 await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '10px');
             check('no insets: the rule is there but adds nothing (env() and the variable are both 0)',
                 await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '10px');
+            // The drawer exists on the calendar page; if a build's page does not have it, say so
+            // rather than throwing inside getComputedStyle (that is how run 464 failed: a null
+            // element, not a wrong value).
             check('no insets: the drawer is not padded either',
-                await page.evaluate(() => getComputedStyle(document.getElementById('dg-drawer')).paddingTop), '0px');
+                await page.evaluate(() => {
+                    const d = document.getElementById('dg-drawer');
+                    return d ? getComputedStyle(d).paddingTop : 'no drawer on this page';
+                }), '0px');
             check('no insets: no cover padding is added at all',
                 await page.evaluate(() => document.body.classList.contains('dg-safe-top-on')), false);
             check('the light page gets dark icons, on both bars',

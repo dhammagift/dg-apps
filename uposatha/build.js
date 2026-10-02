@@ -64,13 +64,30 @@ function coverViewport(html) {
     return html.replace(VIEWPORT, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">');
 }
 
+// The snapshot has to BE the calendar page. Run 466 bundled something else — a page titled
+// "Dhamma.gift" that loads the reader's offline scripts and has no .tbar — and the app would have
+// shipped it: the only guards were "the file exists" and "it is not empty". These markers are the
+// calendar's own (its stylesheet, its top bar, its drawer and the app-only Rate Us row), so a
+// redirect, a 404 page or a different app's shell fails the build here instead of in someone's hand.
+const CALENDAR_MARKERS = ['uposatha-calendar.css', 'class="tbar"', 'id="dg-drawer"', 'id="up-rate"'];
+function isCalendarPage(html) {
+    return CALENDAR_MARKERS.filter((m) => html.includes(m));
+}
+
 function bundleSnapshot() {
     if (!fs.existsSync(path.join(SNAPSHOT, 'uposatha-calendar.html'))) {
         throw new Error('uposatha/snapshot/ is missing: run  SITE=https://dhamma.gift node tools/snapshot.js  first (CI does).');
     }
     const files = [];
     copyTree(SNAPSHOT, WWW, files);
-    const page = coverViewport(fs.readFileSync(path.join(SNAPSHOT, 'uposatha-calendar.html'), 'utf8'));
+    const raw = fs.readFileSync(path.join(SNAPSHOT, 'uposatha-calendar.html'), 'utf8');
+    const found = isCalendarPage(raw);
+    if (found.length !== CALENDAR_MARKERS.length) {
+        const missing = CALENDAR_MARKERS.filter((m) => found.indexOf(m) === -1);
+        throw new Error('uposatha/build.js: the snapshot is not the calendar page (missing ' + missing.join(', ')
+            + ') — the site answered with something else; title: ' + (raw.match(/<title>([^<]*)/) || [])[1]);
+    }
+    const page = coverViewport(raw);
     if (!page.includes('viewport-fit=cover')) throw new Error('uposatha/build.js: the page lost viewport-fit=cover');
     fs.writeFileSync(path.join(WWW, 'index.html'), page);
     const empty = files.filter((f) => fs.statSync(path.join(WWW, f)).size === 0);

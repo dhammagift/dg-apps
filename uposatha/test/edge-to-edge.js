@@ -59,6 +59,9 @@ check('the bundled page asks for the cover viewport',
     /<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">/.test(read(path.join(WWW, 'index.html'))), true);
 // The snapshot is the site's page, copied as it is: patching it here would be patched again by the
 // site updater (it compares the snapshot tree against the site, site-manifest.json).
+check('the build refuses a snapshot that is not the calendar page (run 466 bundled another app\'s shell)',
+    /CALENDAR_MARKERS/.test(read(path.join(ROOT, 'build.js')))
+    && /is not the calendar page/.test(read(path.join(ROOT, 'build.js'))), true);
 check('the snapshot page itself is left as the site serves it',
     read(path.join(WWW, 'uposatha-calendar.html')).includes('content="width=device-width, initial-scale=1">'), true);
 check('Android takes both orientations (owner: build with landscape and portrait)',

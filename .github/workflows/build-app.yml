@@ -76,6 +76,11 @@ on:
         required: false
         type: boolean
         default: false
+      screenshots_local:
+        description: 'With screenshots: keep the Uposatha pictures in the workflow artifact only, nothing goes to App Store Connect (to look at the app without touching the listing)'
+        required: false
+        type: boolean
+        default: false
       video:
         description: 'Record the emulator test as a video (flow.mp4) as well as screenshots'
         required: false
@@ -1915,6 +1920,7 @@ jobs:
             --app ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
 
       - name: Upload to App Store Connect (version 1.0, en-US) — never sent for review
+        if: ${{ !inputs.screenshots_local }}
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}

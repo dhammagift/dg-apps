@@ -157,6 +157,7 @@ class DgBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(DgNotifyPlugin())
         bridge?.registerPluginInstance(DgShortcutsPlugin())
         bridge?.registerPluginInstance(DgSitePlugin())
+        bridge?.registerPluginInstance(DgInsetsPlugin())
         #if DEBUG
         // Debug builds only, for the same reason as the reader app's DgSelfTestPlugin: the App Store screenshot
         // tour (test/ios-sim/tour.js) needs one native call to say which view is on screen; a release build's
@@ -357,6 +358,39 @@ public class DgSitePlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func clear(_ call: CAPPluginCall) {
         try? FileManager.default.removeItem(at: DgSiteStore.root)
         call.resolve()
+    }
+}
+
+// MARK: - The safe-area insets
+
+// Edge to edge (dg-apps#41) needs the page to know how far the status bar (the Dynamic Island) and
+// the home indicator reach into it. Android's SystemBars plugin injects --safe-area-inset-* by
+// itself; iOS has no such thing, and WKWebView's own env(safe-area-inset-*) is not dependable in an
+// app — it read 62px in one run and 0 in the next two, same build and simulator (runs 446/448/449),
+// which left the page's top bar under the clock.
+//
+// So the page ASKS for them, at the moment it is ready (the bridge's applyTopInset): the answer is
+// the web view's own safeAreaInsets, which is what the system really reports. Registering a push
+// instead (writing the variables from the native side) loses the write when it lands before the
+// page's document exists — which is what run 451 showed.
+@objc(DgInsetsPlugin)
+public class DgInsetsPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "DgInsetsPlugin"
+    public let jsName = "DgInsets"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "get", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func get(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let insets = self.bridge?.webView?.safeAreaInsets ?? .zero
+            call.resolve([
+                "top": Double(insets.top),
+                "right": Double(insets.right),
+                "bottom": Double(insets.bottom),
+                "left": Double(insets.left)
+            ])
+        }
     }
 }
 

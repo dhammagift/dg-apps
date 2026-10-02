@@ -135,7 +135,7 @@ const server = http.createServer((req, res) => {
 });
 
 function capacitorStub() {
-    window.__calls = { styles: [], dgbars: 0, report: null };
+    window.__calls = { styles: [], dgbars: 0, report: null, insets: null, insetsAsked: 0 };
     window.Capacitor = {
         getPlatform: () => 'android', isNativePlatform: () => true,
         Plugins: {
@@ -145,6 +145,8 @@ function capacitorStub() {
             DgSite: { put: () => Promise.resolve(), list: () => Promise.resolve({ files: [] }), clear: () => Promise.resolve() },
             // the DEBUG proof plugin (iOS): the bridge reports the inset it applied
             DgSelfTest: { report: (o) => { window.__calls.report = o; return Promise.resolve(o); } },
+            // iOS: the page asks for the web view's safe-area insets (no env() there)
+            DgInsets: { get: () => { window.__calls.insetsAsked = (window.__calls.insetsAsked || 0) + 1; return Promise.resolve(window.__calls.insets || { top: 0, right: 0, bottom: 0, left: 0 }); } },
             // addListener as well: the bridge wraps the plugin's own listeners, and Capacitor's real
             // plugin has it — the site's current page calls it as soon as it loads.
             LocalNotifications: { addListener: () => ({ remove() {} }), requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: () => Promise.resolve() },
@@ -160,9 +162,11 @@ function capacitorStub() {
 // Stands in for the native side of SystemBars: the custom property it writes into the page (the
 // SystemBars plugin does this on every inset change, for old and new WebViews alike), which is what
 // the bridge's inset probe falls back on where env() itself is broken.
+// Stands in for the native side: the iOS plugin (DgInsets) answers with the web view's own insets
+// and the bridge writes them into the CSS variables; on Android Capacitor's SystemBars injects the
+// same variables by itself. Either way the page reads var(--safe-area-inset-top, env(...)).
 function fakeInsets(px) {
-    // Capacitor's SystemBars writes exactly this (insetsHandling: css, its default).
-    document.documentElement.style.setProperty('--safe-area-inset-top', px + 'px');
+    window.__calls.insets = { top: px, right: 0, bottom: 0, left: 0 };
     window.dispatchEvent(new Event('resize'));
 }
 
@@ -216,8 +220,8 @@ function fakeInsets(px) {
                 'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}');
             check('the page reports the inset it really has ("effective"), read from the layout',
                 await page.evaluate(() => window.__calls.report && window.__calls.report.topInset), 30);
-            check('the plugin variable is what supplies it here (env() is 0 in this browser)',
-                await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top').trim()), '30px');
+            check('the native answer is what supplies it (env() is 0 in this browser), and it was asked for',
+                await page.evaluate(() => [getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top').trim(), window.__calls.insetsAsked > 0]), ['30px', true]);
             // The theme the page itself switches (uposatha-calendar.js setTheme): data-theme on <html>.
             await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
             await page.waitForTimeout(200);

@@ -588,6 +588,21 @@
     var css = document.getElementById('dg-safe-top');
     if (!css) { css = document.createElement('style'); css.id = 'dg-safe-top'; document.head.appendChild(css); }
     css.textContent = 'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}';
+    // iOS: ask the app for the web view's own insets, at the moment the page is ready. Android's
+    // SystemBars plugin injects the same variables itself (and env() covers the modern WebViews),
+    // so this only runs where the plugin exists.
+    var Insets = Cap.Plugins && Cap.Plugins.DgInsets;
+    if (Insets && typeof Insets.get === 'function') {
+      Insets.get().then(function (i) {
+        var root = document.documentElement;
+        ['top', 'right', 'bottom', 'left'].forEach(function (k) {
+          var v = Math.round((i && i[k]) || 0);
+          if (v > 0) root.style.setProperty('--safe-area-inset-' + k, v + 'px');
+          else root.style.removeProperty('--safe-area-inset-' + k);
+        });
+        setTimeout(function () { reportInset(effectiveInset()); }, 30);
+      }).catch(function () { setTimeout(function () { reportInset(effectiveInset()); }, 30); });
+    }
     var top = effectiveInset();
     if (top > 0) document.body.classList.add('dg-safe-top-on');
     setTimeout(function () { reportInset(top); }, 60);

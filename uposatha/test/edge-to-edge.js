@@ -185,6 +185,23 @@ function fakeInsets(px) {
     window.dispatchEvent(new Event('resize'));
 }
 
+// The app layer (.tbar, #dg-drawer, body.app) is put up by the page's own scripts after the
+// snapshot loads: a check that reads it must wait for it, and if it never arrives it must say what
+// the page really is instead of throwing inside getComputedStyle (that is how runs 464 and 465
+// failed: a null element in CI, while the local run had it).
+async function appReady(page) {
+    await page.waitForSelector('.tbar', { timeout: 20000 }).catch(() => {});
+    return page.evaluate(() => ({
+        hasBar: !!document.querySelector('.tbar'),
+        hasDrawer: !!document.getElementById('dg-drawer'),
+        isApp: !!document.body && document.body.classList.contains('app'),
+        title: document.title,
+        href: location.href,
+        bytes: document.documentElement ? document.documentElement.outerHTML.length : 0,
+        scripts: Array.from(document.scripts).map((s) => s.src).filter(Boolean).slice(0, 4)
+    }));
+}
+
 (async () => {
     await new Promise((r) => server.listen(PORT, '127.0.0.1', r));
     const browser = await launchChromium();
@@ -199,11 +216,13 @@ function fakeInsets(px) {
             page.on('pageerror', (e) => errors.push(e.message));
             await page.addInitScript(() => { try { localStorage.setItem('uiScale', '100'); } catch (e) {} });
             await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
+            const app1 = await appReady(page);
+            if (!app1.hasBar) console.log('       page is not the app layer:', JSON.stringify(app1));
             await page.waitForTimeout(2500);
             check('no insets: the top bar keeps its own padding',
-                await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '10px');
+                await page.evaluate(() => { const b = document.querySelector('.tbar'); return b ? getComputedStyle(b).paddingTop : 'no .tbar on this page'; }), '10px');
             check('no insets: the rule is there but adds nothing (env() and the variable are both 0)',
-                await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '10px');
+                await page.evaluate(() => { const b = document.querySelector('.tbar'); return b ? getComputedStyle(b).paddingTop : 'no .tbar on this page'; }), '10px');
             // The drawer exists on the calendar page; if a build's page does not have it, say so
             // rather than throwing inside getComputedStyle (that is how run 464 failed: a null
             // element, not a wrong value).
@@ -232,6 +251,8 @@ function fakeInsets(px) {
             page.on('pageerror', (e) => errors.push(e.message));
             await page.addInitScript(() => { try { localStorage.setItem('uiScale', '100'); } catch (e) {} });
             await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
+            const app2 = await appReady(page);
+            if (!app2.hasBar) console.log('       page is not the app layer:', JSON.stringify(app2));
             await page.waitForTimeout(2500);
             // The page's own interface scale (a stored 110% in a fresh profile) would divide the
             // inset by it: this scenario is about the plain case.
@@ -239,7 +260,7 @@ function fakeInsets(px) {
             await page.evaluate(fakeInsets, 30);
             await page.waitForTimeout(200);
             check('a 30px inset: the top bar steps down by it',
-                await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '40px');
+                await page.evaluate(() => { const b = document.querySelector('.tbar'); return b ? getComputedStyle(b).paddingTop : 'no .tbar on this page'; }), '40px');
             const rep = await page.evaluate(() => window.__calls.report);
             check('the page reports its measurements for the proof (what the screenshot cannot tell)',
                 [rep && rep.topInset, rep && rep.viewportFit, rep && rep.barTop >= rep.topInset], [30, true, true]);
@@ -279,7 +300,8 @@ function fakeInsets(px) {
                 document.documentElement.style.zoom = '1.5';
                 window.dispatchEvent(new Event('resize'));
                 await new Promise((r) => setTimeout(r, 50));
-                const bar = getComputedStyle(document.querySelector('.tbar')).paddingTop;
+                const el = document.querySelector('.tbar');
+                const bar = el ? getComputedStyle(el).paddingTop : 'no .tbar on this page';
                 document.documentElement.style.zoom = '';
                 document.documentElement.style.removeProperty('--dg-zoom');
                 window.dispatchEvent(new Event('resize'));

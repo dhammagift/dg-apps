@@ -1790,6 +1790,7 @@ jobs:
             --app ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
 
       - name: Upload to App Store Connect (version 1.0, en-US) — never sent for review
+        if: ${{ !inputs.screenshots_local }}
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}

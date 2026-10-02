@@ -589,7 +589,11 @@
     if (!document.body) return;
     var css = document.getElementById('dg-safe-top');
     if (!css) { css = document.createElement('style'); css.id = 'dg-safe-top'; document.head.appendChild(css); }
-    css.textContent = 'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}';
+    // The top bar, and the burger menu's drawer (the reader pads its own drawer the same way:
+    // dg-node home.css, html.dg-app #dg-drawer{padding-top: var(--dg-sat)}). Without it the drawer
+    // opens under the clock on Android — the main screen looked right while the menu did not.
+    css.textContent = 'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}'
+      + 'body.app #dg-drawer{padding-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px))}';
     // iOS: ask the app for the web view's own insets, at the moment the page is ready. Android's
     // SystemBars plugin injects the same variables itself (and env() covers the modern WebViews),
     // so this only runs where the plugin exists.
@@ -623,16 +627,33 @@
     return Math.max(0, Math.round((parseFloat(getComputedStyle(bar).paddingTop) || 0) - 10));
   }
 
-  function reportInset(top) {
+  // Where a proof reads the page's own measurements from: the iOS DEBUG plugin writes a file in the
+  // app's Documents; on Android the same JSON goes through DgSite (files/site/), which the emulator
+  // check reads with `adb shell run-as`. A shipped app has neither, and loses nothing.
+  function sendReport(obj) {
     var Self = Cap.Plugins && Cap.Plugins.DgSelfTest;
-    if (!Self || typeof Self.report !== 'function') return;
+    if (Self && typeof Self.report === 'function') { Self.report(obj).catch(function () {}); return; }
+    var Site = Cap.Plugins && Cap.Plugins.DgSite;
+    if (!Site || typeof Site.put !== 'function' || typeof window.btoa !== 'function') return;
+    try {
+      Site.put({ path: '/dg-edgetoedge.json', data: window.btoa(unescape(encodeURIComponent(JSON.stringify(obj)))) })
+        .catch(function () {});
+    } catch (e) { /* no transport: a release build without the proof plugins */ }
+  }
+
+  function reportInset(top) {
     var meta = document.querySelector('meta[name=viewport]');
     var bar = document.querySelector('.tbar');
     var rect = bar ? bar.getBoundingClientRect() : null;
+    // The burger menu's drawer: its content must clear the status bar too (it is the failure the
+    // owner hit on Android — the page looked right, the menu opened under the clock).
+    var drawer = document.getElementById('dg-drawer');
+    var drawerRect = drawer ? drawer.getBoundingClientRect() : null;
+    var drawerPad = drawer ? (parseFloat(getComputedStyle(drawer).paddingTop) || 0) : 0;
     // The bar is sticky at top: 0 and its padding is what keeps it clear of the status bar, so what
     // matters is where its CONTENT starts, not the (always 0) top of the element.
     var padTop = bar ? (parseFloat(getComputedStyle(bar).paddingTop) || 0) : 0;
-    Self.report({
+    sendReport({
       topInset: effectiveInset(),
       // What the native side answered (diagnostics for the iOS proof: the env() value there cannot
       // be trusted, so the answer and whether the plugin exists are the things to look at).
@@ -646,8 +667,10 @@
       barTop: rect ? Math.round(rect.top + padTop) : -1,
       barContentTop: rect ? Math.round(rect.top + padTop) : -1,
       barBottom: rect ? Math.round(rect.bottom) : -1,
+      drawerOpen: !!(drawer && !drawer.hasAttribute('hidden')),
+      drawerContentTop: drawerRect ? Math.round(drawerRect.top + drawerPad) : -1,
       theme: document.documentElement.getAttribute('data-theme') || ''
-    }).catch(function () { /* no proof plugin: a release build, or Android */ });
+    });
   }
 
   function start() {
@@ -670,7 +693,18 @@
       if (a) { try { localStorage.setItem(RATE_FLAG, '1'); } catch (err) { /* no storage */ } }
     }, true);
     // UposathaCore is loaded by the page: give it until the page has finished loading.
-    function afterLoad() { pushShortcuts(); setTimeout(updateSite, 6000); applyTopInset(); }
+    function afterLoad() {
+      pushShortcuts();
+      setTimeout(updateSite, 6000);
+      applyTopInset();
+      // ?dgd=1: the proof opens the burger menu itself (Android: android-screens mode=edgetoedge).
+      // A tap cannot be aimed at a WebView element from adb, and a check that guesses coordinates
+      // ends up testing the guess.
+      if (/[?&]dgd=1/.test(location.search)) {
+        var burger = document.getElementById('b-menu');
+        if (burger) { burger.click(); setTimeout(function () { reportInset(effectiveInset()); }, 700); }
+      }
+    }
     if (document.readyState === 'complete') afterLoad();
     else window.addEventListener('load', afterLoad, { once: true });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') pushShortcuts(); });

@@ -190,8 +190,10 @@ function fakeInsets(px) {
             await page.waitForTimeout(2500);
             check('no insets: the top bar keeps its own padding',
                 await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '10px');
-            check('no insets: no padding is added and nothing is left behind',
-                await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || ''), 'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}');
+            check('no insets: the rule is there but adds nothing (env() and the variable are both 0)',
+                await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '10px');
+            check('no insets: the drawer is not padded either',
+                await page.evaluate(() => getComputedStyle(document.getElementById('dg-drawer')).paddingTop), '0px');
             check('no insets: no cover padding is added at all',
                 await page.evaluate(() => document.body.classList.contains('dg-safe-top-on')), false);
             check('the light page gets dark icons, on both bars',
@@ -221,7 +223,11 @@ function fakeInsets(px) {
                 [rep && rep.topInset, rep && rep.viewportFit, rep && rep.barTop >= rep.topInset], [30, true, true]);
             check('the padding is the documented Capacitor pattern (its variable, then env(), then 0)',
                 await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || ''),
-                'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}');
+                'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}'
+                + 'body.app #dg-drawer{padding-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px))}');
+            check('the burger menu\'s drawer is padded too (it opened under the clock on Android)',
+                /body\.app #dg-drawer\{padding-top:var\(--safe-area-inset-top/.test(
+                    await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || '')), true);
             check('the page reports the inset it really has ("effective"), read from the layout',
                 await page.evaluate(() => window.__calls.report && window.__calls.report.topInset), 30);
             check('the native answer is what supplies it (env() is 0 in this browser), and it was asked for',

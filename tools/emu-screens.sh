@@ -138,12 +138,12 @@ PY
   # taken there; every run takes the landscape one, cutout sides included.
   TABLET=$([ "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | head -1)" = "2560x1600" ] && echo yes || echo no)
   # The burger menu's drawer (owner: it opened under the clock on Android). Opened through the
-  # page's own hook (?dgd=1): a tap cannot be aimed at a WebView element from adb, and a check that
+  # page's own hook (?drawer=1): a tap cannot be aimed at a WebView element from adb, and a check that
   # guesses coordinates ends up testing the guess. Judged on the page's OWN report — the bridge
   # writes its measurements through DgSite, which this debuggable APK keeps in files/site/.
   adb shell cmd uimode night no > /dev/null 2>&1
   adb shell am force-stop "$PKG"
-  adb shell am start -W -n "$PKG/gift.dhamma.uposatha.MainActivity" -a android.intent.action.MAIN --es route "/?dgd=1" > /dev/null
+  adb shell am start -W -n "$PKG/gift.dhamma.uposatha.MainActivity" -a android.intent.action.MAIN --es route "/?drawer=1" > /dev/null
   wait_page 30 || ko "drawer: the page never painted"
   sleep 3
   adb exec-out screencap -p > "$OUT/edge-drawer.png"

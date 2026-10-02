@@ -600,7 +600,16 @@
       + 'body.app .dg-segmented button[aria-pressed="true"],body.app .segrow button[aria-pressed="true"]'
       + '{background:var(--dg-accent);color:var(--dg-on-accent,#fff)}'
       + 'body.app .dg-segmented button[aria-pressed="true"] .dg-seg-ic{color:inherit}'
-      + 'body.app .dg-segmented button[aria-pressed="true"] svg{color:inherit}';
+      + 'body.app .dg-segmented button[aria-pressed="true"] svg{color:inherit}'
+      // The page's own side panel (uposatha-calendar.css .drawer/.panel, padding 16px 18px 30px)
+      // is fixed at top: 0 as well — the same trap the burger menu fell into.
+      + 'body.app .drawer,body.app .panel{padding-top:calc(16px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}'
+      // Landscape on a phone with a camera cutout: the insets move to the sides. The page's content
+      // is inset, and so is the drawer (fixed, right: 0), which would otherwise sit under the cutout.
+      + 'body.app{padding-left:var(--safe-area-inset-left, env(safe-area-inset-left, 0px));'
+      + 'padding-right:var(--safe-area-inset-right, env(safe-area-inset-right, 0px))}'
+      + 'body.app #dg-drawer{padding-left:var(--safe-area-inset-left, env(safe-area-inset-left, 0px));'
+      + 'padding-right:var(--safe-area-inset-right, env(safe-area-inset-right, 0px))}';
     // iOS: ask the app for the web view's own insets, at the moment the page is ready. Android's
     // SystemBars plugin injects the same variables itself (and env() covers the modern WebViews),
     // so this only runs where the plugin exists.
@@ -704,10 +713,10 @@
       pushShortcuts();
       setTimeout(updateSite, 6000);
       applyTopInset();
-      // ?dgd=1: the proof opens the burger menu itself (Android: android-screens mode=edgetoedge).
+      // ?drawer=1: the proof opens the burger menu itself (Android: android-screens mode=edgetoedge).
       // A tap cannot be aimed at a WebView element from adb, and a check that guesses coordinates
       // ends up testing the guess.
-      if (/[?&]dgd=1/.test(location.search)) {
+      if (/[?&]drawer=1/.test(location.search)) {
         var burger = document.getElementById('b-menu');
         if (burger) { burger.click(); setTimeout(function () { reportInset(effectiveInset()); }, 700); }
       }

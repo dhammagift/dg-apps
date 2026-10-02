@@ -222,9 +222,26 @@ function fakeInsets(px) {
             check('the page reports its measurements for the proof (what the screenshot cannot tell)',
                 [rep && rep.topInset, rep && rep.viewportFit, rep && rep.barTop >= rep.topInset], [30, true, true]);
             check('the padding is the documented Capacitor pattern (its variable, then env(), then 0)',
-                await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || ''),
-                'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}'
-                + 'body.app #dg-drawer{padding-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px))}');
+                await page.evaluate(() => /body\.app \.tbar\{padding-top:calc\(10px \+ var\(--safe-area-inset-top, env\(safe-area-inset-top, 0px\)\)\)\}/.test(
+                    (document.getElementById('dg-safe-top') || {}).textContent || '')), true);
+            check('the chosen half of a segmented control is the accent green, like a switched-on toggle',
+                await page.evaluate(() => {
+                    const css = (document.getElementById('dg-safe-top') || {}).textContent || '';
+                    const paint = /body\.app \.dg-segmented button\[aria-pressed="true"\][^{]*\{background:var\(--dg-accent\)/.test(css);
+                    return paint;
+                }), true);
+            check('... and it really renders as the accent (not a grey)',
+                await page.evaluate(() => {
+                    const btn = document.querySelector('.dg-segmented button[aria-pressed="true"]');
+                    if (!btn) return 'no pressed button on the page';
+                    const acc = getComputedStyle(document.documentElement).getPropertyValue('--dg-accent').trim();
+                    const probe = document.createElement('div');
+                    probe.style.color = acc || '#149c7c';
+                    document.body.appendChild(probe);
+                    const want = getComputedStyle(probe).color;
+                    probe.remove();
+                    return getComputedStyle(btn).backgroundColor === want ? 'accent' : getComputedStyle(btn).backgroundColor + ' != ' + want;
+                }), 'accent');
             check('the burger menu\'s drawer is padded too (it opened under the clock on Android)',
                 /body\.app #dg-drawer\{padding-top:var\(--safe-area-inset-top/.test(
                     await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || '')), true);

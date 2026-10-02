@@ -593,7 +593,14 @@
     // dg-node home.css, html.dg-app #dg-drawer{padding-top: var(--dg-sat)}). Without it the drawer
     // opens under the clock on Android — the main screen looked right while the menu did not.
     css.textContent = 'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}'
-      + 'body.app #dg-drawer{padding-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px))}';
+      + 'body.app #dg-drawer{padding-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px))}'
+      // Owner: the chosen half of a segmented control (language, theme, week start) is grey
+      // (--dg-surface-active) while a switched-on toggle is the accent green (--dg-toggle-row
+      // [aria-pressed=true] .dg-tgl{background:var(--dg-accent)}). One colour for both states.
+      + 'body.app .dg-segmented button[aria-pressed="true"],body.app .segrow button[aria-pressed="true"]'
+      + '{background:var(--dg-accent);color:var(--dg-on-accent,#fff)}'
+      + 'body.app .dg-segmented button[aria-pressed="true"] .dg-seg-ic{color:inherit}'
+      + 'body.app .dg-segmented button[aria-pressed="true"] svg{color:inherit}';
     // iOS: ask the app for the web view's own insets, at the moment the page is ready. Android's
     // SystemBars plugin injects the same variables itself (and env() covers the modern WebViews),
     // so this only runs where the plugin exists.

@@ -31,6 +31,11 @@ public class DgSelfTestPlugin: CAPPlugin, CAPBridgedPlugin {
             "barTop": call.getDouble("barTop") ?? -1,
             "barBottom": call.getDouble("barBottom") ?? -1,
             "theme": call.getString("theme") ?? "",
+            // Diagnostics for the iOS inset hunt: was the insets plugin there at all, and what did
+            // it answer. The bridge sends them; without these two the report cannot say which of the
+            // two a topInset of 0 came from.
+            "insetsPlugin": call.getBool("insetsPlugin") ?? false,
+            "insetsAnswer": call.getObject("insetsAnswer") ?? [:],
             "at": Date().timeIntervalSince1970
         ]
         do {

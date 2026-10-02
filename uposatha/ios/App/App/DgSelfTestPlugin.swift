@@ -36,6 +36,7 @@ public class DgSelfTestPlugin: CAPPlugin, CAPBridgedPlugin {
             // two a topInset of 0 came from.
             "insetsPlugin": call.getBool("insetsPlugin") ?? false,
             "insetsAnswer": call.getObject("insetsAnswer") ?? [:],
+            "orientation": call.getString("orientation") ?? "",
             "at": Date().timeIntervalSince1970
         ]
         do {

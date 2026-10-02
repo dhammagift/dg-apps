@@ -638,6 +638,10 @@
       // be trusted, so the answer and whether the plugin exists are the things to look at).
       insetsPlugin: insetsDiag.plugin,
       insetsAnswer: insetsDiag.answer,
+      // Portrait or landscape: the iPhone app is portrait only now, and the proof judges the
+      // portrait state (the last write used to be a landscape one with top 0, which read as a
+      // failure of the page).
+      orientation: window.innerWidth > window.innerHeight ? 'landscape' : 'portrait',
       viewportFit: !!(meta && /viewport-fit\s*=\s*cover/.test(meta.getAttribute('content') || '')),
       barTop: rect ? Math.round(rect.top + padTop) : -1,
       barContentTop: rect ? Math.round(rect.top + padTop) : -1,

@@ -57,9 +57,11 @@
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
+		<!-- iPhone: portrait only (owner, dg-apps#41). The page's app layer is built for it and the
+		     landscape pass on iOS kept showing a layout that never relaid out (the content sideways
+		     in a portrait frame, and the safe-area insets moving to the sides). Landscape stays on
+		     iPad below, and can be brought back to iPhone as its own task. -->
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

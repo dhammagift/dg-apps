@@ -107,6 +107,10 @@ const BRIDGE = bridgeSource();
 const dgApp = read(path.join(ROOT, 'ios', 'App', 'App', 'DgApp.swift'));
 check('iOS: the root no longer confines the page to the safe area',
     /safeAreaLayoutGuide/.test(dgApp), false);
+check('iOS: iPhone is portrait only (no landscape layout to keep right, dg-apps#41)',
+    /<key>UISupportedInterfaceOrientations<\/key>\s*<array>[\s\S]*?<\/array>/.test(read(path.join(ROOT, 'ios', 'App', 'App', 'Info.plist')))
+    && !/UIInterfaceOrientationLandscape/.test(read(path.join(ROOT, 'ios', 'App', 'App', 'Info.plist')).split('<key>UISupportedInterfaceOrientations~ipad</key>')[0]),
+    true);
 check('iOS: the page is pinned to the window\'s own edges',
     /view\.topAnchor/.test(dgApp) && /view\.bottomAnchor/.test(dgApp), true);
 check('iOS: the status bar query reaches the bridge (the page picks its own icon colour)',

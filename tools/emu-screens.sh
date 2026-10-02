@@ -114,6 +114,19 @@ w = [int(sys.argv[2][i:i+2], 16) for i in (1, 3, 5)]
 sys.exit(0 if all(abs(a - b) <= 8 for a, b in zip(c, w)) else 1)
 PY
     [ "$v_bottom_matches_page" = true ] && ok "$1: the bottom edge is the page's own background too" || ko "$1: the bottom edge is $v_bottom_color, not the page's $v_page_bg"
+    # 3b. ... and not far below it either: the padding must be the status bar's height, not more
+    #     (that is the owner's "отступ слишком большой" — the plugin had reported 52 CSS px for a
+    #     22 px drawn bar). The bar's own text starts right under it: 10px of its padding plus the
+    #     glyph's ascent, so a gap over ~45 device px means the page was over-padded.
+    if [ -n "$v_text_top" ] && [ "$v_text_top" != None ] && [ -n "$v_status_rows" ]; then
+      gap=$((v_text_top - v_status_rows))
+      if [ "$gap" -le 45 ]; then
+        ok "$1: the top bar sits right below the status bar (gap ${gap}px), not a strip lower"
+      else
+        ko "$1: the top bar starts ${gap}px below the status bar — over-padded"
+      fi
+    fi
+
     # 4. Landscape: the camera cutout is on a side there, so the left and right edges are checked
     #    too. A landscape pass whose screenshot is portrait is not evidence of anything: it is a
     #    failure of the rotation, never a pass.

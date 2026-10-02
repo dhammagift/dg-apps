@@ -51,11 +51,24 @@ public class DgInsetsPlugin extends Plugin {
     @PluginMethod
     public void get(PluginCall call) {
         getActivity().runOnUiThread(() -> {
-            Insets bars = Insets.NONE;
+            // The STATUS bar for the top and the NAVIGATION bar for the bottom — not systemBars()
+            // for everything: that union also carries the caption bar and the display cutout, and it
+            // reported 52 CSS px on a device whose drawn status bar is 22 (owner: "отступ слишком
+            // большой... на глаз?"). The cutout is asked for separately and only feeds the sides,
+            // where it really matters (landscape).
+            int top = 0, right = 0, bottom = 0, left = 0, cutL = 0, cutR = 0;
             try {
                 WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(getActivity().getWindow().getDecorView());
                 if (insets != null) {
-                    bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+                    Insets status = insets.getInsets(WindowInsetsCompat.Type.statusBars());
+                    Insets nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars());
+                    Insets cut = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+                    top = status.top;
+                    bottom = nav.bottom;
+                    cutL = cut.left;
+                    cutR = cut.right;
+                    left = Math.max(status.left, cutL);
+                    right = Math.max(status.right, cutR);
                 }
             } catch (Exception e) {
                 // No insets to report is not worth failing the page's layout over: it falls back to
@@ -63,10 +76,14 @@ public class DgInsetsPlugin extends Plugin {
             }
             float density = getActivity().getResources().getDisplayMetrics().density;
             JSObject ret = new JSObject();
-            ret.put("top", bars.top / density);
-            ret.put("right", bars.right / density);
-            ret.put("bottom", bars.bottom / density);
-            ret.put("left", bars.left / density);
+            ret.put("top", top / density);
+            ret.put("right", right / density);
+            ret.put("bottom", bottom / density);
+            ret.put("left", left / density);
+            // Diagnostics for the proof: the raw pixels and the density it divided by, so a wrong
+            // number can be checked against the drawn status bar in the screenshot.
+            ret.put("rawTop", top);
+            ret.put("density", density);
             call.resolve(ret);
         });
     }

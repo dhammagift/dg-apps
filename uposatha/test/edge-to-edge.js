@@ -195,6 +195,7 @@ function fakeInsets(px) {
             const page = await ctx.newPage();
             const errors = [];
             page.on('pageerror', (e) => errors.push(e.message));
+            await page.addInitScript(() => { try { localStorage.setItem('uiScale', '100'); } catch (e) {} });
             await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
             await page.waitForTimeout(2500);
             check('no insets: the top bar keeps its own padding',
@@ -221,8 +222,12 @@ function fakeInsets(px) {
             const page = await ctx.newPage();
             const errors = [];
             page.on('pageerror', (e) => errors.push(e.message));
+            await page.addInitScript(() => { try { localStorage.setItem('uiScale', '100'); } catch (e) {} });
             await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
             await page.waitForTimeout(2500);
+            // The page's own interface scale (a stored 110% in a fresh profile) would divide the
+            // inset by it: this scenario is about the plain case.
+            await page.evaluate(() => { document.documentElement.style.removeProperty('--dg-zoom'); document.documentElement.style.zoom = ''; });
             await page.evaluate(fakeInsets, 30);
             await page.waitForTimeout(200);
             check('a 30px inset: the top bar steps down by it',

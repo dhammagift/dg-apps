@@ -107,7 +107,7 @@ class DgBridgeViewController: CAPBridgeViewController {
           r.setProperty('--safe-area-inset-left', '\(i.left)px');
         } catch (e) {}
         """
-        webView.evaluateJavascript(js, nil)
+        webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     // Called on every layout change (rotation, a split view, the keyboard): the values are written

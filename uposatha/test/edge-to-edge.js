@@ -161,6 +161,7 @@ function capacitorStub() {
 // SystemBars plugin does this on every inset change, for old and new WebViews alike), which is what
 // the bridge's inset probe falls back on where env() itself is broken.
 function fakeInsets(px) {
+    // Capacitor's SystemBars writes exactly this (insetsHandling: css, its default).
     document.documentElement.style.setProperty('--safe-area-inset-top', px + 'px');
     window.dispatchEvent(new Event('resize'));
 }
@@ -181,8 +182,8 @@ function fakeInsets(px) {
             await page.waitForTimeout(2500);
             check('no insets: the top bar keeps its own padding',
                 await page.evaluate(() => getComputedStyle(document.querySelector('.tbar')).paddingTop), '10px');
-            check('no insets: no fallback value is left behind (the live env() decides)',
-                await page.evaluate(() => document.documentElement.style.getPropertyValue('--dg-safe-top')), '');
+            check('no insets: no padding is added and nothing is left behind',
+                await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || ''), 'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}');
             check('no insets: no cover padding is added at all',
                 await page.evaluate(() => document.body.classList.contains('dg-safe-top-on')), false);
             check('the light page gets dark icons, on both bars',
@@ -210,11 +211,13 @@ function fakeInsets(px) {
             const rep = await page.evaluate(() => window.__calls.report);
             check('the page reports its measurements for the proof (what the screenshot cannot tell)',
                 [rep && rep.topInset, rep && rep.viewportFit, rep && rep.barTop >= rep.topInset], [30, true, true]);
-            check('the padding is CSS with the live env() and the measured value as its fallback',
+            check('the padding is the documented Capacitor pattern (its variable, then env(), then 0)',
                 await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || ''),
-                'body.app .tbar{padding-top:calc(10px + var(--dg-safe-top, env(safe-area-inset-top, 0px)))}');
-            check('the measured inset is only a fallback, and it is really set',
-                await page.evaluate(() => document.documentElement.style.getPropertyValue('--dg-safe-top')), '30px');
+                'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}');
+            check('the page reports the inset it really has ("effective"), read from the layout',
+                await page.evaluate(() => window.__calls.report && window.__calls.report.topInset), 30);
+            check('the plugin variable is what supplies it here (env() is 0 in this browser)',
+                await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top').trim()), '30px');
             // The theme the page itself switches (uposatha-calendar.js setTheme): data-theme on <html>.
             await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
             await page.waitForTimeout(200);

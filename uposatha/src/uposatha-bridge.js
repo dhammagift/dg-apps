@@ -574,40 +574,36 @@
   // while Capacitor kept the WebView inside the safe area. Edge to edge (dg-apps#41) that padding is
   // gone on BOTH platforms, so the bar would sit behind the clock / Dynamic Island.
   //
-  // The padding is CSS, not a number measured once and written: `env(safe-area-inset-top)` is live in
-  // the engine — it is the value the WebView itself reports, correct from the first layout and after
-  // every rotation — and a measured px written at load is a race. Run 448 lost that race on iOS: the
-  // probe ran before WKWebView reported the inset, came out 0, and the bar stayed under the clock,
-  // while the same build in runs 445/446 happened to measure 62px and looked right.
+  // The padding is the pattern Capacitor's own SystemBars documentation prescribes (system-bars.md,
+  // "Android Note"): the plugin injects --safe-area-inset-* on Android — as a fallback for WebViews
+  // below version 140, whose env() is broken — and env() is what iOS uses, live in the engine.
   //
-  // The custom property is only the FALLBACK for a WebView whose env() is broken (the Chromium bug
-  // the SystemBars plugin works around below version 140, where Capacitor passes the insets through
-  // but the page sees 0): the bridge writes it when it has a positive number, and removes it
-  // otherwise, so `var(--dg-safe-top, env(...))` falls back to the live value rather than to 0.
+  //   padding-top: calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))
+  //
+  // It is CSS only: no number is measured and written once at load. That measurement was a race —
+  // run 448 probed before WKWebView reported the inset, got 0, wrote no padding, and the bar sat
+  // under the clock, while runs 445/446 measured 62px from the same build and looked right.
   function applyTopInset() {
     if (!document.body) return;
     var css = document.getElementById('dg-safe-top');
     if (!css) { css = document.createElement('style'); css.id = 'dg-safe-top'; document.head.appendChild(css); }
-    css.textContent = 'body.app .tbar{padding-top:calc(10px + var(--dg-safe-top, env(safe-area-inset-top, 0px)))}';
-
-    var probe = document.createElement('div');
-    probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top,0px);';
-    document.body.appendChild(probe);
-    var inset = Math.round(probe.getBoundingClientRect().height);
-    probe.remove();
-    // Capacitor's SystemBars reports the same number as a custom property; where env() is broken
-    // that property is the only source left.
-    var native = parseInt((getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top') || '').trim(), 10);
-    var top = inset || (isNaN(native) ? 0 : native);
-    var root = document.documentElement;
-    if (top > 0) root.style.setProperty('--dg-safe-top', top + 'px');
-    else root.style.removeProperty('--dg-safe-top');
+    css.textContent = 'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}';
+    var top = effectiveInset();
     if (top > 0) document.body.classList.add('dg-safe-top-on');
     setTimeout(function () { reportInset(top); }, 60);
   }
 
   // The page's own measurements, for an automated proof. DgSelfTest is registered in DEBUG builds
   // only (uposatha/ios/App/App/DgSelfTestPlugin.swift), so a shipped app and Android ignore this.
+  // The inset the page really ended up with: what the bar's own padding comes to, whichever source
+  // supplied it (the live env(), the plugin's variable, or nothing at all). Read from the layout, so
+  // a probe that ran too early cannot flatter it.
+  function effectiveInset() {
+    var bar = document.querySelector('.tbar');
+    if (!bar) return 0;
+    return Math.max(0, Math.round((parseFloat(getComputedStyle(bar).paddingTop) || 0) - 10));
+  }
+
   function reportInset(top) {
     var Self = Cap.Plugins && Cap.Plugins.DgSelfTest;
     if (!Self || typeof Self.report !== 'function') return;
@@ -617,12 +613,8 @@
     // The bar is sticky at top: 0 and its padding is what keeps it clear of the status bar, so what
     // matters is where its CONTENT starts, not the (always 0) top of the element.
     var padTop = bar ? (parseFloat(getComputedStyle(bar).paddingTop) || 0) : 0;
-    // The EFFECTIVE inset — what the bar is really padded by, whichever source supplied it (the
-    // live env() or the measured fallback). The proof has to judge the result, not the probe: in run
-    // 448 the probe measured 0 while the layout could still have been right.
-    var effective = Math.max(0, Math.round(padTop - 10));
     Self.report({
-      topInset: effective,
+      topInset: effectiveInset(),
       measuredInset: top,
       viewportFit: !!(meta && /viewport-fit\s*=\s*cover/.test(meta.getAttribute('content') || '')),
       barTop: rect ? Math.round(rect.top + padTop) : -1,

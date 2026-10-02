@@ -140,26 +140,25 @@ PY
       fi
     fi
   }
-  # The app is portrait only (AndroidManifest.xml): ask for landscape and check it does not turn.
   adb shell settings put system accelerometer_rotation 0 > /dev/null 2>&1
-  adb shell cmd window user-rotation lock 1 > /dev/null 2>&1
-  sleep 4
-  adb exec-out screencap -p > "$OUT/.orient.png"
-  if python3 -c "from PIL import Image; im=Image.open('$OUT/.orient.png'); raise SystemExit(0 if im.height > im.width else 1)" 2>/dev/null; then
-    ok "the app stays portrait even when the device is turned (orientation lock)"
-  else
-    ko "the app turned landscape: the orientation lock is missing"
-  fi
   adb shell cmd window user-rotation lock 0 > /dev/null 2>&1
-  rm -f "$OUT/.orient.png"
   adb logcat -c 2>/dev/null || true
   adb shell settings put system accelerometer_rotation 0
   adb shell settings put system user_rotation 0
   adb shell pm clear "$PKG" > /dev/null 2>&1 || true   # first run: the default light theme, no stored state
   measure light light
   measure dark dark
-  # Landscape is gone with the orientation lock (AndroidManifest.xml, owner dg-apps#41: the wide
-  # layout was never right — the tab bar and the drawer overlapped it).
+  # Landscape, on the owner's word ("собери сразу с пейзаж портрет"): the wide layout is measured
+  # again, sides included (a cutout or a side navigation bar moves the insets there).
+  adb shell cmd uimode night no > /dev/null 2>&1
+  measure landscape-light light land
+  rotate 0 || true
+  launch 8; wait_page 30 || true
+  adb shell cmd uimode night yes > /dev/null 2>&1
+  sleep 3
+  measure landscape-dark dark land
+  rotate 0 || true
+  adb shell cmd uimode night no > /dev/null 2>&1
   #
   # The tablet case (owner: "а андроид с планшетный сможешь сделать?") is taken on THIS emulator by
   # resizing its display to a tablet's CSS size — 1600x2560 at density 2 (800x1280 CSS px is what a

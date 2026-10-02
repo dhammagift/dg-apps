@@ -66,6 +66,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgSoundPlugin.class);
         registerPlugin(DgSitePlugin.class);
         registerPlugin(DgAlarmPlugin.class);
+        // The page asks for the window's safe-area insets (DgInsetsPlugin): its own top bar, burger
+        // menu and panels have to stay clear of the transparent bars.
+        registerPlugin(DgInsetsPlugin.class);
         // No DgBars any more (dg-apps#41): the page runs edge to edge under transparent system bars
         // (viewport-fit=cover, capacitor.config.json -> SystemBars) and only the bar ICONS are set
         // from the page, by Capacitor's own SystemBars plugin (uposatha-bridge.js).

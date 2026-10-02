@@ -117,6 +117,10 @@ check('iOS: the status bar query reaches the bridge (the page picks its own icon
     /childViewControllerForStatusBarStyle/.test(dgApp), true);
 check('iOS: behind the first paint is the page background (white / #111111), not a system colour',
     /dgPageBackground/.test(dgApp) && /0x11 \/ 255/.test(dgApp), true);
+check('both platforms answer the page\'s inset question (env() and the plugin var were 0 on the emulator)',
+    /@CapacitorPlugin\(name = "DgInsets"\)/.test(read(path.join(APP, 'java/gift/dhamma/uposatha/DgInsetsPlugin.java')))
+    && /@objc\(DgInsetsPlugin\)/.test(dgApp)
+    && /registerPlugin\(DgInsetsPlugin\.class\)/.test(java), true);
 check('the bridge pads the top bar on iOS too (no platform skip in applyTopInset)',
     /function applyTopInset\(\) \{\n\s*if \(IOS\) return;/.test(BRIDGE), false);
 // iOS is served by DgSiteRouter, which answers "/" with /uposatha-calendar.html — the site's own

@@ -583,6 +583,8 @@
   // It is CSS only: no number is measured and written once at load. That measurement was a race —
   // run 448 probed before WKWebView reported the inset, got 0, wrote no padding, and the bar sat
   // under the clock, while runs 445/446 measured 62px from the same build and looked right.
+  var insetsDiag = { plugin: false, answer: null };
+
   function applyTopInset() {
     if (!document.body) return;
     var css = document.getElementById('dg-safe-top');
@@ -592,8 +594,10 @@
     // SystemBars plugin injects the same variables itself (and env() covers the modern WebViews),
     // so this only runs where the plugin exists.
     var Insets = Cap.Plugins && Cap.Plugins.DgInsets;
+    insetsDiag = { plugin: !!Insets, answer: null };
     if (Insets && typeof Insets.get === 'function') {
       Insets.get().then(function (i) {
+        insetsDiag.answer = i;
         var root = document.documentElement;
         ['top', 'right', 'bottom', 'left'].forEach(function (k) {
           var v = Math.round((i && i[k]) || 0);
@@ -630,7 +634,10 @@
     var padTop = bar ? (parseFloat(getComputedStyle(bar).paddingTop) || 0) : 0;
     Self.report({
       topInset: effectiveInset(),
-      measuredInset: top,
+      // What the native side answered (diagnostics for the iOS proof: the env() value there cannot
+      // be trusted, so the answer and whether the plugin exists are the things to look at).
+      insetsPlugin: insetsDiag.plugin,
+      insetsAnswer: insetsDiag.answer,
       viewportFit: !!(meta && /viewport-fit\s*=\s*cover/.test(meta.getAttribute('content') || '')),
       barTop: rect ? Math.round(rect.top + padTop) : -1,
       barContentTop: rect ? Math.round(rect.top + padTop) : -1,

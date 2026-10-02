@@ -159,8 +159,50 @@ PY
   measure light light
   measure dark dark
   # Landscape is gone with the orientation lock (AndroidManifest.xml, owner dg-apps#41: the wide
-  # layout was never right — the tab bar and the drawer overlapped it): nothing to measure there.
-  TABLET=$([ "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | head -1)" = "2560x1600" ] && echo yes || echo no)
+  # layout was never right — the tab bar and the drawer overlapped it).
+  #
+  # The tablet case (owner: "а андроид с планшетный сможешь сделать?") is taken on THIS emulator by
+  # resizing its display to a tablet's CSS size — 1600x2560 at density 2 (800x1280 CSS px is what a
+  # 10" tablet gives a page). The pixel_tablet system image never came up on the runner twice (a
+  # corrupt download, "Error on ZipFile unknown archive"), and the layout question is about the
+  # page's CSS width, not about the machine.
+  tablet_pass() {
+    adb shell wm size 1600x2560 > /dev/null 2>&1
+    adb shell wm density 320 > /dev/null 2>&1
+    sleep 6
+    measure tablet-light light
+    # the burger menu at tablet width: the same page's-own-numbers check as on the phone
+    adb shell am force-stop "$PKG"
+    adb shell am start -W -n "$PKG/gift.dhamma.uposatha.MainActivity" -a android.intent.action.MAIN --es route "/?drawer=1" > /dev/null
+    wait_page 30 || true
+    sleep 3
+    adb exec-out screencap -p > "$OUT/edge-tablet-drawer.png"
+    adb shell run-as "$PKG" cat files/site/dg-edgetoedge.json > "$OUT/dg-edgetoedge-tablet.json" 2>/dev/null || true
+    if [ -s "$OUT/dg-edgetoedge-tablet.json" ]; then
+      if python3 - "$OUT/dg-edgetoedge-tablet.json" <<'TEOF' | tee -a "$res"
+import json, sys
+d = json.load(open(sys.argv[1]))
+ok = True
+def check(cond, text):
+    global ok
+    print(("PASS " if cond else "FAIL ") + text)
+    ok = ok and cond
+check(d.get("drawerOpen") is True, "tablet: the burger menu is really open")
+check((d.get("topInset") or 0) >= 20, "tablet: the page has the status bar's height: %s px" % d.get("topInset"))
+check((d.get("drawerContentTop") or -1) >= (d.get("topInset") or 0),
+      "tablet: the drawer's content starts at %s px, at or below the inset %s px" % (d.get("drawerContentTop"), d.get("topInset")))
+sys.exit(0 if ok else 1)
+TEOF
+      then :; else fail=1; fi
+    else
+      ko "tablet: no report from the page"
+    fi
+    adb shell wm size reset > /dev/null 2>&1
+    adb shell wm density reset > /dev/null 2>&1
+    sleep 4
+  }
+  tablet_pass || ko "tablet: the resized pass did not run"
+  TABLET=yes
 
   # A short tour for the video: the app layer, a tab, then the dark theme (the page follows the
   # system appearance through prefers-color-scheme, so the same path a reader takes is exercised).

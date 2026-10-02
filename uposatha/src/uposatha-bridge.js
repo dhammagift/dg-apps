@@ -601,8 +601,18 @@
     // The top bar, and the burger menu's drawer (the reader pads its own drawer the same way:
     // dg-node home.css, html.dg-app #dg-drawer{padding-top: var(--dg-sat)}). Without it the drawer
     // opens under the clock on Android — the main screen looked right while the menu did not.
-    css.textContent = 'body.app .tbar{padding-top:calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}'
-      + 'body.app #dg-drawer{padding-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px))}'
+    // Every inset is divided by --dg-zoom: the page's font-size setting zooms <html> (home.js,
+    // applyUiScale sets zoom and --dg-zoom), so a CSS px there is the zoomed one while the inset is
+    // a viewport measurement. The site divides its own --dg-sat/--dg-sab exactly so (home.css);
+    // without it the padding would grow with the font size and the bar would sit lower each step.
+    var SAT = 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) / var(--dg-zoom, 1)';
+    var SAL = 'var(--safe-area-inset-left, env(safe-area-inset-left, 0px)) / var(--dg-zoom, 1)';
+    var SAR = 'var(--safe-area-inset-right, env(safe-area-inset-right, 0px)) / var(--dg-zoom, 1)';
+    // The top bar, and the burger menu's drawer (the reader pads its own drawer the same way:
+    // dg-node home.css, html.dg-app #dg-drawer{padding-top: var(--dg-sat)}). Without it the drawer
+    // opens under the clock on Android — the main screen looked right while the menu did not.
+    css.textContent = 'body.app .tbar{padding-top:calc(10px + ' + SAT + ')}'
+      + 'body.app #dg-drawer{padding-top:calc(' + SAT + ')}'
       // Owner: the chosen half of a segmented control (language, theme, week start) is grey
       // (--dg-surface-active) while a switched-on toggle is the accent green (--dg-toggle-row
       // [aria-pressed=true] .dg-tgl{background:var(--dg-accent)}). One colour for both states.
@@ -612,13 +622,20 @@
       + 'body.app .dg-segmented button[aria-pressed="true"] svg{color:inherit}'
       // The page's own side panel (uposatha-calendar.css .drawer/.panel, padding 16px 18px 30px)
       // is fixed at top: 0 as well — the same trap the burger menu fell into.
-      + 'body.app .drawer,body.app .panel{padding-top:calc(16px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}'
+      + 'body.app .drawer,body.app .panel{padding-top:calc(16px + ' + SAT + ')}'
       // Landscape on a phone with a camera cutout: the insets move to the sides. The page's content
       // is inset, and so is the drawer (fixed, right: 0), which would otherwise sit under the cutout.
-      + 'body.app{padding-left:var(--safe-area-inset-left, env(safe-area-inset-left, 0px));'
-      + 'padding-right:var(--safe-area-inset-right, env(safe-area-inset-right, 0px))}'
-      + 'body.app #dg-drawer{padding-left:var(--safe-area-inset-left, env(safe-area-inset-left, 0px));'
-      + 'padding-right:var(--safe-area-inset-right, env(safe-area-inset-right, 0px))}';
+      // The page's content spans the viewport, so both sides are inset. The drawer only touches the
+      // RIGHT edge (right: 0): padding it on the left as well drew an empty band between the page and
+      // the drawer's content — the "лишние полоски" the owner saw on a tablet in landscape, where the
+      // side navigation bar makes those insets non-zero.
+      + 'body.app{padding-left:calc(' + SAL + ');padding-right:calc(' + SAR + ')}'
+      + 'body.app #dg-drawer{padding-right:calc(' + SAR + ')}'
+      // The tab bar's own z-index (app-nav.css: 1090) is above the drawer's (dg-node home.css:
+      // 1085), so the pill bar was drawn over the open burger menu — badly visible in landscape,
+      // where the menu is narrow and the screen short. While the menu is open (the page sets
+      // body.dg-drawer-open), the bar has no business on screen.
+      + 'body.app.dg-drawer-open .appnav{display:none}';
     // iOS: ask the app for the web view's own insets, at the moment the page is ready. Android's
     // SystemBars plugin injects the same variables itself (and env() covers the modern WebViews),
     // so this only runs where the plugin exists.

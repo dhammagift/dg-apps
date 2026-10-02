@@ -231,7 +231,7 @@ function fakeInsets(px) {
             check('the page reports its measurements for the proof (what the screenshot cannot tell)',
                 [rep && rep.topInset, rep && rep.viewportFit, rep && rep.barTop >= rep.topInset], [30, true, true]);
             check('the padding is the documented Capacitor pattern (its variable, then env(), then 0)',
-                await page.evaluate(() => /body\.app \.tbar\{padding-top:calc\(10px \+ var\(--safe-area-inset-top, env\(safe-area-inset-top, 0px\)\)\)\}/.test(
+                await page.evaluate(() => /body\.app \.tbar\{padding-top:calc\(10px \+ var\(--safe-area-inset-top, env\(safe-area-inset-top, 0px\)\) \/ var\(--dg-zoom, 1\)\)\}/.test(
                     (document.getElementById('dg-safe-top') || {}).textContent || '')), true);
             check('the chosen half of a segmented control is the accent green, like a switched-on toggle',
                 await page.evaluate(() => {
@@ -252,7 +252,7 @@ function fakeInsets(px) {
                     return getComputedStyle(btn).backgroundColor === want ? 'accent' : getComputedStyle(btn).backgroundColor + ' != ' + want;
                 }), 'accent');
             check('the burger menu\'s drawer is padded too (it opened under the clock on Android)',
-                /body\.app #dg-drawer\{padding-top:var\(--safe-area-inset-top/.test(
+                /body\.app #dg-drawer\{padding-top:calc\(var\(--safe-area-inset-top/.test(
                     await page.evaluate(() => (document.getElementById('dg-safe-top') || {}).textContent || '')), true);
             check('the page reports the inset it really has ("effective"), read from the layout',
                 await page.evaluate(() => window.__calls.report && window.__calls.report.topInset), 30);
@@ -261,6 +261,25 @@ function fakeInsets(px) {
             // The theme the page itself switches (uposatha-calendar.js setTheme): data-theme on <html>.
             await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
             await page.waitForTimeout(200);
+            const zoomPad = await page.evaluate(async () => {
+                document.documentElement.style.setProperty('--dg-zoom', '1.5');
+                document.documentElement.style.zoom = '1.5';
+                window.dispatchEvent(new Event('resize'));
+                await new Promise((r) => setTimeout(r, 50));
+                const bar = getComputedStyle(document.querySelector('.tbar')).paddingTop;
+                document.documentElement.style.zoom = '';
+                document.documentElement.style.removeProperty('--dg-zoom');
+                window.dispatchEvent(new Event('resize'));
+                await new Promise((r) => setTimeout(r, 50));
+                return bar;
+            });
+            // 10px of the bar's own padding (which the zoom scales to 15) plus the inset divided by
+            // the zoom (30 / 1.5 = 20): 30 CSS px, which renders as 45 device-independent px — the
+            // real 30px inset plus the bar's own 15. Without the division it would be 40 and grow
+            // with every step of the font-size setting.
+            check('at 150% interface zoom the inset is divided by it (the bar does not drift down)',
+                zoomPad, '30px');
+
             check('switching to the page\'s dark theme flips both bars',
                 await page.evaluate(() => window.__calls.styles.slice(-2)), ['DARK/StatusBar', 'DARK/NavigationBar']);
             await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));

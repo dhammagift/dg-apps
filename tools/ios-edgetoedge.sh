@@ -25,7 +25,6 @@ APP="${1:?usage: ios-edgetoedge.sh <App.app> <out-dir> [bundle-id]}"
 OUT="${2:?usage: ios-edgetoedge.sh <App.app> <out-dir> [bundle-id]}"
 BUNDLE="${3:-gift.dhamma.uposatha}"
 VIDEO="${VIDEO:-0}"
-ROTATE_PROJ="uposatha/test/ios-sim/rotatetest/RotateTests.xcodeproj"
 
 [ -d "$APP" ] || { echo "ios-edgetoedge: no .app at $APP" >&2; exit 1; }
 mkdir -p "$OUT"
@@ -44,7 +43,6 @@ xcrun simctl install "$UDID" "$APP"
 xcrun simctl privacy "$UDID" grant location "$BUNDLE" 2>/dev/null || true
 
 REC=""
-ROT_PID=""
 stop_recording() {
     [ -n "$REC" ] || return 0
     kill -INT "$REC" 2>/dev/null || true
@@ -63,55 +61,6 @@ fi
 shot() {
     xcrun simctl io "$UDID" screenshot "$OUT/$1" >/dev/null \
         || echo "ios-edgetoedge: screenshot $1 failed" >&2
-}
-
-# ---- the rotation harness (unused while iPhone is portrait only) -------------------------------
-# rotate_hold/rotate_release, oriented/wait_orient and the xcodegen project they drive are kept for
-# the day landscape comes back to iPhone or is checked on iPad. Building the UI-test bundle up front
-# (xcodebuild build-for-testing, then test-without-building here) is what made them usable: see the
-# git history of this file.
-# True when the current screenshot has the asked-for orientation.
-oriented() {
-    local want="$1" w h
-    xcrun simctl io "$UDID" screenshot /tmp/dg-orient.png >/dev/null 2>&1 || return 1
-    w=$(sips -g pixelWidth /tmp/dg-orient.png 2>/dev/null | awk '/pixelWidth/{print $2}')
-    h=$(sips -g pixelHeight /tmp/dg-orient.png 2>/dev/null | awk '/pixelHeight/{print $2}')
-    [ -n "${w:-}" ] && [ -n "${h:-}" ] || return 1
-    if [ "$want" = landscape ]; then [ "$w" -gt "$h" ]; else [ "$h" -gt "$w" ]; fi
-}
-
-wait_orient() {
-    local want="$1" tries="${2:-20}"
-    for _ in $(seq 1 "$tries"); do
-        oriented "$want" && { echo "ios-edgetoedge: the simulator is $want"; return 0; }
-        sleep 1
-    done
-    echo "ios-edgetoedge: the simulator never turned $want" >&2
-    return 1
-}
-
-# The UI test runs in the background and holds the orientation (RotateTests sleeps) until
-# rotate_release; the log is for the post-mortem.
-rotate_hold() { # $1 = Landscape|Portrait
-    local lower
-    lower=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-    xcodebuild test-without-building \
-        -project "$ROTATE_PROJ" \
-        -scheme RotateTests \
-        -destination "id=$UDID" \
-        -derivedDataPath /tmp/dg-rotate-derived \
-        -only-testing:"RotateTests/RotateTests/testRotate$1" \
-        CODE_SIGNING_ALLOWED=NO > "$OUT/rotate-$1.log" 2>&1 &
-    ROT_PID=$!
-    wait_orient "$lower" 90
-}
-
-rotate_release() {
-    [ -n "$ROT_PID" ] || return 0
-    kill "$ROT_PID" 2>/dev/null || true
-    wait "$ROT_PID" 2>/dev/null || true
-    ROT_PID=""
-    sleep 2
 }
 
 xcrun simctl launch "$UDID" "$BUNDLE"

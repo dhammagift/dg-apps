@@ -418,7 +418,16 @@
         var ours = ((p && p.notifications) || []).filter(function (n) { return n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + 100; }).map(function (n) { return { id: n.id }; });
         return ours.length ? LN.cancel({ notifications: ours }) : null;
       })
-      .then(function () { return lastSchedule && lastSchedule.notifications && lastSchedule.notifications.length ? LN.schedule(lastSchedule) : null; })
+      // What is replayed is only what is still ahead: LocalNotifications fires an `at` already in the past at once (its own
+      // catch-up), so replaying a schedule that has since partly come due would ring for reminders the reader has already
+      // heard. The sound source is a setting of the moment, not a reason to repeat a reminder.
+      .then(function () {
+        var items = ((lastSchedule && lastSchedule.notifications) || []).filter(function (n) {
+          var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
+          return at > Date.now();
+        });
+        return items.length ? LN.schedule(Object.assign({}, lastSchedule, { notifications: items })) : null;
+      })
       .catch(function (e) { console.log('[dg-uposatha-stream] could not move the reminders:', (e && e.message) || e); });
   }
 

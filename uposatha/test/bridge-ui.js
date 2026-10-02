@@ -150,6 +150,51 @@ function capacitorStub() {
             await ctx.close();
         }
 
+        // 3b. What the app sets is remembered: a reminder is never set — and so never rung — twice, and one the app never
+        // managed to set (its time passed before any schedule held it) is shown once at the next launch, not on every one.
+        {
+            const seed = () => {
+                localStorage.setItem('dgUposathaTz', 'UTC');
+                localStorage.setItem('dgUposathaRemind', JSON.stringify({ on: true, lead: 24, d8: true, d14: true, d15: true, sound: 'gong', ownChannel: '', ownName: '' }));
+            };
+            const launch = async (ctx, iso) => {
+                const page = await ctx.newPage();
+                await page.clock.install({ time: new Date(iso) });
+                await page.goto(PAGE, { waitUntil: 'load' });
+                await page.waitForTimeout(2500);
+                const got = await page.evaluate(() => (window.__calls.scheduled.flat() || [])
+                    .filter((n) => new Date(n.schedule.at).getTime() < Date.now() + 20000).map((n) => n.title));
+                const seen = await page.evaluate(() => JSON.parse(localStorage.getItem('dgUposathaNotified') || '[]'));
+                await page.close();
+                return { got, seen };
+            };
+            const freshCtx = async () => {
+                const c = await ctxOf('light', 'ru');
+                await c.addInitScript(capacitorStub);
+                await c.addInitScript(seed);
+                await c.addInitScript(BRIDGE);
+                return c;
+            };
+            // 09:00 UTC on Oct 1: the 8th day's Uposatha begins the next evening, so its "24 h before" reminder (18:00 today)
+            // is still ahead — armed, nothing is shown yet.
+            const ctx = await freshCtx();
+            const armed = await launch(ctx, '2026-10-01T09:00:00Z');
+            check('a reminder still ahead is armed, nothing is shown early', armed.got, []);
+            // A day later, in the same app: that reminder has come (the device delivered it, as it was set for 18:00). It must
+            // not be set again — the 24 h the list keeps it for used to be 24 h of it ringing on every launch.
+            const after = await launch(ctx, '2026-10-02T09:00:00Z');
+            check('a reminder that was armed and has come is not shown again on the next launch', after.got, []);
+            await ctx.close();
+            // A reminder whose time passed while the app was never open before it: shown once, at the launch that finds it.
+            const late = await freshCtx();
+            const first = await launch(late, '2026-10-02T09:00:00Z');
+            check('a reminder whose time passed before it was ever set is shown once', first.got.length, 1);
+            console.log('       shown late:', JSON.stringify(first.got), '— remembered:', JSON.stringify(first.seen));
+            const next = await launch(late, '2026-10-02T09:05:00Z');
+            check('and not again on the launch after that', next.got, []);
+            await late.close();
+        }
+
         // 4. The sound source: the alarm stream or the notification stream, per the setting.
         for (const stream of ['notification', 'alarm']) {
             const ctx = await ctxOf('light', 'ru');

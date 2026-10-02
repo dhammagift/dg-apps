@@ -89,12 +89,56 @@ class DgBridgeViewController: CAPBridgeViewController {
         return configuration
     }
 
+    // The safe-area insets, handed to the page the way Android's SystemBars plugin hands them over:
+    // as --safe-area-inset-*, which the page's CSS reads first (var(--safe-area-inset-top,
+    // env(safe-area-inset-top, 0px))). iOS needs this: WKWebView's own env(safe-area-inset-top) is
+    // NOT reliable in an app — it came out 62px in one run and 0 in the next two, same build, same
+    // simulator (runs 446/448/449), and a page whose top bar is padded by env() then sits under the
+    // Dynamic Island. The web view's own safeAreaInsets are the value the system really reports.
+    private func pushSafeAreaInsets() {
+        guard let webView = webView else { return }
+        let i = webView.safeAreaInsets
+        let js = """
+        try {
+          var r = document.documentElement.style;
+          r.setProperty('--safe-area-inset-top', '\(i.top)px');
+          r.setProperty('--safe-area-inset-right', '\(i.right)px');
+          r.setProperty('--safe-area-inset-bottom', '\(i.bottom)px');
+          r.setProperty('--safe-area-inset-left', '\(i.left)px');
+        } catch (e) {}
+        """
+        webView.evaluateJavascript(js, nil)
+    }
+
+    // Called on every layout change (rotation, a split view, the keyboard): the values are written
+    // again, which is what the page's resize handling expects. The async repeats cover the page
+    // arriving after the first layout — the write is idempotent and cheap.
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        pushSafeAreaInsets()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        pushSafeAreaInsets()
+    }
+
+    private func pushSafeAreaInsetsSoon() {
+        pushSafeAreaInsets()
+        for delay in [0.5, 2.0, 5.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.pushSafeAreaInsets()
+            }
+        }
+    }
+
     override func capacitorDidLoad() {
         // Edge to edge (dg-apps#41): Capacitor would leave the web view on systemBackground; what
         // shows through before the first paint (and under overscroll) is the page's own background
         // instead — the same dynamic colour as the root view behind it.
         webView?.backgroundColor = dgPageBackground
         webView?.scrollView.backgroundColor = dgPageBackground
+        pushSafeAreaInsetsSoon()
 
         // Edge swipe = browser Back (a WKWebView leaves it off), and there is no Back button on iOS.
         webView?.allowsBackForwardNavigationGestures = true

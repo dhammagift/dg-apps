@@ -61,6 +61,11 @@ check('the bundled page asks for the cover viewport',
 // site updater (it compares the snapshot tree against the site, site-manifest.json).
 check('the snapshot page itself is left as the site serves it',
     read(path.join(WWW, 'uposatha-calendar.html')).includes('content="width=device-width, initial-scale=1">'), true);
+check('Android is portrait only too (the landscape layout was never right, owner dg-apps#41)',
+    /android:screenOrientation="portrait"/.test(read(path.join(APP, 'AndroidManifest.xml'))), true);
+check('the page\'s theme reaches the window background (no white strip over a dark page)',
+    /setTheme/.test(read(path.join(APP, 'java/gift/dhamma/uposatha/DgInsetsPlugin.java')))
+    && /DgInsets.setTheme/.test(read(path.join(ROOT, 'src/uposatha-bridge.js'))), true);
 check('DgBarsPlugin.java is gone',
     fs.existsSync(path.join(APP, 'java/gift/dhamma/uposatha/DgBarsPlugin.java')), false);
 

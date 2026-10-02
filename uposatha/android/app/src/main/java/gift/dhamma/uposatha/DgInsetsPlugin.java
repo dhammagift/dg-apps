@@ -28,6 +28,26 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "DgInsets")
 public class DgInsetsPlugin extends Plugin {
 
+    /**
+     * The page's own theme, so the window and the WebView behind it stop showing the SYSTEM's
+     * background. In dark theme on a light device that background was a white strip above the dark
+     * page (owner's screenshots, dg-apps#41) — the bars are transparent, so whatever is behind the
+     * WebView shows there whenever the platform pads it instead of passing the insets through.
+     *     DgInsets.setTheme({ dark: true })
+     */
+    @PluginMethod
+    public void setTheme(PluginCall call) {
+        final boolean dark = call.getBoolean("dark", false);
+        final int color = dark ? 0xFF111111 : 0xFFFFFFFF;
+        getActivity().runOnUiThread(() -> {
+            getActivity().getWindow().getDecorView().setBackgroundColor(color);
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().setBackgroundColor(color);
+            }
+            call.resolve();
+        });
+    }
+
     @PluginMethod
     public void get(PluginCall call) {
         getActivity().runOnUiThread(() -> {

@@ -553,6 +553,15 @@
     lastBarStyle = style;
     SystemBars.setStyle({ style: style, bar: 'StatusBar' }).catch(function () { lastBarStyle = ''; });
     SystemBars.setStyle({ style: style, bar: 'NavigationBar' }).catch(function () { lastBarStyle = ''; });
+    // The window and the WebView BEHIND the page follow the page's theme too: where the platform
+    // pads the WebView instead of passing the insets through, that background is what shows in the
+    // status-bar strip — a white strip over a dark page when the device was in light mode (owner's
+    // screenshots). Android answers through DgInsets.setTheme; on iOS the root view already uses a
+    // dynamic page colour.
+    var Insets = Cap.Plugins && Cap.Plugins.DgInsets;
+    if (Insets && typeof Insets.setTheme === 'function') {
+      Insets.setTheme({ dark: style === 'DARK' }).catch(function () { /* no such method: fine */ });
+    }
   }
   var lastBarStyle = '';
   function watchSystemBars() {

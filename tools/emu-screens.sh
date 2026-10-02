@@ -127,51 +127,28 @@ PY
       fi
     fi
   }
+  # The app is portrait only (AndroidManifest.xml): ask for landscape and check it does not turn.
+  adb shell settings put system accelerometer_rotation 0 > /dev/null 2>&1
+  adb shell cmd window user-rotation lock 1 > /dev/null 2>&1
+  sleep 4
+  adb exec-out screencap -p > "$OUT/.orient.png"
+  if python3 -c "from PIL import Image; im=Image.open('$OUT/.orient.png'); raise SystemExit(0 if im.height > im.width else 1)" 2>/dev/null; then
+    ok "the app stays portrait even when the device is turned (orientation lock)"
+  else
+    ko "the app turned landscape: the orientation lock is missing"
+  fi
+  adb shell cmd window user-rotation lock 0 > /dev/null 2>&1
+  rm -f "$OUT/.orient.png"
   adb logcat -c 2>/dev/null || true
   adb shell settings put system accelerometer_rotation 0
   adb shell settings put system user_rotation 0
   adb shell pm clear "$PKG" > /dev/null 2>&1 || true   # first run: the default light theme, no stored state
   measure light light
   measure dark dark
-  # Landscape and the tablet width (owner: "нужно посмотреть в альбомной и планшетной"). One profile
-  # per run (the workflow's "profile" input, pixel_7 or pixel_tablet), so the tablet pass is only
-  # taken there; every run takes the landscape one, cutout sides included.
+  # Landscape is gone with the orientation lock (AndroidManifest.xml, owner dg-apps#41: the wide
+  # layout was never right — the tab bar and the drawer overlapped it): nothing to measure there.
   TABLET=$([ "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | head -1)" = "2560x1600" ] && echo yes || echo no)
-  # The burger menu's drawer (owner: it opened under the clock on Android). Opened through the
-  # page's own hook (?drawer=1): a tap cannot be aimed at a WebView element from adb, and a check that
-  # guesses coordinates ends up testing the guess. Judged on the page's OWN report — the bridge
-  # writes its measurements through DgSite, which this debuggable APK keeps in files/site/.
-  adb shell cmd uimode night no > /dev/null 2>&1
-  adb shell am force-stop "$PKG"
-  adb shell am start -W -n "$PKG/gift.dhamma.uposatha.MainActivity" -a android.intent.action.MAIN --es route "/?drawer=1" > /dev/null
-  wait_page 30 || ko "drawer: the page never painted"
-  sleep 3
-  adb exec-out screencap -p > "$OUT/edge-drawer.png"
-  adb shell run-as "$PKG" cat files/site/dg-edgetoedge.json > "$OUT/dg-edgetoedge.json" 2>/dev/null || true
-  if [ -s "$OUT/dg-edgetoedge.json" ]; then
-    if python3 - "$OUT/dg-edgetoedge.json" <<'DEOF' | tee -a "$res"
-import json, sys
-d = json.load(open(sys.argv[1]))
-ok = True
-def check(cond, text):
-    global ok
-    print(("PASS " if cond else "FAIL ") + text)
-    ok = ok and cond
-check(d.get("drawerOpen") is True, "the burger menu is really open (the page's own state)")
-check((d.get("topInset") or 0) >= 20, "the page has the status bar's height: %s px" % d.get("topInset"))
-check((d.get("drawerContentTop") or -1) >= (d.get("topInset") or 0),
-      "the drawer's content starts at %s px, at or below the inset %s px — not under the clock" % (d.get("drawerContentTop"), d.get("topInset")))
-check((d.get("barTop") or -1) >= (d.get("topInset") or 0), "the top bar starts at %s px (inset %s px)" % (d.get("barTop"), d.get("topInset")))
-sys.exit(0 if ok else 1)
-DEOF
-    then :; else fail=1; fi
-  else
-    ko "drawer: no report from the page (files/site/dg-edgetoedge.json missing — run-as needs the debuggable APK)"
-  fi
 
-  adb shell cmd uimode night no > /dev/null 2>&1
-  measure landscape-light light land
-  rotate 0 || true
   # A short tour for the video: the app layer, a tab, then the dark theme (the page follows the
   # system appearance through prefers-color-scheme, so the same path a reader takes is exercised).
   launch 8; wait_page 30 || true
@@ -181,9 +158,6 @@ DEOF
   adb exec-out screencap -p > "$OUT/edge-light-to-dark.png"
   launch 8; wait_page 30 || true
   adb shell input tap 250 1790; sleep 4     # the Calendar tab, on the dark page
-  # Landscape again, on the dark page, while the video is still running (the cutout and the bars).
-  measure landscape-dark dark land
-  rotate 0 || true
   adb shell input keyevent KEYCODE_HOME; sleep 2
   stop_rec
   [ -s "$OUT/flow.mp4" ] && echo "video: flow.mp4 ($(du -h "$OUT/flow.mp4" | cut -f1))" >> "$res"

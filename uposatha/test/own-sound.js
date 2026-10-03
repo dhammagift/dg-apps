@@ -102,6 +102,9 @@ const ls = (page, k) => page.evaluate((key) => JSON.parse(localStorage.getItem(k
         const phn = await page2.evaluate(() => [...document.querySelectorAll('#t-status .phn')].map((e) => e.textContent));
         check('the card of the Uposatha day names the phase moment (50%, with the time)', phn.some((x) => /50%/.test(x) && /18:25/.test(x)), true);
         console.log('       e.g.', JSON.stringify(phn));
+        const st = await page2.evaluate(() => (document.getElementById('t-status') || {}).textContent || '');
+        check('the card says which Uposatha begins this evening, with a quiet countdown', [/The 8th day Uposatha begins this evening/.test(st), /in \d+ h \d+ min/.test(st)], [true, true]);
+        console.log('       e.g.', JSON.stringify(st));
         await ctx2.close();
     } finally {
         await browser.close();

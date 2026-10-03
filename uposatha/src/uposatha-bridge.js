@@ -647,6 +647,8 @@
       // 1085), so the pill bar was drawn over the open burger menu — badly visible in landscape,
       // where the menu is narrow and the screen short. While the menu is open (the page sets
       // body.dg-drawer-open), the bar has no business on screen.
+      // The two "time for food" reminders: the list of leads sat flush against the switch above it (owner's screenshot).
+      + 'body.app #mbeg-lead,body.app #mrem-lead{margin-top:14px}'
       + 'body.app.dg-drawer-open .appnav{display:none}';
     // iOS: ask the app for the web view's own insets, at the moment the page is ready. Android's
     // SystemBars plugin injects the same variables itself (and env() covers the modern WebViews),

@@ -1141,7 +1141,7 @@ jobs:
 
       - name: Build Debug APK
         working-directory: uposatha/android
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug -PdgVersionCode=${{ github.run_number }} --stacktrace
 
       - name: Upload debug APK artifact
         if: success()

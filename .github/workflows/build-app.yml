@@ -1116,6 +1116,12 @@ jobs:
         working-directory: uposatha
         run: node tools/bundle-from-repo.js "$RUNNER_TEMP/dg-node"
 
+      # The edge-to-edge check below drives the bundled page in a real browser; the snapshot step that
+      # used to install it is gone.
+      - name: Install the browser for the page checks
+        working-directory: uposatha
+        run: npx playwright install --with-deps chromium
+
       # src/ -> www/ -> android/app/src/main/assets/public: the bundled page, uposatha-bridge.js and
       # the offline page where MainActivity and Capacitor read them from.
       - name: Sync Capacitor

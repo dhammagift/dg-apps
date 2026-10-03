@@ -95,6 +95,13 @@ const ls = (page, k) => page.evaluate((key) => JSON.parse(localStorage.getItem(k
         check('a missed reminder is announced as missed, on the silent channel', [late.length > 0, late.every((n) => n.channelId === 'uposatha-none-v1')], [true, true]);
         console.log('       e.g.', JSON.stringify(late.slice(0, 1).map((n) => [n.title, n.body])));
         check('a reminder still ahead keeps its own title and sound', sched.filter((n) => n.title !== 'Missed reminder').every((n) => n.channelId !== 'uposatha-none-v1'), true);
+        // On the day of an Uposatha the card also gives the exact moment of the Moon's phase (the 50% of the 8th day), in the ordinary and the app mode.
+        await page2.evaluate(() => { try { localStorage.setItem('dgUposathaLite', '0'); } catch (e) { /* none */ } });
+        await page2.reload({ waitUntil: 'load' });
+        await page2.waitForTimeout(3000);
+        const phn = await page2.evaluate(() => [...document.querySelectorAll('#t-status .phn')].map((e) => e.textContent));
+        check('the card of the Uposatha day names the phase moment (50%, with the time)', phn.some((x) => /50%/.test(x) && /18:25/.test(x)), true);
+        console.log('       e.g.', JSON.stringify(phn));
         await ctx2.close();
     } finally {
         await browser.close();

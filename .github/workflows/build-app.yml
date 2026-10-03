@@ -1094,11 +1094,20 @@ jobs:
       # everything it fetches. The site is dhamma.gift, production (the same value as SITE in
       # uposatha/src/uposatha-bridge.js). Fails the job when the site cannot be reached: an APK with no
       # page in it must never be built quietly.
+      # online_origin (the same input as Dhamma.Gift's) lets a manual run take the page, and make the app
+      # update itself, from the test site: no need to touch production to look at a calendar change. A
+      # release run (a tag, or release other than none) always uses production, whatever was typed.
       - name: Take the calendar page off the site
         working-directory: uposatha
         env:
-          SITE: https://dhamma.gift
+          SITE: ${{ (startsWith(github.ref, 'refs/tags/') || (inputs.release != '' && inputs.release != 'none')) && 'https://dhamma.gift' || env.DG_ONLINE_ORIGIN }}
         run: |
+          echo "site: $SITE"
+          if [ "$SITE" != "https://dhamma.gift" ]; then
+            sed -i "s#site: 'https://dhamma.gift'#site: '$SITE'#" src/uposatha-bridge.js
+            sed -i "s#SITE = \"https://dhamma.gift\"#SITE = \"$SITE\"#" android/app/src/main/java/gift/dhamma/uposatha/DgSitePlugin.java
+            grep -c "$SITE" src/uposatha-bridge.js android/app/src/main/java/gift/dhamma/uposatha/DgSitePlugin.java
+          fi
           npx playwright install --with-deps chromium
           node tools/snapshot.js
 

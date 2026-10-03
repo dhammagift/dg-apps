@@ -102,7 +102,7 @@ public class DgShortcutsPlugin extends Plugin {
         try {
             ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts);
             // No enable/disable of static shortcuts here any more. The plugin used to hide the three
-            // programmed ones while "recent words" were on, exactly as the reader app does — and
+            // programmed ones while "recent words" were on, exactly as Dhamma.Gift does — and
             // that is the shape that showed the owner two words out of three: the launcher counts
             // the shortcuts DECLARED in res/xml/shortcuts.xml against its four-entry menu even when
             // they are disabled. One static entry is declared there now (Favorites & History) and

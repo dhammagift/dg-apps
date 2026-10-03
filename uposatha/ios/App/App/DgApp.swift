@@ -159,7 +159,7 @@ class DgBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(DgSitePlugin())
         bridge?.registerPluginInstance(DgInsetsPlugin())
         #if DEBUG
-        // Debug builds only, for the same reason as the reader app's DgSelfTestPlugin: the App Store screenshot
+        // Debug builds only, for the same reason as Dhamma.Gift's DgSelfTestPlugin: the App Store screenshot
         // tour (test/ios-sim/tour.js) needs one native call to say which view is on screen; a release build's
         // Capacitor.Plugins.DgSelfTest is undefined.
         bridge?.registerPluginInstance(DgSelfTestPlugin())

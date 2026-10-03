@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Turns the built www/ into the App Store screenshot-tour bundle: appends tour.js to the calendar page. The only
 // edit, and only to BUILD OUTPUT — www/ is generated, so nothing here touches a committed source file and a
-// shipped build is never made this way. Mirrors the reader app's test/ios-sim/prepare-www.js --tour, simplified:
+// shipped build is never made this way. Mirrors Dhamma.Gift's test/ios-sim/prepare-www.js --tour, simplified:
 // Uposatha has no offline database to fake, the bundled page already comes from the real site.
 //
 //   node test/ios-sim/prepare-www.js [--www www]

@@ -53,7 +53,7 @@ function copyTree(from, to, list) {
 // Edge to edge (owner, dg-apps#41, after the Dhamma.Gift app in a706f50): viewport-fit=cover lets the
 // page run under the transparent status and gesture bars — Capacitor's SystemBars passes the insets
 // through (env(safe-area-inset-*)) instead of padding the WebView and showing the window background
-// there. App build only, like build-page.js of the reader app: on the site the meta stays as it is.
+// there. App build only, like build-page.js of Dhamma.Gift: on the site the meta stays as it is.
 // Safe against the site updater: /index.html is not part of site-manifest.json (only the snapshot
 // tree is), so it is never compared with the site or replaced by an unpatched copy. The bridge
 // enforces the rest at runtime, on whatever page the app ends up loading (the top bar steps down by

@@ -3,7 +3,7 @@
 
      ONE static shortcut, on purpose. The launcher's long-press menu holds FOUR entries on the
      owner's phones, and it counts the shortcuts DECLARED HERE against that budget even when they
-     are disabled at runtime — which is what the reader app learned the hard way (dg-apps
+     are disabled at runtime — which is what Dhamma.Gift learned the hard way (dg-apps
      adcd32d: "The launcher's long-press menu shows four entries in total, so four static shortcuts
      left room for two 'recently read' texts, not three"), and then forgot again when 3b08f69 put
      the four statics back and hid three with ShortcutManager.disableShortcuts(). The dictionary

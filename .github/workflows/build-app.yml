@@ -92,7 +92,7 @@ on:
         type: boolean
         default: false
       dict_only:
-        description: 'Run ONLY the dictionary app jobs and skip the reader app entirely. For checking a change under dict/ without building the offline library: minutes instead of the better part of an hour. A tag ignores it — a release builds everything.'
+        description: 'Run ONLY the dictionary app jobs and skip Dhamma.Gift entirely. For checking a change under dict/ without building the offline library: minutes instead of the better part of an hour. A tag ignores it — a release builds everything.'
         required: false
         type: boolean
         default: false
@@ -995,7 +995,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Same keystore and the same secret names as the reader app (this repo's ANDROID_* or
+      # Same keystore and the same secret names as Dhamma.Gift (this repo's ANDROID_* or
       # dg-twa's KEYSTORE_* — whichever set exists), so one key signs both apps. When no secret is
       # present the release build is skipped rather than failing: a fork must still be able to run
       # this workflow.
@@ -1036,7 +1036,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEYSTORE_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
-        # gift.dhamma.pali, not the reader app's gift.dhamma.twa: this AAB updates the dictionary's
+        # gift.dhamma.pali, not Dhamma.Gift's gift.dhamma.twa: this AAB updates the dictionary's
         # own listing, which is the one the TWA created.
         run: ./gradlew bundleRelease -PdgVersionCode=${{ github.run_number }} --stacktrace
 
@@ -1888,7 +1888,7 @@ jobs:
             build 2>&1 | tee ../../ios-tour-build.log | tail -30
 
       # App Store Connect's iPhone slot for THIS app asks for the 6.5" frame (1242x2688 or 1284x2778), not 6.7"/6.9"
-      # (owner confirmed from the live Console page) — the same size the reader app's own screenshot job already
+      # (owner confirmed from the live Console page) — the same size Dhamma.Gift's own screenshot job already
       # settles on for the same reason. The runner image ships only current iPhone types, so the device is CREATED
       # from an older device type on the newest iOS runtime.
       - name: Prepare a 6.5" device (the size the store page accepts)
@@ -1959,11 +1959,11 @@ jobs:
   # gated by the same choice: `release: play` (or `both`, or any tag) uploads BOTH Android apps,
   # each to its own package on the INTERNAL track. `release: none` — the default — uploads neither.
   #
-  # Internal on purpose, for the same reason as the reader app: it is the only track that reaches a
+  # Internal on purpose, for the same reason as Dhamma.Gift: it is the only track that reaches a
   # device in minutes with no review, it is limited to the testers listed in the console, and
   # promoting it to production stays a human decision in the Play Console.
   #
-  # The same PLAY_SERVICE_ACCOUNT_JSON as the reader app, and the same service account: it already
+  # The same PLAY_SERVICE_ACCOUNT_JSON as Dhamma.Gift, and the same service account: it already
   # holds "Release apps to testing tracks" on gift.dhamma.pali (dg-twa's workflow uploaded this
   # package with it). If that permission is ever revoked, the upload fails here with a 401/403 —
   # which is the point of asking Play rather than assuming.

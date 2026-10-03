@@ -3,7 +3,7 @@
 // to anywhere else refused. And that the updater fetches what the site has changed — one file — and hands
 // only that to DgSite.
 //
-//   (cd uposatha && SITE=... node tools/snapshot.js && node build.js) first, then:  node uposatha/test/bundle-ui.js
+//   (cd uposatha && node tools/bundle-from-repo.js <dg-node dir> && node build.js) first, then:  node uposatha/test/bundle-ui.js
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -41,7 +41,7 @@ function capacitorStub() {
             DgShortcuts: { set: (o) => { window.__calls.shortcuts.push(o.items); return Promise.resolve({ count: o.items.length }); } },
             DgSound: { pick: () => Promise.resolve({}), channel: () => Promise.resolve() },
             DgSite: { put: (o) => { window.__calls.puts.push({ path: o.path, data: o.data }); return Promise.resolve(); }, list: () => Promise.resolve({ files: [] }), clear: () => Promise.resolve() },
-            LocalNotifications: { requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: () => Promise.resolve() },
+            LocalNotifications: { addListener: () => ({ remove() {} }), requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: () => Promise.resolve() },
         },
     };
 }
@@ -59,13 +59,13 @@ function capacitorStub() {
             const page = await ctx.newPage();
             const refused = [], bad = [], errors = [];
             // Offline: nothing outside the app's own origin is reachable, except the "site" we stand in for below.
-            const changed = '/assets/css/uposatha-calendar.css';
-            const changedBody = fs.readFileSync(path.join(WWW, changed), 'utf8') + '\n/* changed on the site */\n';
+            const changed = '/assets/js/uposatha-quotes.json';   // a text: only the json follows the site, the code is the build's
+            const changedBody = fs.readFileSync(path.join(WWW, changed), 'utf8') + '\n\n';
             await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => {
                 const u = new URL(route.request().url());
-                if (u.origin === 'https://test.dhamma.gift') {
+                if (u.origin === 'https://dhamma.gift') {
                     const p = u.pathname === '/uposatha-calendar' ? '/uposatha-calendar.html' : u.pathname;
-                    if (p === changed) return route.fulfill({ status: 200, contentType: 'text/css', body: changedBody });
+                    if (p === changed) return route.fulfill({ status: 200, contentType: 'application/json', body: changedBody });
                     const f = path.join(WWW, p);
                     if (manifest.files.includes(p) && fs.existsSync(f)) return route.fulfill({ status: 200, contentType: TYPES[path.extname(f).slice(1)] || 'application/octet-stream', body: fs.readFileSync(f) });
                     return route.fulfill({ status: 404, body: '' });
@@ -90,7 +90,7 @@ function capacitorStub() {
             await page.screenshot({ path: path.join(SHOTS, `launch-upo-offline-${lang}-${theme}.png`) });
             // The updater: 6 s after load, one changed file goes to DgSite, and only that one.
             await page.waitForTimeout(7000);
-            const puts = await page.evaluate(() => window.__calls.puts.map((p) => [p.path, atob(p.data).endsWith('/* changed on the site */\n')]));
+            const puts = await page.evaluate(() => window.__calls.puts.filter((p) => p.path !== '/dg-edgetoedge.json').map((p) => [p.path, atob(p.data).endsWith('\n\n')]));
             check(`${lang}/${theme}: the updater hands over exactly the file the site changed`, puts, [[changed, true]]);
             await ctx.close();
         }

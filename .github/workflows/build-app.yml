@@ -1089,27 +1089,32 @@ jobs:
         working-directory: uposatha
         run: npm ci
 
-      # The app bundles the calendar page: it opens with no network, and updates itself from the site when
-      # there is one (uposatha/tools/snapshot.js). A real browser loads the page off the site and records
-      # everything it fetches. The site is dhamma.gift, production (the same value as SITE in
-      # uposatha/src/uposatha-bridge.js). Fails the job when the site cannot be reached: an APK with no
-      # page in it must never be built quietly.
-      # online_origin (the same input as Dhamma.Gift's) lets a manual run take the page, and make the app
-      # update itself, from the test site: no need to touch production to look at a calendar change. A
-      # release run (a tag, or release other than none) always uses production, whatever was typed.
-      - name: Take the calendar page off the site
-        working-directory: uposatha
-        env:
-          SITE: ${{ (startsWith(github.ref, 'refs/tags/') || (inputs.release != '' && inputs.release != 'none')) && 'https://dhamma.gift' || env.DG_ONLINE_ORIGIN }}
+      # The app bundles the calendar page: it opens with no network. The page is taken from the dg-node
+      # checkout the build is pinned to (DG_NODE_REF, or the dg_node_ref input), not from a running site: a
+      # build no longer depends on what production serves at that minute, and a change to the calendar
+      # reaches an app by being in dg-node, not by being deployed. Only the texts (json) follow the site at
+      # run time (updatable in uposatha-bridge.js). Fails the job when a file of the page is not in dg-node.
+      - name: Resolve dg-node ref
+        id: pin
         run: |
-          echo "site: $SITE"
-          if [ "$SITE" != "https://dhamma.gift" ]; then
-            sed -i "s#site: 'https://dhamma.gift'#site: '$SITE'#" src/uposatha-bridge.js
-            sed -i "s#SITE = \"https://dhamma.gift\"#SITE = \"$SITE\"#" android/app/src/main/java/gift/dhamma/uposatha/DgSitePlugin.java
-            grep -c "$SITE" src/uposatha-bridge.js android/app/src/main/java/gift/dhamma/uposatha/DgSitePlugin.java
-          fi
-          npx playwright install --with-deps chromium
-          node tools/snapshot.js
+          REF="${{ inputs.dg_node_ref }}"
+          if [ -z "$REF" ]; then REF="$(tr -d '[:space:]' < DG_NODE_REF)"; fi
+          if [ -z "$REF" ]; then echo "::error::DG_NODE_REF is empty and no dg_node_ref input given"; exit 1; fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout dg-node (the calendar page and what it loads)
+        run: |
+          mkdir -p "$RUNNER_TEMP/dg-node"
+          cd "$RUNNER_TEMP/dg-node"
+          git init -q
+          git remote add origin https://github.com/dhammagift/dg-node.git
+          git fetch --depth 1 origin "${{ steps.pin.outputs.ref }}" -q
+          git checkout -q FETCH_HEAD
+          echo "dg-node@${{ steps.pin.outputs.ref }} = $(git rev-parse HEAD)"
+
+      - name: Lay the calendar page out from dg-node
+        working-directory: uposatha
+        run: node tools/bundle-from-repo.js "$RUNNER_TEMP/dg-node"
 
       # src/ -> www/ -> android/app/src/main/assets/public: the bundled page, uposatha-bridge.js and
       # the offline page where MainActivity and Capacitor read them from.

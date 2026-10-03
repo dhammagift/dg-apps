@@ -51,7 +51,9 @@
   var SITE_CONFIG = {
     site: 'https://dhamma.gift',   // where the page comes from: the production site (owner, 2026-09-30)
     // The page's file in the bundle is /uposatha-calendar.html; on the site it is /uposatha-calendar.
-    urlFor: function (path) { return path === '/uposatha-calendar.html' ? '/uposatha-calendar' : path; }
+    urlFor: function (path) { return path === '/uposatha-calendar.html' ? '/uposatha-calendar' : path; },
+    // The code (html, css, js) is what the build took from the repository; only the texts (json) follow the site.
+    updatable: function (path) { return /\.json$/.test(path); }
   };
   // @site-updater (inlined from src/site-updater.js by uposatha/build.js)
 

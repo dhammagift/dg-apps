@@ -34,7 +34,7 @@ function errorPageSource() {
 }
 module.exports = { bridgeSource, errorPageSource, bundleSnapshot };
 
-// The snapshot of the calendar page (tools/snapshot.js: the page and everything it loads, laid out as the
+// The snapshot of the calendar page (tools/bundle-from-repo.js: the page and everything it loads, laid out as the
 // site serves it) is what the app opens with no network at all: it becomes www/, with the page itself also
 // as www/index.html, and a manifest of what is in it (site-manifest.json: the paths and their SHA-256) that
 // the updater compares the site against.
@@ -69,7 +69,7 @@ function isCalendarPage(html) {
 
 function bundleSnapshot() {
     if (!fs.existsSync(path.join(SNAPSHOT, 'uposatha-calendar.html'))) {
-        throw new Error('uposatha/snapshot/ is missing: run  SITE=https://dhamma.gift node tools/snapshot.js  first (CI does).');
+        throw new Error('uposatha/snapshot/ is missing: run  node tools/bundle-from-repo.js <dg-node dir>  first (CI does).');
     }
     const files = [];
     copyTree(SNAPSHOT, WWW, files);

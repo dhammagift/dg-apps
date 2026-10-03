@@ -55,8 +55,8 @@ const read = (p) => fs.readFileSync(p, 'utf8');
 
 // ---- the files -----------------------------------------------------------------------------------
 
-check('the bundled page asks for the cover viewport',
-    /<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">/.test(read(path.join(WWW, 'index.html'))), true);
+check('Android: the bundled page has no viewport-fit=cover (SystemBars pads the window, the page adds nothing)',
+    /viewport-fit=cover/.test(read(path.join(WWW, 'index.html'))), false);
 // The snapshot is the site's page, copied as it is: patching it here would be patched again by the
 // site updater (it compares the snapshot tree against the site, site-manifest.json).
 check('the build refuses a snapshot that is not the calendar page (run 466 bundled another app\'s shell)',
@@ -83,8 +83,8 @@ check('... and the bundle carries no DgBars plugin at all',
     /DgBars/.test(fs.readdirSync(path.join(APP, 'java/gift/dhamma/uposatha')).join(' ')), false);
 check('only Capacitor\'s own SystemBars is configured',
     Object.keys(JSON.parse(read(path.join(ROOT, 'capacitor.config.json'))).plugins), ['SystemBars', 'LocalNotifications']);
-check('SystemBars is told the viewport will be cover (no first-paint shift)',
-    JSON.parse(read(path.join(ROOT, 'capacitor.config.json'))).plugins.SystemBars.initialViewportFitValueHint, 'cover');
+check('SystemBars is not told the viewport will be cover (it pads the window natively)',
+    'initialViewportFitValueHint' in JSON.parse(read(path.join(ROOT, 'capacitor.config.json'))).plugins.SystemBars, false);
 check('the window background is the page\'s light background, not the navy strip',
     /<color name="dg_navbar">#ffffff<\/color>/.test(read(path.join(APP, 'res/values/colors.xml'))), true);
 check('... and the dark one in night mode',
@@ -260,7 +260,7 @@ async function appReady(page) {
                 await page.evaluate(() => { const b = document.querySelector('.tbar'); return b ? getComputedStyle(b).paddingTop : 'no .tbar on this page'; }), '40px');
             const rep = await page.evaluate(() => window.__calls.report);
             check('the page reports its measurements for the proof (what the screenshot cannot tell)',
-                [rep && rep.topInset, rep && rep.viewportFit, rep && rep.barTop >= rep.topInset], [30, true, true]);
+                [rep && rep.topInset, rep && rep.barTop >= rep.topInset], [30, true]);
             check('the padding is the documented Capacitor pattern (its variable, then env(), then 0)',
                 await page.evaluate(() => /body\.app \.tbar\{padding-top:calc\(10px \+ var\(--safe-area-inset-top, env\(safe-area-inset-top, 0px\)\) \/ var\(--dg-zoom, 1\)\)\}/.test(
                     (document.getElementById('dg-safe-top') || {}).textContent || '')), true);

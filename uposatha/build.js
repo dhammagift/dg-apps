@@ -32,7 +32,7 @@ function errorPageSource() {
     return fs.readFileSync(path.join(SRC, 'index.html'), 'utf8')
         .replace('<!-- @launch-screens -->', () => '<script>\n' + launchScreens() + '</script>');
 }
-module.exports = { bridgeSource, errorPageSource, coverViewport, bundleSnapshot };
+module.exports = { bridgeSource, errorPageSource, bundleSnapshot };
 
 // The snapshot of the calendar page (tools/snapshot.js: the page and everything it loads, laid out as the
 // site serves it) is what the app opens with no network at all: it becomes www/, with the page itself also
@@ -50,19 +50,12 @@ function copyTree(from, to, list) {
     }
 }
 
-// Edge to edge (owner, dg-apps#41, after the Dhamma.Gift app in a706f50): viewport-fit=cover lets the
-// page run under the transparent status and gesture bars — Capacitor's SystemBars passes the insets
-// through (env(safe-area-inset-*)) instead of padding the WebView and showing the window background
-// there. App build only, like build-page.js of Dhamma.Gift: on the site the meta stays as it is.
-// Safe against the site updater: /index.html is not part of site-manifest.json (only the snapshot
-// tree is), so it is never compared with the site or replaced by an unpatched copy. The bridge
-// enforces the rest at runtime, on whatever page the app ends up loading (the top bar steps down by
-// the inset where the platform really pays it: uposatha-bridge.js).
-const VIEWPORT = '<meta name="viewport" content="width=device-width, initial-scale=1">';
-function coverViewport(html) {
-    if (!html.includes(VIEWPORT)) throw new Error('uposatha/build.js: viewport meta not found in the snapshot page — update VIEWPORT');
-    return html.replace(VIEWPORT, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">');
-}
+// Android (owner, dg-apps#41): the bundled page deliberately carries NO viewport-fit=cover. Without it
+// Capacitor's SystemBars pads the window below the system bars itself (the layout Google describes:
+// the insets are applied natively, to the container of the WebView) and the page adds nothing, so
+// there is one owner of the inset and no double gap at start or after a rotation. The window
+// background follows the page's theme (DgInsets.setTheme), so no strip shows above or below.
+// iOS is the other way round: DgSiteRouter adds the cover at serve time (DgApp.swift).
 
 // The snapshot has to BE the calendar page. Run 466 bundled something else — a page titled
 // "Dhamma.gift" that loads the reader's offline scripts and has no .tbar — and the app would have
@@ -87,9 +80,7 @@ function bundleSnapshot() {
         throw new Error('uposatha/build.js: the snapshot is not the calendar page (missing ' + missing.join(', ')
             + ') — the site answered with something else; title: ' + (raw.match(/<title>([^<]*)/) || [])[1]);
     }
-    const page = coverViewport(raw);
-    if (!page.includes('viewport-fit=cover')) throw new Error('uposatha/build.js: the page lost viewport-fit=cover');
-    fs.writeFileSync(path.join(WWW, 'index.html'), page);
+    fs.writeFileSync(path.join(WWW, 'index.html'), raw);
     const empty = files.filter((f) => fs.statSync(path.join(WWW, f)).size === 0);
     if (empty.length) throw new Error('the snapshot has empty files (a bundle with blank styles is worse than none): ' + empty.join(', '));
     const hashes = {};

@@ -920,7 +920,11 @@ function injectBridgeIntoPages() {
             }
             // Fragments inserted with innerHTML (reader/*-pm-fragment.html) have no </body>; a
             // script tag inside them would never execute, so skipping them loses nothing.
-            if (!html.includes('native-bridge.js') && html.includes('</body>')) {
+            // A real <script src>, not the bare file name: a comment that merely mentions
+            // native-bridge.js (dg-node aa537fa, login/index.html) made this skip the sign-in page,
+            // so on iOS "Sign in with Apple/Google" ran the site's popup flow inside the WebView and
+            // silently did nothing (dg-apps#43, build 442).
+            if (!/<script[^>]*src="\/native-bridge\.js"/.test(html) && html.includes('</body>')) {
                 html = html.replace('</body>', tag + '\n</body>');
             }
             if (html === before) continue;

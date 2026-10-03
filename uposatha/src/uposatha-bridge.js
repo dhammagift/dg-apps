@@ -614,13 +614,14 @@
     // applyUiScale sets zoom and --dg-zoom), so a CSS px there is the zoomed one while the inset is
     // a viewport measurement. The site divides its own --dg-sat/--dg-sab exactly so (home.css);
     // without it the padding would grow with the font size and the bar would sit lower each step.
+    var TOP_PAD = 4;   // px above the bar's content row; the site's own 10px made the app bar sit lower than WhatsApp/Notion
     var SAT = 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) / var(--dg-zoom, 1)';
     var SAL = 'var(--safe-area-inset-left, env(safe-area-inset-left, 0px)) / var(--dg-zoom, 1)';
     var SAR = 'var(--safe-area-inset-right, env(safe-area-inset-right, 0px)) / var(--dg-zoom, 1)';
     // The top bar, and the burger menu's drawer (the reader pads its own drawer the same way:
     // dg-node home.css, html.dg-app #dg-drawer{padding-top: var(--dg-sat)}). Without it the drawer
     // opens under the clock on Android — the main screen looked right while the menu did not.
-    css.textContent = 'body.app .tbar{padding-top:calc(10px + ' + SAT + ')}'
+    css.textContent = 'body.app .tbar{padding-top:calc(' + TOP_PAD + 'px + ' + SAT + ')}'
       + 'body.app #dg-drawer{padding-top:calc(' + SAT + ')}'
       // Owner: the chosen half of a segmented control (language, theme, week start) is grey
       // (--dg-surface-active) while a switched-on toggle is the accent green (--dg-toggle-row
@@ -675,7 +676,7 @@
   function effectiveInset() {
     var bar = document.querySelector('.tbar');
     if (!bar) return 0;
-    return Math.max(0, Math.round((parseFloat(getComputedStyle(bar).paddingTop) || 0) - 10));
+    return Math.max(0, Math.round((parseFloat(getComputedStyle(bar).paddingTop) || 0) - 4));
   }
 
   // Where a proof reads the page's own measurements from: the iOS DEBUG plugin writes a file in the

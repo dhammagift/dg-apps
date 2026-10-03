@@ -219,7 +219,7 @@ async function appReady(page) {
             if (!app1.hasBar) console.log('       page is not the app layer:', JSON.stringify(app1));
             await page.waitForTimeout(2500);
             check('no insets: the top bar keeps its own padding',
-                await page.evaluate(() => { const b = document.querySelector('.tbar'); return b ? getComputedStyle(b).paddingTop : 'no .tbar on this page'; }), '10px');
+                await page.evaluate(() => { const b = document.querySelector('.tbar'); return b ? getComputedStyle(b).paddingTop : 'no .tbar on this page'; }), '4px');
             // The drawer exists on the calendar page; if a build's page does not have it, say so
             // rather than throwing inside getComputedStyle (that is how run 464 failed: a null
             // element, not a wrong value).
@@ -257,12 +257,12 @@ async function appReady(page) {
             await page.evaluate(fakeInsets, 30);
             await page.waitForTimeout(200);
             check('a 30px inset: the top bar steps down by it',
-                await page.evaluate(() => { const b = document.querySelector('.tbar'); return b ? getComputedStyle(b).paddingTop : 'no .tbar on this page'; }), '40px');
+                await page.evaluate(() => { const b = document.querySelector('.tbar'); return b ? getComputedStyle(b).paddingTop : 'no .tbar on this page'; }), '34px');
             const rep = await page.evaluate(() => window.__calls.report);
             check('the page reports its measurements for the proof (what the screenshot cannot tell)',
                 [rep && rep.topInset, rep && rep.barTop >= rep.topInset], [30, true]);
             check('the padding is the documented Capacitor pattern (its variable, then env(), then 0)',
-                await page.evaluate(() => /body\.app \.tbar\{padding-top:calc\(10px \+ var\(--safe-area-inset-top, env\(safe-area-inset-top, 0px\)\) \/ var\(--dg-zoom, 1\)\)\}/.test(
+                await page.evaluate(() => /body\.app \.tbar\{padding-top:calc\(4px \+ var\(--safe-area-inset-top, env\(safe-area-inset-top, 0px\)\) \/ var\(--dg-zoom, 1\)\)\}/.test(
                     (document.getElementById('dg-safe-top') || {}).textContent || '')), true);
             check('the chosen half of a segmented control is the accent green, like a switched-on toggle',
                 await page.evaluate(() => {
@@ -310,7 +310,7 @@ async function appReady(page) {
             // real 30px inset plus the bar's own 15. Without the division it would be 40 and grow
             // with every step of the font-size setting.
             check('at 150% interface zoom the inset is divided by it (the bar does not drift down)',
-                zoomPad, '30px');
+                zoomPad, '24px');
 
             check('switching to the page\'s dark theme flips both bars',
                 await page.evaluate(() => window.__calls.styles.slice(-2)), ['DARK/StatusBar', 'DARK/NavigationBar']);

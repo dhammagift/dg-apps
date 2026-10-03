@@ -69,6 +69,16 @@ public class DgInsetsPlugin extends Plugin {
                     cutR = cut.right;
                     left = Math.max(status.left, cutL);
                     right = Math.max(status.right, cutR);
+                    // Capacitor's SystemBars pads the decor view itself whenever it does not pass
+                    // the insets through (a WebView older than 140, or before it has seen
+                    // viewport-fit=cover). The WebView then already sits below the status bar, and
+                    // the page padding it by the same amount again was the huge gap above the header
+                    // at start (owner, 2026-10-03: right only after a theme switch).
+                    android.view.View decor = getActivity().getWindow().getDecorView();
+                    top = Math.max(0, top - decor.getPaddingTop());
+                    bottom = Math.max(0, bottom - decor.getPaddingBottom());
+                    left = Math.max(0, left - decor.getPaddingLeft());
+                    right = Math.max(0, right - decor.getPaddingRight());
                 }
             } catch (Exception e) {
                 // No insets to report is not worth failing the page's layout over: it falls back to

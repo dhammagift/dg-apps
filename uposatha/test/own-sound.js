@@ -33,7 +33,7 @@ function capacitorStub() {
             DgSound: { pick: () => { window.__picks++; return Promise.resolve({ channelId: 'uposatha-own-' + window.__picks, name: 'Bell ' + window.__picks }); }, channel: () => Promise.resolve(), dndAccess: () => Promise.resolve({ granted: false }) },
             DgSite: { put: () => Promise.resolve(), list: () => Promise.resolve({ files: [] }), clear: () => Promise.resolve() },
             SystemBars: { setStyle: () => Promise.resolve() },
-            LocalNotifications: { addListener: () => ({ remove() {} }), requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: (o) => { window.__sched.push(o.notifications.map((n) => n.channelId)); (window.__sched2 = window.__sched2 || []).push(...o.notifications.map((n) => ({ title: n.title, channelId: n.channelId, at: +new Date(n.schedule.at) }))); return Promise.resolve({ notifications: [] }); } },
+            LocalNotifications: { addListener: () => ({ remove() {} }), requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: (o) => { window.__sched.push(o.notifications.map((n) => n.channelId)); (window.__sched2 = window.__sched2 || []).push(...o.notifications.map((n) => ({ title: n.title, body: n.body, channelId: n.channelId, at: +new Date(n.schedule.at) }))); return Promise.resolve({ notifications: [] }); } },
         },
     };
 }
@@ -91,9 +91,10 @@ const ls = (page, k) => page.evaluate((key) => JSON.parse(localStorage.getItem(k
         await page2.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
         await page2.waitForTimeout(3500);
         const sched = await page2.evaluate(() => window.__sched2 || []);
-        const late = sched.filter((n) => /^Missed: /.test(n.title));
+        const late = sched.filter((n) => n.title === 'Missed reminder');
         check('a missed reminder is announced as missed, on the silent channel', [late.length > 0, late.every((n) => n.channelId === 'uposatha-none-v1')], [true, true]);
-        check('a reminder still ahead keeps its own title and sound', sched.filter((n) => !/^Missed: /.test(n.title)).every((n) => n.channelId !== 'uposatha-none-v1'), true);
+        console.log('       e.g.', JSON.stringify(late.slice(0, 1).map((n) => [n.title, n.body])));
+        check('a reminder still ahead keeps its own title and sound', sched.filter((n) => n.title !== 'Missed reminder').every((n) => n.channelId !== 'uposatha-none-v1'), true);
         await ctx2.close();
     } finally {
         await browser.close();

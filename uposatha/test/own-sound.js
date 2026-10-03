@@ -33,7 +33,7 @@ function capacitorStub() {
             DgSound: { pick: () => { window.__picks++; return Promise.resolve({ channelId: 'uposatha-own-' + window.__picks, name: 'Bell ' + window.__picks }); }, channel: () => Promise.resolve(), dndAccess: () => Promise.resolve({ granted: false }) },
             DgSite: { put: () => Promise.resolve(), list: () => Promise.resolve({ files: [] }), clear: () => Promise.resolve() },
             SystemBars: { setStyle: () => Promise.resolve() },
-            LocalNotifications: { addListener: () => ({ remove() {} }), requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: (o) => { window.__sched.push(o.notifications.map((n) => n.channelId)); return Promise.resolve({ notifications: [] }); } },
+            LocalNotifications: { addListener: () => ({ remove() {} }), requestPermissions: () => Promise.resolve({ display: 'granted' }), createChannel: () => Promise.resolve(), getPending: () => Promise.resolve({ notifications: [] }), cancel: () => Promise.resolve(), schedule: (o) => { window.__sched.push(o.notifications.map((n) => n.channelId)); (window.__sched2 = window.__sched2 || []).push(...o.notifications.map((n) => ({ title: n.title, channelId: n.channelId, at: +new Date(n.schedule.at) }))); return Promise.resolve({ notifications: [] }); } },
         },
     };
 }
@@ -79,6 +79,22 @@ const ls = (page, k) => page.evaluate((key) => JSON.parse(localStorage.getItem(k
         check('scheduled reminders use the shared own channel', await page.evaluate(() => window.__sched.flat().filter((c) => /uposatha-own/.test(c)).every((c) => c === 'uposatha-own-2') && window.__sched.flat().some((c) => c === 'uposatha-own-2')), true);
         check('no script errors', errors, []);
         await ctx.close();
+
+        // The catch-up: a reminder whose time has passed is shown at once, quietly, and says it was missed. The clock is fixed one
+        // day after the 8th-day reminder was due ("1 day ahead" of an Uposatha that begins on the evening of 3 Oct 2026).
+        const ctx2 = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, locale: 'en-US', timezoneId: 'Asia/Almaty' });
+        await ctx2.addInitScript(capacitorStub);
+        await ctx2.addInitScript(bridgeSource());
+        await ctx2.addInitScript(() => { try { localStorage.setItem('dgUposathaRemind', JSON.stringify({ on: true, lead: 24, d8: true, d14: true, d15: false, sound: 'gong', ownChannel: '', ownName: '' })); } catch (e) { /* none */ } });
+        const page2 = await ctx2.newPage();
+        await page2.clock.setFixedTime(new Date('2026-10-03T07:00:00Z'));   // 12:00 in Almaty, before the evening it begins
+        await page2.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
+        await page2.waitForTimeout(3500);
+        const sched = await page2.evaluate(() => window.__sched2 || []);
+        const late = sched.filter((n) => /^Missed: /.test(n.title));
+        check('a missed reminder is announced as missed, on the silent channel', [late.length > 0, late.every((n) => n.channelId === 'uposatha-none-v1')], [true, true]);
+        check('a reminder still ahead keeps its own title and sound', sched.filter((n) => !/^Missed: /.test(n.title)).every((n) => n.channelId !== 'uposatha-none-v1'), true);
+        await ctx2.close();
     } finally {
         await browser.close();
         server.close();

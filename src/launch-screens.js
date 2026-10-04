@@ -91,14 +91,14 @@
     var TEXT = {
         ru: {
             none: ['Нет соединения.', 'Проверьте интернет и повторите.'],
-            down: ['Сервер не отвечает.', 'Попробуйте чуть позже — сервер сейчас недоступен.'],
+            down: ['Не удалось загрузить.', 'Проверьте интернет и попробуйте ещё раз.'],
             retry: ['Проверяем соединение…', 'Это займёт несколько секунд.'],
             btn: 'Повторить', busy: 'Проверяем…', auto: 'Повторим сами, когда сеть появится',
             upo: 'Напоминания уже стоят на телефоне и придут без сети.',
         },
         en: {
             none: ['No connection.', 'Check the internet and try again.'],
-            down: ['The server isn’t responding.', 'Try again shortly — the server is unavailable right now.'],
+            down: ['Couldn’t load.', 'Check the internet and try again.'],
             retry: ['Checking the connection…', 'This takes a few seconds.'],
             btn: 'Try again', busy: 'Checking…', auto: 'We’ll retry by ourselves once you’re online',
             upo: 'Your reminders are set on this phone and will arrive without it.',

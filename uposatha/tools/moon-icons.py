@@ -2,7 +2,10 @@
 """Draws the eight moon-phase variants of Uposatha's small icons (run from uposatha/):
 
   ic_stat_moon_0..7   the status-bar icon of a reminder: white on transparent, the unlit part of the moon a thin ring
-  shortcut_moon_0..7  the launcher-shortcut icon: the bare moon (no plate, no clouds) in grey, the unlit part faint, on an adaptive icon's 108dp canvas (the moon fills the visible two thirds; DgShortcutsPlugin hands it over as an adaptive bitmap)
+  shortcut_moon_0..7  the launcher-shortcut icon: the moon (no clouds) in the launcher icon's colours, light on its navy plate, the unlit
+                      part faint, on an adaptive icon's 108dp canvas (DgShortcutsPlugin hands it over as an adaptive bitmap). Opaque:
+                      the launcher shows a transparent canvas as a black plate, and the grey moon of before was a dark blot on the
+                      light menu (owner's screenshot) — it only looked right in the dark theme.
 
 Index 0..7 = new, waxing crescent, first quarter, waxing gibbous, full, waning gibbous, last quarter, waning crescent,
 drawn as in the Northern Hemisphere (lit side right while waxing). The bridge asks for the mirrored index in the Southern one.
@@ -77,24 +80,27 @@ def compose(i, px, kind):
         out = Image.new('RGBA', (size, size), (255, 255, 255, 0))
         out.putalpha(alpha)
     else:   # 'shortcut': the moon alone, grey
-        return moon_only(i, px)
+        return moon_only(i, px, fill=0.44, plate=PLATE, color=LIGHT, unlit=0.22)
     return out.resize((px, px), Image.LANCZOS)
 
 
-def moon_only(i, px, fill=0.66):
+def moon_only(i, px, fill=0.66, plate=None, color=None, unlit=0.28):
     size = px * SS
     scale = size * fill / (2 * R)   # the visible middle of an adaptive icon's canvas is 72 of 108 (0.667): the moon fills it (fill=0.66); iOS quick actions use 0.96
     ox, oy = size / 2 - CX * scale, size / 2 - CY * scale
     lit = lit_mask(i, size, scale, ox, oy)
     whole = disc_mask(size, scale, ox, oy, R)
-    out = Image.new('RGBA', (size, size), GREY + (0,))
-    for mask, a in ((whole, 0.28), (lit, 1)):
-        layer = Image.new('RGBA', (size, size), GREY + (0,)); layer.putalpha(mask.point(lambda v, a=a: int(v * a)))
+    color = color or GREY
+    out = Image.new('RGBA', (size, size), plate + (255,) if plate else GREY + (0,))
+    for mask, a in ((whole, unlit), (lit, 1)):
+        layer = Image.new('RGBA', (size, size), color + (0,)); layer.putalpha(mask.point(lambda v, a=a: int(v * a)))
         out = Image.alpha_composite(out, layer)
     return out.resize((px, px), Image.LANCZOS)
 
 
 GREY = (138, 144, 153)
+PLATE = (0x24, 0x34, 0x48)   # @color/ic_launcher_background
+LIGHT = (223, 232, 240)      # the moon of the launcher icon
 DENS = {'mdpi': 1, 'hdpi': 1.5, 'xhdpi': 2, 'xxhdpi': 3, 'xxxhdpi': 4}
 if __name__ == '__main__':
     for d, k in DENS.items():

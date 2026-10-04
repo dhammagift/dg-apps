@@ -12,6 +12,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 
+import androidx.browser.customtabs.CustomTabsClient;
 import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.core.splashscreen.SplashScreen;
 
@@ -236,12 +237,25 @@ public class MainActivity extends BridgeActivity {
             // fixed extra.
             Uri data = intent.getData();
             String path = data.getPath();
-            if (path != null && SITE_ONLY.matcher(path).find()) {
+            // The tab must be pinned to a browser: dhamma.gift is this app's own verified App Link, so a
+            // Custom Tab intent with no package resolves back to MainActivity, which opens the tab again
+            // — a loop that relaunched the app over and over, and it could not even be put away (owner,
+            // build 507, Help). @capacitor/browser never looped because it opens through a bound session,
+            // which carries the browser's package.
+            // And never on a link this app itself sent (its own tab handing the URL back): that is the
+            // loop's first step, whatever the browser does.
+            Uri referrer = getReferrer();
+            boolean fromSelf = referrer != null && getPackageName().equals(referrer.getHost());
+            String browser = !fromSelf && path != null && SITE_ONLY.matcher(path).find()
+                ? CustomTabsClient.getPackageName(this, null) : null;
+            if (browser != null) {
                 try {
-                    new CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(this, data);
+                    CustomTabsIntent tab = new CustomTabsIntent.Builder().setShowTitle(true).build();
+                    tab.intent.setPackage(browser);
+                    tab.launchUrl(this, data);
                     return;
                 } catch (Exception e) {
-                    // No browser for a Custom Tab: the page's own route below still sends it out.
+                    // The browser refused: the page's own route below still sends it out.
                 }
             }
             String route = (path == null || path.isEmpty() ? "/" : path)

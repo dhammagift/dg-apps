@@ -23,12 +23,12 @@ public class MainActivity extends BridgeActivity {
     // first had already begun, racing the bridge's own initial load of the start page.
     private Intent handledIntent;
 
-    // The launch splash (res/drawable/dg_splash_icon.xml, 800 ms) stays until the page has drawn its first
+    // The launch splash (res/drawable/dg_splash_icon.xml, 890 ms: 250 ms still, 640 ms reveal) stays until the page has drawn its first
     // frame, so it hands over to the page and not to an empty WebView: this page is far heavier than the
     // dictionary's, and a splash released on a fixed timer showed a blank screen after it (2026-09-26).
-    // At least SPLASH_MIN_MS, so a warm start still lets the mark play; at most SPLASH_MAX_MS, so a page
+    // At least SPLASH_MIN_MS, the whole pass, so a warm start still lets the mark play to the end; at most SPLASH_MAX_MS, so a page
     // that never reports cannot keep the app behind the splash.
-    private static final long SPLASH_MIN_MS = 750;
+    private static final long SPLASH_MIN_MS = 890;
     private static final long SPLASH_MAX_MS = 3000;
     private volatile boolean pageVisible;
 

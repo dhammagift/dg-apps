@@ -428,6 +428,9 @@ async function appReady(page) {
             check('iOS: both bars get dark icons on the light page, through SystemBars',
                 await page.evaluate(() => [window.__calls.styles, window.__calls.themes]), [['LIGHT/StatusBar', 'LIGHT/NavigationBar'], []]);
             check('iOS: the inset is asked for natively', await page.evaluate(() => window.__calls.insetsAsked > 0), true);
+            check('iOS: Share opens the app\'s own sheet (DgShare) with the docs page',
+                await page.evaluate(async () => { document.getElementById('b-share').click(); await new Promise((r) => setTimeout(r, 50)); return window.__calls.shared.slice(-1)[0]; }),
+                { title: 'Uposatha', url: 'https://dhamma.gift/docs/uposatha' });
             check('iOS: the bridge does not patch the viewport (DgSiteRouter does at serve time)',
                 await page.evaluate(() => /viewport-fit=cover/.test(document.querySelector('meta[name=viewport]').content)), false);
             check('no script errors', errors, []);

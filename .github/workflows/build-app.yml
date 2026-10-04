@@ -92,7 +92,7 @@ on:
         type: boolean
         default: false
       uposatha:
-        description: 'Build the Uposatha APK (debug and release, uploaded nowhere) without the iOS checks: a manual run for a test APK. release=uposatha / ios_checks build it too.'
+        description: 'Build the Uposatha APK (debug and release, uploaded nowhere) and run its iOS simulator check, without Dhamma.Gift''s iOS checks: a manual run for a test build. release=uposatha / ios_checks build it too.'
         required: false
         type: boolean
         default: false
@@ -1274,7 +1274,7 @@ jobs:
   uposatha-ios:
     name: Uposatha app (iOS simulator)
     needs: uposatha-build
-    if: inputs.ios_checks
+    if: inputs.ios_checks || inputs.uposatha   # `uposatha` alone: the Uposatha APK and this simulator check, without Dhamma.Gift's iOS checks
     runs-on: macos-26
     timeout-minutes: 60
     steps:

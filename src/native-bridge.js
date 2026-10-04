@@ -14,6 +14,22 @@
 // of this kind) — NOT part of app.js, which is the data-shim only (see its own header comment)
 // and isn't loaded on the settings page at all.
 (function () {
+    // iOS zooms the page in when a field with text under 16px gets focus, and leaves it zoomed: the
+    // Settings page (15px selects and inputs) then sat wider than the phone and slid sideways (owner,
+    // 2026-10-04). maximum-scale=1 stops that automatic zoom; iOS still lets the reader pinch-zoom.
+    // iOS only: Android honours maximum-scale as "no pinch zoom", and has no focus zoom to stop.
+    (function noFocusZoomOnIos() {
+        var C = window.Capacitor;
+        if (!(C && C.getPlatform && C.getPlatform() === 'ios')) return;
+        function apply() {
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (meta && !/maximum-scale/.test(meta.content)) meta.content += ', maximum-scale=1';
+            return !!meta;
+        }
+        // On Settings this file is the first thing in <head>, before the viewport tag exists.
+        if (!apply()) document.addEventListener('DOMContentLoaded', apply);
+    })();
+
     // ---------------------------------------------------------------------------------------
     // Error reports to the site (dg-node POST /api/app-log)
     // ---------------------------------------------------------------------------------------

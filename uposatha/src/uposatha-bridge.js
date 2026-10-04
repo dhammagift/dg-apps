@@ -713,7 +713,7 @@
       vt.ready.then(function () {
         document.documentElement.animate(
           { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'] },
-          { duration: 1000, easing: 'cubic-bezier(.2, 0, 0, 1)', fill: 'both', pseudoElement: '::view-transition-new(root)' });   // tuned with the owner on a demo page
+          { duration: 450, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'both', pseudoElement: '::view-transition-new(root)' });   // the timing of build 491, which the owner found smooth on a phone (1000 and 1500 ms stuttered)
       }).catch(function () {});
       function done() { running = false; document.documentElement.classList.remove('dg-theme-vt'); }
       vt.finished.then(done, done);

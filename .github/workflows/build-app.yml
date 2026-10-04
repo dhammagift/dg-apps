@@ -61,7 +61,7 @@ on:
         required: false
         type: string
       release:
-        description: 'Which store gets this build, one app at a time (owner, 2026-09-29: the same shape for all three apps, and never ship an app nobody asked for). dg = Dhamma.Gift to Play (INTERNAL track: testers only, production still needs a promote in the console); dg-ios = Dhamma.Gift to TestFlight; dg-both = Dhamma.Gift to both, in one run; dict / dict-ios = the dictionary to Play / TestFlight; uposatha / uposatha-ios = Uposatha to Play / TestFlight. none (default) = build only, nothing uploaded. A dict/uposatha choice skips the Dhamma.Gift build (and its database) entirely. A tag always releases everything.'
+        description: 'Which store gets this build, one app at a time (owner, 2026-09-29: the same shape for all three apps, and never ship an app nobody asked for). dg = Dhamma.Gift to Play (open testing, beta; production still needs a promote in the console); dg-ios = Dhamma.Gift to TestFlight; dg-both = Dhamma.Gift to both, in one run; dict / dict-ios = the dictionary to Play (closed testing, alpha) / TestFlight; uposatha / uposatha-ios = Uposatha to Play (closed testing, alpha) / TestFlight. none (default) = build only, nothing uploaded. A dict/uposatha choice skips the Dhamma.Gift build (and its database) entirely. A tag always releases everything.'
         required: false
         type: choice
         default: none
@@ -787,11 +787,10 @@ jobs:
   # Same shape as ios-release below, and dormant for the same reason: no secret, no upload, and a
   # job summary that says so, instead of a green tick that reads like a release happened.
   #
-  # The INTERNAL track on purpose. It is the only track that reaches a device in minutes with no
-  # review, it is limited to the testers listed in the console, and production still costs a
-  # deliberate promote there — so an automated upload can never be the thing that ships to readers
-  # by accident. Promoting internal -> production stays a human decision, which is the one part of
-  # this nobody asked to automate.
+  # A testing track, never production: Dhamma.Gift goes to open testing (beta), the dictionary and
+  # Uposatha to closed testing (alpha) — the owner moved them up from internal (2026-10-04). Production
+  # still costs a deliberate promote in the console, so an automated upload can never be the thing that
+  # ships to readers by accident; that promote stays a human decision.
   #
   # What this needs once, in the Play Console (docs/ANDROID_RELEASE.md):
   #   Setup -> API access -> link a Google Cloud project -> create a service account -> JSON key;
@@ -849,7 +848,7 @@ jobs:
           retention-days: 14
 
   android-release:
-    name: Android release (Play internal track)
+    name: Android release (Play open testing, beta)
     needs: [build, android-tests]
     if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'dg' || inputs.release == 'dg-both')) || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -900,7 +899,7 @@ jobs:
           {
             echo "### Android release: uploaded"
             echo ""
-            echo "versionCode ${{ github.run_number }} is on the **internal** track of \`gift.dhamma.twa\`."
+            echo "versionCode ${{ github.run_number }} is on the **open testing (beta)** track of \`gift.dhamma.twa\`."
             echo "Testers get it within minutes. Production needs a promote in the Play Console."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -1215,11 +1214,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # The Uposatha app's Play release: the signed AAB uposatha-build made, uploaded to the INTERNAL track of gift.dhamma.uposatha.
+  # The Uposatha app's Play release: the signed AAB uposatha-build made, uploaded to the closed testing (alpha) track of gift.dhamma.uposatha.
   # Only on a hand-started run with release = uposatha: it is a separate app with its own listing, so it does not ride along
   # with `play`, `both` or a tag (those keep shipping the reader and the dictionary only).
   uposatha-release:
-    name: Uposatha app release (Play internal track)
+    name: Uposatha app release (Play closed testing, alpha)
     needs: uposatha-build
     if: (github.event_name == 'workflow_dispatch' && inputs.release == 'uposatha') || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -1267,7 +1266,7 @@ jobs:
           {
             echo "### Uposatha app uploaded"
             echo ""
-            echo "versionCode ${{ github.run_number }} is on the **internal** track of \`gift.dhamma.uposatha\`."
+            echo "versionCode ${{ github.run_number }} is on the **closed testing (alpha)** track of \`gift.dhamma.uposatha\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Uposatha on iOS (uposatha/ios): builds the app for the simulator from the same web bundle as the APK, launches it and
@@ -1982,18 +1981,17 @@ jobs:
   # ---------------------------------------------------------------------------------------------
   # The dictionary half of the Play release path, the same shape as android-release above and
   # gated by the same choice: `release: play` (or `both`, or any tag) uploads BOTH Android apps,
-  # each to its own package on the INTERNAL track. `release: none` — the default — uploads neither.
+  # each to its own package on a testing track. `release: none` — the default — uploads neither.
   #
-  # Internal on purpose, for the same reason as Dhamma.Gift: it is the only track that reaches a
-  # device in minutes with no review, it is limited to the testers listed in the console, and
-  # promoting it to production stays a human decision in the Play Console.
+  # Closed testing (alpha), for the same reason as Dhamma.Gift's testing track: promoting it to
+  # production stays a human decision in the Play Console.
   #
   # The same PLAY_SERVICE_ACCOUNT_JSON as Dhamma.Gift, and the same service account: it already
   # holds "Release apps to testing tracks" on gift.dhamma.pali (dg-twa's workflow uploaded this
   # package with it). If that permission is ever revoked, the upload fails here with a 401/403 —
   # which is the point of asking Play rather than assuming.
   dict-release:
-    name: Dictionary app release (Play internal track)
+    name: Dictionary app release (Play closed testing, alpha)
     needs: dict-build
     if: (github.event_name == 'workflow_dispatch' && inputs.release == 'dict') || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -2044,7 +2042,7 @@ jobs:
           {
             echo "### Dictionary app uploaded"
             echo ""
-            echo "versionCode ${{ github.run_number }} is on the **internal** track of \`gift.dhamma.pali\`."
+            echo "versionCode ${{ github.run_number }} is on the **closed testing (alpha)** track of \`gift.dhamma.pali\`."
             echo "Testers get it within minutes. Production needs a promote in the Play Console."
           } >> "$GITHUB_STEP_SUMMARY"
 

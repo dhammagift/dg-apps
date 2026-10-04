@@ -792,13 +792,6 @@
       // The two "time for food" reminders: the list of leads sat flush against the switch above it (owner's screenshot).
       + 'body.app #mbeg-lead,body.app #mrem-lead{margin-top:14px}'
       + 'body.app.dg-drawer-open .appnav{display:none}'
-      // The top bar is a floating pill like the tab bar below (dg-apps#54, owner: "as in Telegram, the text should be seen
-      // where the beard was"): no solid band under the clock, the page shows through above and around the pill.
-      + 'body.app .tbar,body.app.scrolled .tbar{background:transparent;box-shadow:none}'
-      + 'body.app .tbar>*{position:relative}'
-      + 'body.app .tbar::before{content:"";position:absolute;left:10px;right:10px;top:calc(' + SAT + ' + 2px);bottom:2px;border-radius:30px;'
-      + 'background:color-mix(in srgb,var(--dg-surface) 80%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);'
-      + 'border:1px solid var(--dg-border);box-shadow:0 8px 24px rgba(0,0,0,.12)}'
       // "Link copied" from the menu's share (settings.js showBubbleNotification): its styles are
       // the site's (extrastyles.css), which this page does not load, so it was a bare full-width bar.
       // It and the page's own toast sit above the tab bar, not under it.

@@ -50,12 +50,10 @@ function copyTree(from, to, list) {
     }
 }
 
-// Android (owner, dg-apps#41): the bundled page deliberately carries NO viewport-fit=cover. Without it
-// Capacitor's SystemBars pads the window below the system bars itself (the layout Google describes:
-// the insets are applied natively, to the container of the WebView) and the page adds nothing, so
-// there is one owner of the inset and no double gap at start or after a rotation. The window
-// background follows the page's theme (DgInsets.setTheme), so no strip shows above or below.
-// iOS is the other way round: DgSiteRouter adds the cover at serve time (DgApp.swift).
+// viewport-fit=cover is not written into the bundled files: the snapshot stays the site's page (the
+// updater compares it against the site). Android gets it from uposatha-bridge.js as the page is
+// parsed (dg-apps#54: the page draws under the bars, SystemBars passes the insets through), iOS
+// from DgSiteRouter at serve time (DgApp.swift).
 
 // The snapshot has to BE the calendar page. Run 466 bundled something else — a page titled
 // "Dhamma.gift" that loads the reader's offline scripts and has no .tbar — and the app would have

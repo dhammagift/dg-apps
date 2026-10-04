@@ -11,7 +11,9 @@
   },
   "plugins": {
     "SystemBars": {
-      "style": "DEFAULT"
+      "style": "DEFAULT",
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
     },
     "LocalNotifications": {
       "smallIcon": "ic_stat_uposatha",

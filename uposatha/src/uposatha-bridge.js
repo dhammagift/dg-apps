@@ -34,6 +34,25 @@
   var CALENDAR_PATH = /^\/(uposatha-calendar(\.html)?\/?|index\.html)?$/;
   var onCalendar = CALENDAR_PATH.test(location.pathname);
 
+  // Android (dg-apps#54): the page draws under the system bars, as on iOS (DgSiteRouter adds the
+  // same at serve time). With viewport-fit=cover Capacitor's SystemBars passes the insets through
+  // to the page (WebView 140+) instead of padding the window, so the strips under the clock and the
+  // navigation bar are the page's own paint, and a theme switch repaints them in the same frame.
+  // Patched here, as the parser inserts the tag, so the bundled copy and a downloaded one are alike.
+  if (!IOS && onCalendar) coverViewport();
+  function coverViewport() {
+    function patch() {
+      var m = document.querySelector('meta[name=viewport]');
+      if (!m) return false;
+      var c = m.getAttribute('content') || '';
+      if (!/viewport-fit\s*=\s*cover/.test(c)) m.setAttribute('content', c + ', viewport-fit=cover');
+      return true;
+    }
+    if (patch()) return;
+    var mo = new MutationObserver(function () { if (patch()) mo.disconnect(); });
+    mo.observe(document, { childList: true, subtree: true });
+  }
+
   // The page's own rule (uposatha-calendar.js: ?lang=, then the stored dhammaLanguage, then the phone's
   // language) — not <html lang>, which the page sets late.
   function isRu() {
@@ -543,51 +562,130 @@
 
   // @rate-prompt (inlined from src/native-bridge.js by uposatha/build.js)
 
-  // The OS status/navigation bar ICON STYLE. Edge to edge (dg-apps#41): the page now runs under the
-  // transparent bars itself, so there is no strip to paint (the DgBars plugin is gone) — only the
-  // icons have to stay readable on what the page shows there. The page's own theme decides it:
-  // data-theme on <html> (uposatha-calendar.js setTheme) with data-bs-theme as the fallback the
-  // shared scripts write. Both bars in one go: the bottom one sits over the page background too
-  // (app-refresh.css pads the tab bar with env(safe-area-inset-bottom)). On iOS the two calls set
-  // the same single status bar twice — the bar names are an Android concept the plugin ignores
-  // there. Sent only when it changes,
-  // and again when the app comes back to the front (a system dialog may have reset it).
-  // The old code read data-bs-theme only: the page never set it itself, so the icons stayed light
-  // (near-invisible) on the light theme — one of the reasons the plugin painted strips instead.
+  // The OS status/navigation bars (dg-apps#54). One owner per platform:
+  //   * Android: DgInsets.setTheme sets the icons AND the window colour in one native call. Not
+  //     Capacitor's SystemBars.setStyle: that one ends by repainting the window in the SYSTEM's
+  //     background (SystemBars.java, setStyle -> decorView.setBackgroundColor(windowBackground)),
+  //     so on a light phone a dark page got white strips above and below it, and on a dark phone a
+  //     light page got black ones (owner's screenshots) — whichever call landed last won.
+  //   * iOS: SystemBars.setStyle (one status bar; the bar names are ignored there).
+  // The colour is the page's own background (--dg-page, also the navy "lunar" look), read from the
+  // layout, so the window under the bars is never a different shade from the page.
+  // Sent only when it changes, and again when the app comes back to the front.
+  function pageColor() {
+    var c = getComputedStyle(document.body).backgroundColor || '';
+    var m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c);
+    var rgb = m ? [+m[1], +m[2], +m[3]] : null;
+    if (!rgb) {
+      // color-mix() comes back as color(srgb r g b) with 0..1 channels
+      m = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(c);
+      if (m) rgb = [m[1], m[2], m[3]].map(function (v) { return Math.round(Math.min(1, +v) * 255); });
+    }
+    if (!rgb) return '';
+    return '#' + rgb.map(function (v) { return ('0' + v.toString(16)).slice(-2); }).join('');
+  }
   function syncSystemBars(force) {
-    var SystemBars = Cap.Plugins && Cap.Plugins.SystemBars;
-    if (!SystemBars || typeof SystemBars.setStyle !== 'function') return;
+    if (!document.body) return;
     var root = document.documentElement;
     var theme = root.getAttribute('data-theme') || root.getAttribute('data-bs-theme');
-    var style = (theme || document.body.classList.contains('dark')) === 'dark' ? 'DARK' : 'LIGHT';
-    if (!force && style === lastBarStyle) return;
-    lastBarStyle = style;
+    var dark = (theme || (document.body.classList.contains('dark') ? 'dark' : '')) === 'dark';
+    var color = pageColor() || (dark ? '#111111' : '#ffffff');
+    var key = dark + color;
+    if (!force && key === lastBarStyle) return;
+    lastBarStyle = key;
+    var Insets = Cap.Plugins && Cap.Plugins.DgInsets;
+    if (!IOS && Insets && typeof Insets.setTheme === 'function') {
+      Insets.setTheme({ dark: dark, color: color }).catch(function () { lastBarStyle = ''; });
+      return;
+    }
+    var SystemBars = Cap.Plugins && Cap.Plugins.SystemBars;
+    if (!SystemBars || typeof SystemBars.setStyle !== 'function') return;
+    var style = dark ? 'DARK' : 'LIGHT';
     SystemBars.setStyle({ style: style, bar: 'StatusBar' }).catch(function () { lastBarStyle = ''; });
     SystemBars.setStyle({ style: style, bar: 'NavigationBar' }).catch(function () { lastBarStyle = ''; });
-    // The window and the WebView BEHIND the page follow the page's theme too: where the platform
-    // pads the WebView instead of passing the insets through, that background is what shows in the
-    // status-bar strip — a white strip over a dark page when the device was in light mode (owner's
-    // screenshots). Android answers through DgInsets.setTheme; on iOS the root view already uses a
-    // dynamic page colour.
-    var Insets = Cap.Plugins && Cap.Plugins.DgInsets;
-    if (Insets && typeof Insets.setTheme === 'function') {
-      Insets.setTheme({ dark: style === 'DARK' }).catch(function () { /* no such method: fine */ });
-    }
   }
   var lastBarStyle = '';
+
+  // ---- links and sharing (dg-apps#56) -------------------------------------------------------------
+  // The page lives at the app's own origin (https://uposatha.dhamma.gift), which is not a site: a
+  // path of the site opened here (the menu's Help, window.open('/docs/uposatha/')) fell back to the
+  // calendar itself, and Share then handed out that address. Every such path goes to dhamma.gift.
+  function pageRu() { return /^ru/i.test(document.documentElement.lang || '') || (!document.documentElement.lang && isRu()); }
+  function siteUrl(url) {
+    var u;
+    try { u = new URL(url, location.href); } catch (e) { return url; }
+    if (u.origin !== location.origin || CALENDAR_PATH.test(u.pathname)) return url;
+    return SITE_CONFIG.site + u.pathname + u.search + u.hash;
+  }
+  // What Share hands out (owner): the app's page in the docs, which leads to both stores and opens
+  // in a browser or in Dhamma.Gift alike.
+  function shareUrl() { return SITE_CONFIG.site + (pageRu() ? '/ru' : '') + '/docs/uposatha'; }
+
+  function wireLinksAndShare() {
+    var open = window.open;
+    window.open = function (url) {
+      var args = Array.prototype.slice.call(arguments);
+      if (typeof url === 'string' && url) args[0] = siteUrl(url);
+      return open.apply(window, args);
+    };
+    // The system share sheet. iOS has navigator.share; Android's WebView does not, so both share
+    // buttons (the page's and the menu's) fell back to "Link copied". DgShare is the native sheet.
+    var send = typeof navigator.share === 'function' ? navigator.share.bind(navigator) : null;
+    var Share = Cap.Plugins && Cap.Plugins.DgShare;
+    if (!send && Share && typeof Share.share === 'function') send = function (d) { return Share.share(d); };
+    if (!send) return;
+    navigator.share = function (data) {
+      return send({ title: (data && data.title) || 'Uposatha', url: shareUrl() });
+    };
+  }
+
+  // ---- the theme switch: a circle from the tap (dg-apps#55, as in Telegram) ---------------------
+  // The page switches the theme synchronously (setTheme / themeswitch.js), so the same click is
+  // replayed inside a View Transition and the new theme is revealed through a growing circle. The
+  // system bars follow in the same frame (syncSystemBars, from the observer). No View Transitions
+  // (WebView < 111, iOS < 18) or reduced motion: the plain instant switch, as before.
+  function animateThemeSwitch() {
+    if (typeof document.startViewTransition !== 'function') return;
+    var replaying = false, running = false;
+    document.addEventListener('click', function (e) {
+      if (replaying || running) return;
+      var btn = e.target && e.target.closest && e.target.closest('#app-theme, #dg-theme-seg button');
+      if (!btn) return;
+      if (btn.id === 'app-theme' && document.body.classList.contains('dg-drawer-open')) return;   // the share button there
+      if (btn.getAttribute('aria-pressed') === 'true') return;
+      if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      var r = btn.getBoundingClientRect();
+      var x = e.clientX || r.left + r.width / 2, y = e.clientY || r.top + r.height / 2;
+      var radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+      running = true;
+      // the page's own colour transitions (the top bar fades its background) would show mid-way in the circle
+      document.documentElement.classList.add('dg-theme-vt');
+      var vt = document.startViewTransition(function () {
+        replaying = true;
+        try { btn.click(); } finally { replaying = false; }
+      });
+      vt.ready.then(function () {
+        document.documentElement.animate(
+          { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'] },
+          { duration: 450, easing: 'cubic-bezier(.4, 0, .2, 1)', pseudoElement: '::view-transition-new(root)' });
+      }).catch(function () {});
+      function done() { running = false; document.documentElement.classList.remove('dg-theme-vt'); }
+      vt.finished.then(done, done);
+    }, true);
+  }
   function watchSystemBars() {
     syncSystemBars(true);
-    var mo = new MutationObserver(function (muts) {
-      for (var i = 0; i < muts.length; i++) {
-        if (muts[i].attributeName === 'data-theme' || muts[i].attributeName === 'data-bs-theme') { syncSystemBars(false); return; }
-      }
-    });
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-bs-theme', 'class'] });
+    var mo = new MutationObserver(function () { syncSystemBars(false); });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-bs-theme'] });
+    // body.dark and the navy look (body[data-look]) change the page colour too
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-look', 'data-theme'] });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') syncSystemBars(true); });
     window.addEventListener('focus', function () { syncSystemBars(true); });
     // The inset is re-read when the view changes (rotation, a cutout moving to the side): the bar
     // padding lives in a style tag of its own, so a stale value would stay for the whole session.
-    window.addEventListener('resize', function () { applyTopInset(); });
+    window.addEventListener('resize', function () { applyTopInset(); syncSystemBars(false); });
   }
 
   // The page's own top bar (.tbar, sticky at top: 0) has no top inset: the site never needed one
@@ -649,11 +747,24 @@
       // body.dg-drawer-open), the bar has no business on screen.
       // The two "time for food" reminders: the list of leads sat flush against the switch above it (owner's screenshot).
       + 'body.app #mbeg-lead,body.app #mrem-lead{margin-top:14px}'
-      + 'body.app.dg-drawer-open .appnav{display:none}';
+      + 'body.app.dg-drawer-open .appnav{display:none}'
+      // "Link copied" from the menu's share (settings.js showBubbleNotification): its styles are
+      // the site's (extrastyles.css), which this page does not load, so it was a bare full-width bar.
+      // It and the page's own toast sit above the tab bar, not under it.
+      + 'body.app .bubble-notification,body.app .toast{position:fixed;left:50%;right:auto;top:auto;bottom:calc(96px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));'
+      + 'max-width:calc(100% - 32px);transform:translate(-50%,20px);background:var(--dg-navy,#1d2b4a);color:#fff;padding:9px 16px;border-radius:999px;'
+      + 'font-size:13px;line-height:1.35;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:2000}'
+      + 'body.app .bubble-notification.show,body.app .toast.on{opacity:1;transform:translate(-50%,0)}'
+      // the theme circle (animateThemeSwitch): the new theme is clipped in over the old one
+      + '::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}'
+      + 'html.dg-theme-vt *{transition:none!important}';
     // iOS: ask the app for the web view's own insets, at the moment the page is ready. Android's
     // SystemBars plugin injects the same variables itself (and env() covers the modern WebViews),
     // so this only runs where the plugin exists.
-    var Insets = Cap.Plugins && Cap.Plugins.DgInsets;
+    // Android (dg-apps#54): no second source. The page is viewport-fit=cover there and Capacitor's
+    // SystemBars passes the insets through (WebView 140+: env() and --safe-area-inset-*), or pads
+    // the window itself and writes 0 (older WebViews). Asking natively as well was the double gap.
+    var Insets = IOS && Cap.Plugins && Cap.Plugins.DgInsets;
     insetsDiag = { plugin: !!Insets, answer: null };
     if (Insets && typeof Insets.get === 'function') {
       Insets.get().then(function (i) {
@@ -733,6 +844,8 @@
     if (!onCalendar) { if (!IOS) wireBackButton(); return; }
     watchSystemBars();
     applyTopInset();
+    wireLinksAndShare();
+    animateThemeSwitch();
     if (IOS) { wrapIosNotifications(); wireIosShortcutTaps(); }
     else { wireBackButton(); wrapLocalNotifications(); watchStreamRow(); }
     // #up-rate's href is dg-node's own static markup (uposatha-calendar.html) — the Play Store URL,

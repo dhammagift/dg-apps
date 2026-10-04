@@ -66,12 +66,13 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgSoundPlugin.class);
         registerPlugin(DgSitePlugin.class);
         registerPlugin(DgAlarmPlugin.class);
-        // The page asks for the window's safe-area insets (DgInsetsPlugin): its own top bar, burger
-        // menu and panels have to stay clear of the transparent bars.
+        // The bar icons and the window colour follow the page's theme (DgInsetsPlugin.setTheme).
         registerPlugin(DgInsetsPlugin.class);
+        // The system share sheet behind the page's navigator.share (the WebView has none).
+        registerPlugin(DgSharePlugin.class);
         // No DgBars any more (dg-apps#41): the page runs edge to edge under transparent system bars
-        // (viewport-fit=cover, capacitor.config.json -> SystemBars) and only the bar ICONS are set
-        // from the page, by Capacitor's own SystemBars plugin (uposatha-bridge.js).
+        // (viewport-fit=cover, set by uposatha-bridge.js; capacitor.config.json -> SystemBars passes
+        // the insets through to the page).
         // The launch splash is the animated mark (res/drawable/dg_splash_icon.xml, 890 ms). The system takes the
         // splash down the moment the first frame is ready, which on a warm start is before the mark has drawn;
         // holding it for the length of the animation is what lets it play, and costs a cold start nothing it

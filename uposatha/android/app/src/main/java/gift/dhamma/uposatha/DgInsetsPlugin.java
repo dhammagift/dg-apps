@@ -1,100 +1,72 @@
 package gift.dhamma.uposatha;
 
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
+import android.content.res.Configuration;
+import android.graphics.Color;
+import android.view.Window;
 
-import com.getcapacitor.JSObject;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * The safe-area insets, for the page to ask for (dg-apps#41).
+ * The system bars follow the page's theme (dg-apps#54): the bar icons and the window behind the
+ * WebView, in one call, so they cannot disagree.
+ *     DgInsets.setTheme({ dark: true, color: "#111111" })
  *
- * Edge to edge means the page draws under the transparent status and navigation bars, so it has to
- * keep its own top bar, burger menu and side panels clear of them. The sources it could use are not
- * dependable: Capacitor's SystemBars injects --safe-area-inset-* only in its passthrough branch and
- * that injection has been failing in its own logs ("Error injecting safe area CSS: ... reading
- * 'style'"), and env(safe-area-inset-*) reads 0 in the CI emulator. The report from run 458 is
- * blunt: the page measured topInset 0 on a device whose status bar is 24dp tall, and the burger
- * menu opened under the clock (owner: "бургер меню открывается под часами").
+ * Not Capacitor's SystemBars.setStyle: it ends by repainting the window in the SYSTEM's background
+ * (windowBackground of the phone's own light/dark mode). On a light phone a dark page then had
+ * white strips above and below it, on a dark phone a light page black ones (owner's screenshots).
+ * SystemBars still owns the insets (viewport-fit=cover: it passes them through to the page), and it
+ * calls setStyle again on every configuration change (rotation, the phone's own theme), so the
+ * page's choice is put back right after it.
  *
- * So the page asks here, the same call it makes on iOS (DgInsets, DgApp.swift): the real insets of
- * the window, divided by the density to be CSS pixels, exactly as Capacitor's own injection does.
- *     Capacitor.Plugins.DgInsets.get() -> { top, right, bottom, left }
+ * The insets themselves are the page's (SystemBars' --safe-area-inset-* and env()); the iOS plugin
+ * of the same name still answers get(), Android has no second source any more.
  */
 @CapacitorPlugin(name = "DgInsets")
 public class DgInsetsPlugin extends Plugin {
 
-    /**
-     * The page's own theme, so the window and the WebView behind it stop showing the SYSTEM's
-     * background. In dark theme on a light device that background was a white strip above the dark
-     * page (owner's screenshots, dg-apps#41) — the bars are transparent, so whatever is behind the
-     * WebView shows there whenever the platform pads it instead of passing the insets through.
-     *     DgInsets.setTheme({ dark: true })
-     */
+    private Boolean dark;
+    private int color;
+
     @PluginMethod
     public void setTheme(PluginCall call) {
-        final boolean dark = call.getBoolean("dark", false);
-        final int color = dark ? 0xFF111111 : 0xFFFFFFFF;
+        final boolean isDark = call.getBoolean("dark", false);
+        int c = isDark ? 0xFF111111 : 0xFFFFFFFF;
+        try {
+            c = Color.parseColor(call.getString("color", ""));
+        } catch (IllegalArgumentException e) {
+            // no colour or not a #rrggbb one: the page's plain light/dark background
+        }
+        final int pageColor = c;
         getActivity().runOnUiThread(() -> {
-            getActivity().getWindow().getDecorView().setBackgroundColor(color);
-            if (getBridge() != null && getBridge().getWebView() != null) {
-                getBridge().getWebView().setBackgroundColor(color);
-            }
+            dark = isDark;
+            color = pageColor;
+            apply();
             call.resolve();
         });
     }
 
-    @PluginMethod
-    public void get(PluginCall call) {
-        getActivity().runOnUiThread(() -> {
-            // The STATUS bar for the top and the NAVIGATION bar for the bottom — not systemBars()
-            // for everything: that union also carries the caption bar and the display cutout, and it
-            // reported 52 CSS px on a device whose drawn status bar is 22 (owner: "отступ слишком
-            // большой... на глаз?"). The cutout is asked for separately and only feeds the sides,
-            // where it really matters (landscape).
-            int top = 0, right = 0, bottom = 0, left = 0, cutL = 0, cutR = 0;
-            try {
-                WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(getActivity().getWindow().getDecorView());
-                if (insets != null) {
-                    Insets status = insets.getInsets(WindowInsetsCompat.Type.statusBars());
-                    Insets nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars());
-                    Insets cut = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
-                    top = status.top;
-                    bottom = nav.bottom;
-                    cutL = cut.left;
-                    cutR = cut.right;
-                    left = Math.max(status.left, cutL);
-                    right = Math.max(status.right, cutR);
-                    // Capacitor's SystemBars pads the decor view itself whenever it does not pass
-                    // the insets through (a WebView older than 140, or before it has seen
-                    // viewport-fit=cover). The WebView then already sits below the status bar, and
-                    // the page padding it by the same amount again was the huge gap above the header
-                    // at start (owner, 2026-10-03: right only after a theme switch).
-                    android.view.View decor = getActivity().getWindow().getDecorView();
-                    top = Math.max(0, top - decor.getPaddingTop());
-                    bottom = Math.max(0, bottom - decor.getPaddingBottom());
-                    left = Math.max(0, left - decor.getPaddingLeft());
-                    right = Math.max(0, right - decor.getPaddingRight());
-                }
-            } catch (Exception e) {
-                // No insets to report is not worth failing the page's layout over: it falls back to
-                // env(), and to no padding at all if that is 0 too.
-            }
-            float density = getActivity().getResources().getDisplayMetrics().density;
-            JSObject ret = new JSObject();
-            ret.put("top", top / density);
-            ret.put("right", right / density);
-            ret.put("bottom", bottom / density);
-            ret.put("left", left / density);
-            // Diagnostics for the proof: the raw pixels and the density it divided by, so a wrong
-            // number can be checked against the drawn status bar in the screenshot.
-            ret.put("rawTop", top);
-            ret.put("density", density);
-            call.resolve(ret);
-        });
+    private void apply() {
+        if (dark == null) return;
+        Window window = getActivity().getWindow();
+        window.getDecorView().setBackgroundColor(color);
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().setBackgroundColor(color);
+        }
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(window, window.getDecorView());
+        bars.setAppearanceLightStatusBars(!dark);
+        bars.setAppearanceLightNavigationBars(!dark);
+    }
+
+    @Override
+    protected void handleOnConfigurationChanged(Configuration newConfig) {
+        super.handleOnConfigurationChanged(newConfig);
+        // After SystemBars has had its turn (it repaints the window in the system's colour).
+        getActivity().getWindow().getDecorView().post(this::apply);
     }
 }

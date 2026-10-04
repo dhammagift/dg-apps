@@ -7,12 +7,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.View;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 
 import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.core.splashscreen.SplashScreen;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.WebViewListener;
 
 import java.util.regex.Pattern;
@@ -79,6 +83,23 @@ public class MainActivity extends BridgeActivity {
                 @Override
                 public void onPageLoaded(WebView webView) { pageVisible = true; }
             });
+            // A reader URL loaded as a document (/sn35.117: a reload, a restored tab) is not a file here:
+            // the dot reads as an extension and the WebView shows its own "Webpage not available
+            // (ERR_INVALID_RESPONSE)" page, with no way out but closing the app (owner, 2026-10-04). The
+            // same place opens through the root's _nativeRoute handoff. The main frame only: Capacitor's
+            // listeners hear every failed image too, and one of those must not reload the page.
+            getBridge().setWebViewClient(new BridgeWebViewClient(getBridge()) {
+                @Override
+                public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                    if (request.isForMainFrame() && reopenThroughRoot(view, request.getUrl())) return;
+                    super.onReceivedError(view, request, error);
+                }
+                @Override
+                public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+                    if (request.isForMainFrame() && reopenThroughRoot(view, request.getUrl())) return;
+                    super.onReceivedHttpError(view, request, response);
+                }
+            });
         }
         // Deliberately no handleIntent() here — see handledIntent above.
 
@@ -107,6 +128,17 @@ public class MainActivity extends BridgeActivity {
     // No status-bar code here any more (dg-apps#40): the page runs edge to edge under transparent
     // system bars (viewport-fit=cover, build-page.js) and native-bridge.js sets the icon style from
     // what the page shows at the top. The old fixed dark strip and its forced light icons are gone.
+
+    private boolean reopenThroughRoot(WebView webView, Uri u) {
+        String path = u.getPath();
+        if (!"localhost".equals(u.getHost()) || path == null) return false;
+        String last = path.substring(path.lastIndexOf('/') + 1);
+        if (last.indexOf('.') < 0 || last.matches(".*\\.html?$")) return false;
+        String route = path + (u.getQuery() != null ? "?" + u.getQuery() : "")
+            + (u.getFragment() != null ? "#" + u.getFragment() : "");
+        webView.post(() -> webView.loadUrl("https://localhost/?_nativeRoute=" + Uri.encode(route)));
+        return true;
+    }
 
     @Override
     public void onNewIntent(Intent intent) {

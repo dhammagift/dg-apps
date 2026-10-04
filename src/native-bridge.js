@@ -1189,6 +1189,16 @@
             // while the Quick Modal (Favorites/History/compass) is open exits the app instead of
             // just closing the modal.
             if (closeRatePrompt()) return;
+            // The "no connection" screen (launch-screens.js) is never a dead end (owner: "only closing
+            // the app got me out"): Back takes it away and goes back a page, or home when there is
+            // nowhere to go back to — the page under it may be the one that could not load.
+            var lsErr = document.getElementById('dglsErr');
+            if (lsErr) {
+                lsErr.remove();
+                if (ev.canGoBack) window.history.back();
+                else if (location.pathname !== '/') location.replace('/');
+                return;
+            }
             // Any other open overlay of the page — sheets, popovers, the drawer, the quick window
             // and its subscription form — top one first (dg-node home.js; owner: "шторки не
             // сворачиваются по свайпу назад, приложение просто выходит").

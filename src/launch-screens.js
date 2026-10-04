@@ -91,14 +91,14 @@
     var TEXT = {
         ru: {
             none: ['Нет соединения.', 'Проверьте интернет и повторите.'],
-            down: ['Сайт не отвечает.', 'Попробуйте чуть позже — сервер сейчас недоступен.'],
+            down: ['Сервер не отвечает.', 'Попробуйте чуть позже — сервер сейчас недоступен.'],
             retry: ['Проверяем соединение…', 'Это займёт несколько секунд.'],
             btn: 'Повторить', busy: 'Проверяем…', auto: 'Повторим сами, когда сеть появится',
             upo: 'Напоминания уже стоят на телефоне и придут без сети.',
         },
         en: {
             none: ['No connection.', 'Check the internet and try again.'],
-            down: ['The site isn’t responding.', 'Try again shortly — the server is unavailable right now.'],
+            down: ['The server isn’t responding.', 'Try again shortly — the server is unavailable right now.'],
             retry: ['Checking the connection…', 'This takes a few seconds.'],
             btn: 'Try again', busy: 'Checking…', auto: 'We’ll retry by ourselves once you’re online',
             upo: 'Your reminders are set on this phone and will arrive without it.',
@@ -200,6 +200,20 @@
 
     // The "no connection" screen. state: 'none' (offline) | 'down' (online, but no answer). opts.retry()
     // returns a promise: true = it worked (the host navigates on its own), false = still failing.
+    // Reload where the reader is: a reader URL (/sn35.117) is not a file in the app, the dot reads as
+    // an extension and the WebView answers ERR_INVALID_RESPONSE; the root with the _nativeRoute handoff
+    // (native-bridge.js) opens the same place.
+    function reloadHere() {
+        var last = location.pathname.split('/').pop();
+        // Dhamma.Gift only (window.dgOfflineReady, src/platform.js): the dictionary app serves its
+        // pages from the site and has no _nativeRoute handoff.
+        if (window.dgOfflineReady && last.indexOf('.') !== -1 && !/\.html?$/.test(last)) {
+            location.replace('/?_nativeRoute=' + encodeURIComponent(location.pathname + location.search + location.hash));
+        } else {
+            location.reload();
+        }
+    }
+
     function error(app, state, opts) {
         opts = opts || {};
         var existing = document.getElementById('dglsErr');
@@ -239,7 +253,7 @@
             busy = true;
             show('retry');
             var started = Date.now();
-            Promise.resolve(opts.retry ? opts.retry() : (location.reload(), true)).catch(function () { return false; }).then(function (ok) {
+            Promise.resolve(opts.retry ? opts.retry() : (reloadHere(), true)).catch(function () { return false; }).then(function (ok) {
                 // Long enough to read "Checking…": an instant flicker looks like the button did nothing.
                 setTimeout(function () {
                     busy = false;

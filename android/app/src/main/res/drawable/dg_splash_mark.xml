@@ -2,12 +2,13 @@
 <!-- The Dhamma.Gift mark as a vector in its FINAL state (docs/launch-screens/dg-mark.svg, traced from the
      designer's PNG): the shell, the petals, the book. dg_splash_icon.xml animates it: a circle opens from
      the book upwards and the mark rises a little, as in the handoff. 288dp is the canvas the system gives a
-     splash icon; the mark is 150dp wide (owner: the same size as the dictionary's and Uposatha's marks,
-     ~120dp wide but taller; 166dp read as too big). The thin outline is for the
+     splash icon. The mark is 97dp tall (176dp wide), the height of the dictionary's and Uposatha's marks
+     (owner, by height); raised 12dp off centre so the wide book stays inside the 192dp circle the system
+     shows (docs: splash-demo, 2026-10-04). The thin outline is for the
      light theme (the mark is light grey and is never inverted); it is transparent in the dark one. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="288dp" android:height="288dp" android:viewportWidth="288" android:viewportHeight="288">
-    <group android:name="art" android:translateX="69.000" android:translateY="100.506" android:scaleX="0.10901" android:scaleY="0.10901">
+    <group android:name="art" android:translateX="56.192" android:translateY="81.334" android:scaleX="0.12763" android:scaleY="0.12763">
         <group android:name="pop" android:pivotX="688" android:pivotY="798">
             <clip-path android:name="reveal" android:pathData="M688,798m-1100,0a1100,1100 0 1,0 2200,0a1100,1100 0 1,0 -2200,0Z"/>
             <path android:fillColor="#AFAFAC" android:strokeColor="@color/dg_mark_outline" android:strokeWidth="5" android:strokeLineJoin="round"

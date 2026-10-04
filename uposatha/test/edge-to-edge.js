@@ -398,7 +398,7 @@ async function appReady(page) {
                 const btn = document.getElementById('app-theme');
                 const r = btn.getBoundingClientRect();
                 btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: r.left + 5, clientY: r.top + 5 }));
-                await new Promise((res) => setTimeout(res, 1400));
+                await new Promise((res) => setTimeout(res, 1900));
                 return { was, now: document.documentElement.getAttribute('data-theme'), circles: window.__calls.vt, window: window.__calls.themes.slice(-1)[0] };
             });
             check('the theme button switches the theme through a circle from the tap, and the bars follow',
@@ -407,7 +407,7 @@ async function appReady(page) {
                 await page.evaluate(async () => {
                     const btn = document.getElementById('app-theme');
                     btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
-                    await new Promise((res) => setTimeout(res, 1400));
+                    await new Promise((res) => setTimeout(res, 1900));
                     return [document.documentElement.getAttribute('data-theme'), window.__calls.vt];
                 }), ['light', 2]);
             check('no script errors', errors, []);

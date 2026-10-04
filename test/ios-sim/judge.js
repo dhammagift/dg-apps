@@ -24,6 +24,13 @@ function judge(report) {
         const last = report.progress[report.progress.length - 1];
         console.log(`progress events   ${report.progress.length}, last ${JSON.stringify(last)}`);
     }
+    if (report.nativeSql) {
+        console.log(`native sql        ${JSON.stringify(report.nativeSql)}`);
+    }
+    if (report.consoleErrors && report.consoleErrors.length) {
+        console.log('console errors (text):');
+        report.consoleErrors.slice(-15).forEach(e => console.log(`  ${e}`));
+    }
 
     if (report.speech) {
         console.log('--- speech and the native progress plugin ---');

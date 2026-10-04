@@ -86,6 +86,22 @@
         if (event && event.detail && typeof event.detail.resolve === 'function') event.detail.resolve(true);
     });
 
+    // Console errors with their TEXT: the app's console log prints an Error object as {} (run 499:
+    // "Ошибка при поиске: {}"), which says nothing about why the library never opened.
+    report.consoleErrors = [];
+    (function () {
+        var orig = console.error;
+        console.error = function () {
+            try {
+                report.consoleErrors.push(Array.prototype.map.call(arguments, function (a) {
+                    return a && (a.stack || a.message) ? String(a.message) + (a.stack ? ' @ ' + String(a.stack).split('\n')[0] : '') : String(a);
+                }).join(' ').slice(0, 400));
+                if (report.consoleErrors.length > 40) report.consoleErrors.shift();
+            } catch (e) { /* never let the spy break the page */ }
+            return orig.apply(console, arguments);
+        };
+    })();
+
     // Progress lines the page already dispatches (offline-status.js paints them): the first thing
     // to look at when the library never becomes present.
     ['dg:dl-progress', 'dg:offline-invalid', 'dg:download-declined', 'dg:update-available'].forEach(function (name) {
@@ -127,6 +143,37 @@
                 setTimeout(poll, POLL_MS);
             })();
         });
+    }
+
+    // Since run 261 (2026-09-20, the native dg.db read through /dg-sql) the library never becomes present
+    // here. Ask the endpoint directly, the way the page and the worker do, so a failing run says which
+    // half is broken: the scheme handler, or a worker's synchronous request to it.
+    function probeNativeSql() {
+        var out = {
+            DG_NATIVE_SQL: window.DG_NATIVE_SQL || null,
+            platformNativeSql: (window.dgPlatform && window.dgPlatform.nativeSql) || null,
+            page: null,
+            worker: null,
+        };
+        var endpoint = out.DG_NATIVE_SQL || '/dg-sql';
+        var url = location.origin + endpoint + '/status';
+        var page = fetch(url, { cache: 'no-store' }).then(function (r) {
+            return r.text().then(function (t) { out.page = { status: r.status, type: r.headers.get('content-type'), body: t.slice(0, 200) }; });
+        }).catch(function (e) { out.page = { threw: String(e && e.message || e) }; });
+        var worker = new Promise(function (resolve) {
+            var src = 'onmessage=function(e){var r={};try{var x=new XMLHttpRequest();x.open("GET",e.data,false);x.send();' +
+                'r={status:x.status,type:x.getResponseHeader("content-type"),body:String(x.responseText).slice(0,200)};}' +
+                'catch(err){r={threw:String(err&&err.message||err)};}postMessage(r);};';
+            var done = false;
+            try {
+                var w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+                w.onmessage = function (e) { done = true; out.worker = e.data; w.terminate(); resolve(); };
+                w.onerror = function (e) { done = true; out.worker = { error: String(e && e.message || e) }; resolve(); };
+                w.postMessage(url);
+            } catch (e) { done = true; out.worker = { threw: String(e && e.message || e) }; resolve(); }
+            setTimeout(function () { if (!done) { out.worker = { timeout: '10s' }; resolve(); } }, 10000);
+        });
+        return Promise.all([page, worker]).then(function () { return out; });
     }
 
     function runCase(c) {
@@ -636,6 +683,9 @@
     var wakeLockSpy = spyWakeLock();
 
     waitForLibrary()
+        .then(function () {
+            return probeNativeSql().then(function (r) { report.nativeSql = r; });
+        })
         .then(function () {
             if (!report.libraryPresent) return;
             return CASES.reduce(function (chain, c) {

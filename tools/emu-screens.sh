@@ -187,9 +187,13 @@ def check(cond, text):
     print(("PASS " if cond else "FAIL ") + text)
     ok = ok and cond
 check(d.get("drawerOpen") is True, "tablet: the burger menu is really open")
-check((d.get("topInset") or 0) >= 20, "tablet: the page has the status bar's height: %s px" % d.get("topInset"))
-check((d.get("drawerContentTop") or -1) >= (d.get("topInset") or 0),
-      "tablet: the drawer's content starts at %s px, at or below the inset %s px" % (d.get("drawerContentTop"), d.get("topInset")))
+# dg-apps#54: the inset reaches the page only where SystemBars passes it through (WebView 140+); on an older
+# WebView the window is padded natively and the page rightly gets 0 (the pixel checks above see the bar clear
+# of the clock either way). What must hold in both: the menu's content is not above the inset the page has.
+top, drawer = d.get("topInset"), d.get("drawerContentTop")
+check(top == 0 or (top or 0) >= 20, "tablet: the page's inset is the status bar's or none (window padded): %s px" % top)
+check(drawer is not None and top is not None and drawer >= top,
+      "tablet: the drawer's content starts at %s px, at or below the inset %s px" % (drawer, top))
 sys.exit(0 if ok else 1)
 TEOF
       then :; else fail=1; fi

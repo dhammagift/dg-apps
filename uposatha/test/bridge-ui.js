@@ -46,10 +46,11 @@ function capacitorStub() {
             LocalNotifications: {
                 requestPermissions: () => Promise.resolve({ display: 'granted' }),
                 createChannel: (c) => { window.__calls.channels.push(c); return Promise.resolve(); },
-                getPending: () => Promise.resolve({ notifications: [] }),
+                getPending: () => Promise.resolve({ notifications: window.__pendingNative || [] }),
+                cancel: (o) => { window.__calls.cancelled = o.notifications.map((n) => n.id); return Promise.resolve(); },
                 getDeliveredNotifications: () => Promise.resolve({ notifications: window.__delivered || [] }),
                 removeDeliveredNotifications: (o) => { window.__calls.removed = (window.__calls.removed || []).concat(o.notifications.map((n) => n.id)); return Promise.resolve(); },
-                cancel: () => Promise.resolve(),
+                addListener: () => ({ remove() {} }),
                 schedule: (o) => { window.__calls.scheduled.push(o.notifications); return Promise.resolve(); },
             },
         },
@@ -215,9 +216,28 @@ function capacitorStub() {
                 icons: [...new Set((window.__calls.scheduled.flat() || []).map((n) => n.largeIcon))],
                 alarms: (window.__calls.alarms || []).map((a) => [a.sound, a.at > 0]),
             }));
-            // A reminder left in the tray must not turn the next one with the same id into a silent update.
-            await page.evaluate(() => { window.__delivered = [{ id: 7000 }, { id: 7990 }, { id: 1 }]; window.__calls.removed = []; return window.Capacitor.Plugins.LocalNotifications.schedule({ notifications: [{ id: 7000, title: 't', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at: new Date(Date.now() + 60000) } }] }); });
-            check(`stream ${stream}: what is left of ours in the tray is taken away before a new reminder`, await page.evaluate(() => window.__calls.removed), [7000, 7990]);
+            // The tray is left alone (owner: the sound came, the notification was gone), and the next reminder never takes
+            // the id of one still there: its id is its own minute.
+            const tray = await page.evaluate(async () => {
+                window.__delivered = [{ id: 7000 }, { id: 7990 }, { id: 1 }]; window.__calls.removed = []; window.__calls.scheduled = [];
+                const at = new Date(Date.UTC(2026, 9, 4, 6, 0));
+                await window.Capacitor.Plugins.LocalNotifications.schedule({ notifications: [
+                    { id: 7000, title: 't', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at } },
+                    { id: 7001, title: 't2', body: 'b2', channelId: 'uposatha-gong-v1', schedule: { at } }] });
+                return { removed: window.__calls.removed, ids: window.__calls.scheduled.flat().map((n) => n.id) };
+            });
+            const minute = Math.floor(Date.UTC(2026, 9, 4, 6, 0) / 60000) % 100000;
+            check(`stream ${stream}: nothing of ours is taken out of the tray, each reminder has an id of its own minute`,
+                tray, { removed: [], ids: [1000000 + minute * 10, 1000000 + minute * 10 + 1] });
+            // The page cancels what is pending by its own range (7000-7099): getPending shows ours as that range, cancel maps back.
+            check(`stream ${stream}: the page's own cancel still reaches the pending reminders`,
+                await page.evaluate(async () => {
+                    const LN = window.Capacitor.Plugins.LocalNotifications;
+                    window.__pendingNative = [{ id: 1000123 }, { id: 1000456 }, { id: 7990 }];
+                    const seen = await LN.getPending();
+                    await LN.cancel({ notifications: seen.notifications.filter((n) => n.id >= 7000 && n.id < 7100) });
+                    return [seen.notifications.map((n) => n.id), window.__calls.cancelled];
+                }), [[7000, 7001, 7990], [1000123, 7000, 1000456, 7001]]);
             const suffix = stream === 'alarm' ? '-alarm' : '';
             check(`stream ${stream}: channels are made natively on the ${stream} stream, asking to sound through Do Not Disturb`,
                 got.native.some((n) => n[0] === 'uposatha-gong-v1' + (stream === 'alarm' ? '-alarm' : '') && n[1] === stream && n[2] === (stream === 'alarm' ? '' : 'gong.mp3') && n[3] === true) && got.plugin.length === 0, true);
@@ -297,7 +317,8 @@ function capacitorStub() {
                 return { notify: window.__ios.notify.map((n) => [n.id, n.title, n.sound]), cancel: window.__ios.cancel, android: (window.__calls.scheduled || []).length, channels: (window.__calls.channels || []).length,
                     shortcuts: (window.__calls.shortcuts.slice(-1)[0] || []).map((i) => i.id), listener: typeof window.__ios.listeners.shortcut };
             });
-            check('ios: reminders go to DgNotify with the sound of their channel (the reader\'s own sound is the default one; a past reminder is dropped by the native side)', got.notify, [[7000, 'T', 'gong'], [7001, 'T2', 'pubbanha'], [7002, 'T3', ''], [7003, 'T4', 'vikala']]);
+            check('ios: reminders go to DgNotify with the sound of their channel (the reader\'s own sound is the default one; a past reminder is dropped by the native side)', got.notify.map((n) => n.slice(1)), [['T', 'gong'], ['T2', 'pubbanha'], ['T3', ''], ['T4', 'vikala']]);
+            check('ios: ids are their own minute, not the place in the list', got.notify.every((n) => n[0] >= 1000000), true);
             check('ios: cancel goes to DgNotify; nothing goes to the Android paths', [got.cancel, got.android, got.channels], [[7000], 0, 0]);
             check('ios: quick actions are pushed and a tap is listened for', [got.shortcuts.length, got.listener], [4, 'function']);
             await ctx.close();

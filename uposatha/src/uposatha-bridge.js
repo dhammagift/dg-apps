@@ -234,12 +234,36 @@
 
   var NATIVE_ID_BASE = 7000;   // the page's ids for its reminders (uposatha-calendar.js: NATIVE_ID_BASE + list index; the test reminder is 7990)
 
-  function clearDeliveredOurs(LN) {
-    if (!LN || typeof LN.getDeliveredNotifications !== 'function') return Promise.resolve();
-    return LN.getDeliveredNotifications().then(function (d) {
-      var ours = ((d && d.notifications) || []).filter(function (n) { return n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + 1000; }).map(function (n) { return { id: n.id }; });
-      return ours.length ? LN.removeDeliveredNotifications({ notifications: ours }) : null;
-    }).catch(function () { /* the tray could not be read: schedule anyway */ });
+  // Every reminder has an id of its own, made from its minute (owner: "the sound was there, the notification was not").
+  // The page numbers its reminders by their place in the list (the next one is always 7000), and re-plans after each
+  // one fires, so the next reminder took the id of the one in the tray and replaced it; the tray was also emptied
+  // before every re-plan so that the replacement would not arrive silent. Now nothing in the tray is touched: an id
+  // is the minute it rings at (and the place within that minute: the meal and a part of the day can share one), so
+  // a reminder never lands on another. getPending/cancel are translated back, so the page still cancels by its range.
+  var UNIQUE_BASE = 1000000;
+  function isUnique(id) { return id >= UNIQUE_BASE && id < UNIQUE_BASE + 1000000; }
+  function uniqueId(n) {
+    if (!(n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + 100)) return n.id;   // the test reminders (7990+) keep theirs
+    var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
+    return UNIQUE_BASE + (Math.floor(at / 60000) % 100000) * 10 + (n.id % 10);
+  }
+  var pendingAlias = {};   // the page's id -> ours, from the last getPending the page saw
+  function pageView(p) {
+    pendingAlias = {};
+    var k = 0;
+    var list = ((p && p.notifications) || []).map(function (n) {
+      if (!isUnique(n.id) || k >= 100) return n;
+      var alias = NATIVE_ID_BASE + k++;
+      pendingAlias[alias] = n.id;
+      return Object.assign({}, n, { id: alias });
+    });
+    return Object.assign({}, p, { notifications: list });
+  }
+  // An alias stands for one of ours; an id from before this change (7000+, still pending after an update) is cancelled as itself too.
+  function nativeIds(ids) {
+    var out = [];
+    ids.forEach(function (id) { if (pendingAlias[id] != null) out.push(pendingAlias[id]); out.push(id); });
+    return out;
   }
 
   // What the page last asked of the plugin, so a change of the source can be applied without reloading the page:
@@ -349,19 +373,17 @@
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at) : null;
               // The status-bar icon is the moon of the day the reminder is for.
               var moon = at && !isNaN(at) ? { smallIcon: moonName('ic_stat_moon', moonIndexAt(at)) } : {};
-              return Object.assign({ largeIcon: 'uposatha_notification' }, moon, n, { channelId: suffixed(n.channelId) });
+              return Object.assign({ largeIcon: 'uposatha_notification' }, moon, n, { id: uniqueId(n), channelId: suffixed(n.channelId) });
             });
             // The plugin posts every notification "alert once": one that REPLACES a notification of the same id still in the
-            // tray makes no sound and no vibration. The page's ids are their place in the list (the next reminder is always
-            // 7000, and the test reminder is 7990), so a reminder that fires after another has been left in the tray would
-            // arrive silent. Whatever of ours is still in the tray is taken away before new ones are set.
+            // tray makes no sound. With an id per minute (uniqueId) a reminder never replaces another, so the tray is left alone.
             // The sound itself, on the alarm stream, at the same minute.
             var alarm = alarmPlugin();
             var items = directAlarm() ? ((o && o.notifications) || []).map(function (n) {
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
-              return { id: n.id, at: at, sound: rawSoundOf(n.channelId) };
+              return { id: uniqueId(n), at: at, sound: rawSoundOf(n.channelId) };
             }).filter(function (i) { return i.at > 0 && i.sound; }) : [];
-            return clearDeliveredOurs(target).then(function () { return items.length ? alarm.schedule({ items: items }) : null; }).then(function () { return target.schedule(Object.assign({}, o, { notifications: list })); }).then(function (res) {
+            return Promise.resolve(items.length ? alarm.schedule({ items: items }) : null).then(function () { return target.schedule(Object.assign({}, o, { notifications: list })); }).then(function (res) {
               if (list.length) setTimeout(function () { refreshDnd().then(maybeAskDnd); }, 2500);   // the page has settled; is the access there?
               return res;
             });
@@ -370,11 +392,12 @@
         if (key === 'cancel') {
           return function (o) {
             var alarm = alarmPlugin();
-            var ids = ((o && o.notifications) || []).map(function (n) { return n.id; });
+            var ids = nativeIds(((o && o.notifications) || []).map(function (n) { return n.id; }));
             if (alarm && ids.length) alarm.cancel({ ids: ids });
-            return target.cancel(o);
+            return target.cancel({ notifications: ids.map(function (id) { return { id: id }; }) });
           };
         }
+        if (key === 'getPending') return function () { return target.getPending().then(pageView); };
         var v = target[key];
         return typeof v === 'function' ? v.bind(target) : v;
       }
@@ -401,13 +424,13 @@
             lastSchedule = o;
             var items = ((o && o.notifications) || []).map(function (n) {
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
-              return { id: n.id, title: n.title || '', body: n.body || '', at: at, sound: rawSoundOf(n.channelId) === 'own' ? '' : rawSoundOf(n.channelId) };
+              return { id: uniqueId(n), title: n.title || '', body: n.body || '', at: at, sound: rawSoundOf(n.channelId) === 'own' ? '' : rawSoundOf(n.channelId) };
             }).filter(function (i) { return i.at > 0; });
             return N().schedule({ items: items }).then(function () { return { notifications: items.map(function (i) { return { id: i.id }; }) }; });
           };
         }
-        if (key === 'cancel') return function (o) { return N().cancel({ ids: ((o && o.notifications) || []).map(function (n) { return n.id; }) }); };
-        if (key === 'getPending') return function () { return N().getPending(); };
+        if (key === 'cancel') return function (o) { return N().cancel({ ids: nativeIds(((o && o.notifications) || []).map(function (n) { return n.id; })) }); };
+        if (key === 'getPending') return function () { return N().getPending().then(pageView); };
         var v = target[key];
         return typeof v === 'function' ? v.bind(target) : v;
       }
@@ -572,7 +595,21 @@
   // The colour is the page's own background (--dg-page, also the navy "lunar" look), read from the
   // layout, so the window under the bars is never a different shade from the page.
   // Sent only when it changes, and again when the app comes back to the front.
+  function rgbOf(c) {
+    var m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?/.exec(c || '');
+    return m ? [+m[1], +m[2], +m[3], m[4] == null ? 1 : +m[4]] : null;
+  }
   function pageColor() {
+    var hex = pageColorOnly();
+    // The menu open on a WebView older than 140: the window is padded natively and its colour is the strip under the
+    // clock, so it takes the menu's dimming as well (the tablet screenshot: a white strip over the dimmed page).
+    var scrim = document.body.classList.contains('dg-drawer-open') && document.getElementById('dg-drawer-backdrop');
+    var dim = scrim && rgbOf(getComputedStyle(scrim).backgroundColor);
+    if (!hex || !dim || !dim[3]) return hex;
+    var base = [1, 3, 5].map(function (i) { return parseInt(hex.substr(i, 2), 16); });
+    return '#' + base.map(function (v, i) { return ('0' + Math.round(v * (1 - dim[3]) + dim[i] * dim[3]).toString(16)).slice(-2); }).join('');
+  }
+  function pageColorOnly() {
     var c = getComputedStyle(document.body).backgroundColor || '';
     var m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c);
     var rgb = m ? [+m[1], +m[2], +m[3]] : null;

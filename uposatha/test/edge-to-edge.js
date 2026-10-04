@@ -361,6 +361,15 @@ async function appReady(page) {
             await page.goto(`http://127.0.0.1:${PORT}/?lang=en`, { waitUntil: 'load' });
             await appReady(page);
             await page.waitForTimeout(2500);
+            check('the menu open: the window takes the menu\'s dimming (the strip of a padded window on an old WebView)',
+                await page.evaluate(async () => {
+                    document.getElementById('b-menu').click();
+                    await new Promise((r) => setTimeout(r, 400));
+                    const dimmed = window.__calls.themes.slice(-1)[0];
+                    document.querySelector('#dg-drawer .dg-drawer-close').click();
+                    await new Promise((r) => setTimeout(r, 400));
+                    return [dimmed !== 'light #ffffff' && /^light #[0-9a-f]{6}$/.test(dimmed), window.__calls.themes.slice(-1)[0]];
+                }), [true, 'light #ffffff']);
             check('Help in the menu header opens the docs on dhamma.gift, not the app\'s own origin',
                 await page.evaluate(() => { document.getElementById('d-help-top').click(); return window.__calls.opened.slice(-1)[0]; }),
                 'https://dhamma.gift/docs/uposatha/');

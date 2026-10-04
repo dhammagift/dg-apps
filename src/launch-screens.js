@@ -91,14 +91,14 @@
     var TEXT = {
         ru: {
             none: ['Нет соединения.', 'Проверьте интернет и повторите.'],
-            down: ['Не удалось загрузить.', 'Проверьте интернет и попробуйте ещё раз.'],
+            down: ['Не удалось загрузить', 'Попробуйте ещё раз.'],
             retry: ['Проверяем соединение…', 'Это займёт несколько секунд.'],
             btn: 'Повторить', busy: 'Проверяем…', auto: 'Повторим сами, когда сеть появится',
             upo: 'Напоминания уже стоят на телефоне и придут без сети.',
         },
         en: {
             none: ['No connection.', 'Check the internet and try again.'],
-            down: ['Couldn’t load.', 'Check the internet and try again.'],
+            down: ['Couldn’t load', 'Please try again.'],
             retry: ['Checking the connection…', 'This takes a few seconds.'],
             btn: 'Try again', busy: 'Checking…', auto: 'We’ll retry by ourselves once you’re online',
             upo: 'Your reminders are set on this phone and will arrive without it.',
@@ -234,8 +234,12 @@
 
         function show(st) {
             var pair = t[st];
-            head.textContent = pair[0];
-            body.textContent = pair[1];
+            // 'down' says what failed and what the request answered (opts.what / opts.detail), not a
+            // guessed cause: the network and the server can both be fine while the request was cut
+            // (an app frozen in the background, owner 2026-10-04). Only 'none' (the device reports
+            // itself offline) is about the connection.
+            head.textContent = st === 'down' && opts.what ? pair[0] + ' ' + opts.what : pair[0] + (st === 'down' ? '.' : '');
+            body.textContent = st === 'down' && opts.detail ? opts.detail : pair[1];
             btn.disabled = st === 'retry';
             btn.innerHTML = '';
             if (st === 'retry') {

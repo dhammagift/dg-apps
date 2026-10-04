@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The glint's wide band: off the gem until 570 ms, when the gem is all there, then across it in 320 ms (ends with the 890 ms pass). The hold is an animator of its own that keeps the start shape, not a startOffset:
+     during an offset the drawable shows its static (final) state, which would flash. Both shapes have the
+     same structure, which is what lets the system morph one into the other. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android" android:ordering="sequentially">
+    <objectAnimator android:duration="570" android:propertyName="pathData" android:valueType="pathType"
+        android:valueFrom="M-150,-60 L30,-60 L-250,560 L-430,560Z" android:valueTo="M-150,-60 L30,-60 L-250,560 L-430,560Z"/>
+    <objectAnimator android:duration="320" android:propertyName="pathData" android:valueType="pathType"
+        android:valueFrom="M-150,-60 L30,-60 L-250,560 L-430,560Z" android:valueTo="M750,-60 L930,-60 L650,560 L470,560Z" android:interpolator="@android:interpolator/fast_out_slow_in"/>
+</set>

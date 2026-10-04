@@ -1,21 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The mark settles: scale .96 -> 1 and up 8 px (58 units of the 1376-wide drawing), on the reveal's clock:
-     250 ms still, then 640 ms (dg_splash_reveal.xml). -->
-<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
-    android:duration="890">
+<!-- The gem settles while it opens: from .85 and a turn of -22.5 degrees (one facet) to its place, on the
+     reveal's clock (250 ms still, then 384 ms; dg_splash_reveal.xml). -->
+<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android" android:duration="890">
     <propertyValuesHolder android:propertyName="scaleX">
-        <keyframe android:fraction="0" android:value="0.96"/>
-        <keyframe android:fraction="0.281" android:value="0.96"/>
-        <keyframe android:fraction="1" android:value="1" android:interpolator="@android:interpolator/decelerate_cubic"/>
+        <keyframe android:fraction="0" android:value="0.85"/>
+        <keyframe android:fraction="0.281" android:value="0.85"/>
+        <keyframe android:fraction="0.712" android:value="1" android:interpolator="@android:interpolator/decelerate_cubic"/>
+        <keyframe android:fraction="1" android:value="1"/>
     </propertyValuesHolder>
     <propertyValuesHolder android:propertyName="scaleY">
-        <keyframe android:fraction="0" android:value="0.96"/>
-        <keyframe android:fraction="0.281" android:value="0.96"/>
-        <keyframe android:fraction="1" android:value="1" android:interpolator="@android:interpolator/decelerate_cubic"/>
+        <keyframe android:fraction="0" android:value="0.85"/>
+        <keyframe android:fraction="0.281" android:value="0.85"/>
+        <keyframe android:fraction="0.712" android:value="1" android:interpolator="@android:interpolator/decelerate_cubic"/>
+        <keyframe android:fraction="1" android:value="1"/>
     </propertyValuesHolder>
-    <propertyValuesHolder android:propertyName="translateY">
-        <keyframe android:fraction="0" android:value="58"/>
-        <keyframe android:fraction="0.281" android:value="58"/>
-        <keyframe android:fraction="1" android:value="0" android:interpolator="@android:interpolator/decelerate_cubic"/>
+    <propertyValuesHolder android:propertyName="rotation">
+        <keyframe android:fraction="0" android:value="-22.5"/>
+        <keyframe android:fraction="0.281" android:value="-22.5"/>
+        <keyframe android:fraction="0.712" android:value="0" android:interpolator="@android:interpolator/decelerate_cubic"/>
+        <keyframe android:fraction="1" android:value="0"/>
     </propertyValuesHolder>
 </objectAnimator>

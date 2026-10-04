@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The launch splash: the gem (dg_splash_mark.xml) animated once, 890 ms, as Uposatha's pass. -->
 <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/dg_splash_mark">
     <target android:name="reveal" android:animation="@animator/dg_splash_reveal"/>
     <target android:name="pop" android:animation="@animator/dg_splash_pop"/>
+    <target android:name="band_wide" android:animation="@animator/dg_splash_sheen_wide"/>
+    <target android:name="band_core" android:animation="@animator/dg_splash_sheen_core"/>
 </animated-vector>

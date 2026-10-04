@@ -1,21 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Part of the 890 ms launch mark, timed as Uposatha's: a 250 ms still frame (the window is often not on
-     screen yet when the pass starts), then the circle that uncovers the mark grows from the book's spine
-     upwards in 640 ms. The still is an animator of its own that holds the closed circle, not a startOffset:
-     during an offset the drawable shows its static state, the whole mark, which would flash before the
-     reveal. Both paths have the same structure, which is what lets the system morph one into the other. -->
+<!-- The circle that uncovers the gem from its centre: closed for 250 ms (the splash window is often not on screen yet), then open in 384 ms. The hold is an animator of its own that keeps the start shape, not a startOffset:
+     during an offset the drawable shows its static (final) state, which would flash. Both shapes have the
+     same structure, which is what lets the system morph one into the other. -->
 <set xmlns:android="http://schemas.android.com/apk/res/android" android:ordering="sequentially">
-    <objectAnimator
-        android:duration="250"
-        android:propertyName="pathData"
-        android:valueType="pathType"
-        android:valueFrom="M688,798m-1,0a1,1 0 1,0 2,0a1,1 0 1,0 -2,0Z"
-        android:valueTo="M688,798m-1,0a1,1 0 1,0 2,0a1,1 0 1,0 -2,0Z"/>
-    <objectAnimator
-        android:duration="640"
-        android:propertyName="pathData"
-        android:valueType="pathType"
-        android:valueFrom="M688,798m-1,0a1,1 0 1,0 2,0a1,1 0 1,0 -2,0Z"
-        android:valueTo="M688,798m-1100,0a1100,1100 0 1,0 2200,0a1100,1100 0 1,0 -2200,0Z"
-        android:interpolator="@android:interpolator/decelerate_cubic"/>
+    <objectAnimator android:duration="250" android:propertyName="pathData" android:valueType="pathType"
+        android:valueFrom="M250,250m-1,0a1,1 0 1,0 2,0a1,1 0 1,0 -2,0Z" android:valueTo="M250,250m-1,0a1,1 0 1,0 2,0a1,1 0 1,0 -2,0Z"/>
+    <objectAnimator android:duration="384" android:propertyName="pathData" android:valueType="pathType"
+        android:valueFrom="M250,250m-1,0a1,1 0 1,0 2,0a1,1 0 1,0 -2,0Z" android:valueTo="M250,250m-300,0a300,300 0 1,0 600,0a300,300 0 1,0 -600,0Z" android:interpolator="@android:interpolator/decelerate_cubic"/>
 </set>

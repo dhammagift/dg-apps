@@ -28,20 +28,22 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
-    <!-- The launch screen. It used to be @drawable/splash — a PNG rendered on WHITE for every
-         density — so a dark-mode device got a white flash before the (dark) page appeared, which is
-         what the owner reported. Now it is the launcher icon's own background colour with the
-         icon's foreground centred: the same mark the reader just tapped, in both themes, no white.
+    <!-- The launch screen, the same as the dictionary's and Uposatha's (owner, 2026-10-04: "the main app
+         opens worse than the secondary ones"): the page's own background (dg_splash_bg, light/dark by
+         the system theme) and the Dhamma.Gift mark animated on it (drawable/dg_splash_icon.xml: a circle
+         opens from the book upwards, the motion of a tap on the logo on dhamma.gift). MainActivity holds
+         it until the page has drawn, so it hands over to the page, not to an empty WebView.
+         History: this mark was tried on 2026-09-26 (ed1c32d) and reverted to the launcher icon on navy
+         (df2dc58); then the splash was released after a fixed 750 ms, before the heavy page had drawn.
          postSplashScreenTheme is what hands over to the real theme; without it the app would keep
          the splash theme and the WebView would never appear. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenBackground">@color/dg_splash_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/dg_splash_icon</item>
+        <item name="windowSplashScreenAnimationDuration">900</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
-        <item name="android:background">@color/ic_launcher_background</item>
-        <!-- The splash window is #2E3E50 — dark — so its status bar needs the same light icons as
-             the real theme; without this the launch screen inherited the light-mode default (dark
-             icons) and the clock was invisible from the first frame. -->
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:background">@color/dg_splash_bg</item>
+        <!-- Status bar icons that read on the splash background: dark on light, light on dark. -->
+        <item name="android:windowLightStatusBar">@bool/dg_splash_light_bar</item>
     </style>
 </resources>

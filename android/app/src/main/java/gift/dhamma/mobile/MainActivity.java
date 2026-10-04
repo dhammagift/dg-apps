@@ -5,11 +5,14 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.View;
 import android.webkit.WebView;
 
+import androidx.core.splashscreen.SplashScreen;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
     // Guards against handling the same launch twice. BridgeActivity.load() — called from its
@@ -19,6 +22,15 @@ public class MainActivity extends BridgeActivity {
     // cold start: two loadUrl() calls for one shortcut tap, the second restarting a navigation the
     // first had already begun, racing the bridge's own initial load of the start page.
     private Intent handledIntent;
+
+    // The launch splash (res/drawable/dg_splash_icon.xml, 900 ms) stays until the page has drawn its first
+    // frame, so it hands over to the page and not to an empty WebView: this page is far heavier than the
+    // dictionary's, and a splash released on a fixed timer showed a blank screen after it (2026-09-26).
+    // At least SPLASH_MIN_MS, so a warm start still lets the mark play; at most SPLASH_MAX_MS, so a page
+    // that never reports cannot keep the app behind the splash.
+    private static final long SPLASH_MIN_MS = 750;
+    private static final long SPLASH_MAX_MS = 3000;
+    private volatile boolean pageVisible;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -44,7 +56,21 @@ public class MainActivity extends BridgeActivity {
                 android.util.Log.w("DgSearch", "plugin not registered: " + t);
             }
         }
+        SplashScreen splash = SplashScreen.installSplashScreen(this);
+        final long shownAt = SystemClock.uptimeMillis();
+        splash.setKeepOnScreenCondition(() -> {
+            long held = SystemClock.uptimeMillis() - shownAt;
+            return held < SPLASH_MIN_MS || (!pageVisible && held < SPLASH_MAX_MS);
+        });
         super.onCreate(savedInstanceState);
+        if (getBridge() != null) {
+            getBridge().addWebViewListener(new WebViewListener() {
+                @Override
+                public void onPageCommitVisible(WebView view, String url) { pageVisible = true; }
+                @Override
+                public void onPageLoaded(WebView webView) { pageVisible = true; }
+            });
+        }
         // Deliberately no handleIntent() here — see handledIntent above.
 
         // And no second WebView, ever. With multiple windows enabled, any target="_blank" or
@@ -56,6 +82,9 @@ public class MainActivity extends BridgeActivity {
         // if anything still asks for a window, the WebView loads it in the current view instead.
         if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().getSettings().setSupportMultipleWindows(false);
+            // Before the page's first paint the WebView shows the splash's own colour (light/dark by the
+            // system theme), never a white or navy strip between the splash and the page.
+            getBridge().getWebView().setBackgroundColor(getColor(R.color.dg_splash_bg));
             // No scrollbars, no overscroll glow: the WebView draws its own scroll indicator ABOVE the page
             // (and above the splash), which showed as a strip down the launch screen. The page is the app's
             // whole interface here, and a phone app has no scrollbars on it.

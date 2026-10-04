@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The launch screen's background: the page's own, light #ffffff, dark #111111 by the system theme
+         (the same as the dictionary and Uposatha), so the splash hands over to the page with no navy or
+         white flash. The animated mark is drawn on it by the system splash (drawable/dg_splash_icon.xml). -->
+    <color name="dg_splash_bg">#FFFFFF</color>
+    <!-- Dark icons in the status bar over the light splash; the real theme takes over afterwards. -->
+    <bool name="dg_splash_light_bar">true</bool>
+</resources>

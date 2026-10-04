@@ -665,11 +665,11 @@
       if (typeof url === 'string' && url) args[0] = siteUrl(url);
       return open.apply(window, args);
     };
-    // The system share sheet. iOS has navigator.share; Android's WebView does not, so both share
-    // buttons (the page's and the menu's) fell back to "Link copied". DgShare is the native sheet.
-    var send = typeof navigator.share === 'function' ? navigator.share.bind(navigator) : null;
+    // The system share sheet: the app's own DgShare on both platforms (Android's WebView has no navigator.share, so both
+    // share buttons fell back to "Link copied"); the WebView's navigator.share only where the plugin is missing.
     var Share = Cap.Plugins && Cap.Plugins.DgShare;
-    if (!send && Share && typeof Share.share === 'function') send = function (d) { return Share.share(d); };
+    var send = Share && typeof Share.share === 'function' ? function (d) { return Share.share(d); }
+      : typeof navigator.share === 'function' ? navigator.share.bind(navigator) : null;
     if (!send) return;
     navigator.share = function (data) {
       return send({ title: (data && data.title) || 'Uposatha', url: shareUrl() });
@@ -693,16 +693,19 @@
       if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      // From the button's centre (owner), in the transition layer's own pixels: the page's font size zooms <html>, and
-      // the layer's clip-path is zoomed with it, so the centre and the radius are divided by the zoom (without it the
-      // circle started 10% off to the side). The radius reaches the farthest corner of the SCREEN: on a phone the
-      // snapshot is the large viewport, taller than innerHeight, and a smaller circle stopped short of the bottom.
+      // From the button's centre (owner). The page's font size zooms <html>, and the transition layer with it: a circle
+      // set in pixels started 10% off to the side, and on a phone the snapshot is taller than innerHeight, so a radius
+      // to the window's corners stopped short of the bottom. Hence fractions of the screen, not pixels: the button's rect and a probe that spans the viewport are read the same
+      // way, so whatever unit an engine uses under the zoom (Chromium and WebKit do not agree) cancels out, and the circle is
+      // set in percentages of the transition layer. 150% of the layer's reference radius (its diagonal / sqrt 2) passes the
+      // farthest corner from any point, also on a snapshot taller than the window.
       var r = btn.getBoundingClientRect();
-      var zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-      var x = r.left + r.width / 2, y = r.top + r.height / 2;
-      var w = Math.max(innerWidth, document.documentElement.clientWidth), h = Math.max(innerHeight, screen.height || 0, document.documentElement.clientHeight);
-      var radius = Math.hypot(Math.max(x, w - x), Math.max(y, h - y)) + 2;
-      x /= zoom; y /= zoom; radius /= zoom;
+      var probe = document.createElement('div');
+      probe.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;visibility:hidden;pointer-events:none';
+      document.body.appendChild(probe);
+      var v = probe.getBoundingClientRect();
+      probe.remove();
+      var fx = ((r.left + r.width / 2 - v.left) / (v.width || 1) * 100).toFixed(2), fy = ((r.top + r.height / 2 - v.top) / (v.height || 1) * 100).toFixed(2);
       running = true;
       // the page's own colour transitions (the top bar fades its background) would show mid-way in the circle
       document.documentElement.classList.add('dg-theme-vt');
@@ -712,7 +715,7 @@
       });
       vt.ready.then(function () {
         document.documentElement.animate(
-          { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'] },
+          { clipPath: ['circle(0% at ' + fx + '% ' + fy + '%)', 'circle(150% at ' + fx + '% ' + fy + '%)'] },
           { duration: 450, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'both', pseudoElement: '::view-transition-new(root)' });   // the timing of build 491, which the owner found smooth on a phone (1000 and 1500 ms stuttered)
       }).catch(function () {});
       function done() { running = false; document.documentElement.classList.remove('dg-theme-vt'); }

@@ -158,6 +158,7 @@ class DgBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(DgShortcutsPlugin())
         bridge?.registerPluginInstance(DgSitePlugin())
         bridge?.registerPluginInstance(DgInsetsPlugin())
+        bridge?.registerPluginInstance(DgSharePlugin())
         #if DEBUG
         // Debug builds only, for the same reason as Dhamma.Gift's DgSelfTestPlugin: the App Store screenshot
         // tour (test/ios-sim/tour.js) needs one native call to say which view is on screen; a release build's
@@ -390,6 +391,38 @@ public class DgInsetsPlugin: CAPPlugin, CAPBridgedPlugin {
                 "bottom": Double(insets.bottom),
                 "left": Double(insets.left)
             ])
+        }
+    }
+}
+
+// MARK: - Share
+
+// The system share sheet (dg-apps#56), the same call as on Android (DgSharePlugin.java): uposatha-bridge.js puts it behind the
+// page's navigator.share, so both Share buttons open the sheet with the docs page instead of relying on the WKWebView's own
+// Web Share. On an iPad the sheet is a popover, anchored to the middle of the screen.
+//     Capacitor.Plugins.DgShare.share({ title, url })
+@objc(DgSharePlugin)
+public class DgSharePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "DgSharePlugin"
+    public let jsName = "DgShare"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "share", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func share(_ call: CAPPluginCall) {
+        guard let url = URL(string: call.getString("url") ?? "") else { call.reject("No url to share"); return }
+        let title = call.getString("title") ?? ""
+        DispatchQueue.main.async {
+            guard let host = self.bridge?.viewController else { call.reject("No view to show the sheet on"); return }
+            let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            if !title.isEmpty { sheet.setValue(title, forKey: "subject") }
+            if let pop = sheet.popoverPresentationController {
+                pop.sourceView = host.view
+                pop.sourceRect = CGRect(x: host.view.bounds.midX, y: host.view.bounds.midY, width: 0, height: 0)
+                pop.permittedArrowDirections = []
+            }
+            sheet.completionWithItemsHandler = { _, _, _, _ in call.resolve() }
+            host.present(sheet, animated: true)
         }
     }
 }

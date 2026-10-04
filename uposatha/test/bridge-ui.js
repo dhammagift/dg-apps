@@ -220,13 +220,13 @@ function capacitorStub() {
             // the id of one still there: its id is its own minute.
             const tray = await page.evaluate(async () => {
                 window.__delivered = [{ id: 7000 }, { id: 7990 }, { id: 1 }]; window.__calls.removed = []; window.__calls.scheduled = [];
-                const at = new Date(Date.UTC(2026, 9, 4, 6, 0));
+                const at = new Date(Math.ceil((Date.now() + 86400000) / 60000) * 60000);   // a day ahead: still ahead when the source is changed below
                 await window.Capacitor.Plugins.LocalNotifications.schedule({ notifications: [
                     { id: 7000, title: 't', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at } },
                     { id: 7001, title: 't2', body: 'b2', channelId: 'uposatha-gong-v1', schedule: { at } }] });
-                return { removed: window.__calls.removed, ids: window.__calls.scheduled.flat().map((n) => n.id) };
+                return { removed: window.__calls.removed, ids: window.__calls.scheduled.flat().map((n) => n.id), minute: Math.floor(at.getTime() / 60000) % 100000 };
             });
-            const minute = Math.floor(Date.UTC(2026, 9, 4, 6, 0) / 60000) % 100000;
+            const minute = tray.minute; delete tray.minute;
             check(`stream ${stream}: nothing of ours is taken out of the tray, each reminder has an id of its own minute`,
                 tray, { removed: [], ids: [1000000 + minute * 10, 1000000 + minute * 10 + 1] });
             // The page cancels what is pending by its own range (7000-7099): getPending shows ours as that range, cancel maps back.

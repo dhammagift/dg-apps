@@ -83,4 +83,13 @@
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Alarms are lost on reboot: the LocalNotifications plugin re-arms them on boot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <queries>
+        <!-- dg-apps#48: the text-selection menu of the WebView lists the apps that take selected text
+             (PROCESS_TEXT: Dhamma.Gift, Dict.Dhamma.Gift). Since Android 11 an app sees other apps only if it
+             declares what it looks for, so without this the menu had only the system's own entries. -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
 </manifest>

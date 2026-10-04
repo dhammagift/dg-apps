@@ -693,9 +693,16 @@
       if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       e.preventDefault();
       e.stopImmediatePropagation();
+      // From the button's centre (owner), in the transition layer's own pixels: the page's font size zooms <html>, and
+      // the layer's clip-path is zoomed with it, so the centre and the radius are divided by the zoom (without it the
+      // circle started 10% off to the side). The radius reaches the farthest corner of the SCREEN: on a phone the
+      // snapshot is the large viewport, taller than innerHeight, and a smaller circle stopped short of the bottom.
       var r = btn.getBoundingClientRect();
-      var x = e.clientX || r.left + r.width / 2, y = e.clientY || r.top + r.height / 2;
-      var radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+      var zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      var x = r.left + r.width / 2, y = r.top + r.height / 2;
+      var w = Math.max(innerWidth, document.documentElement.clientWidth), h = Math.max(innerHeight, screen.height || 0, document.documentElement.clientHeight);
+      var radius = Math.hypot(Math.max(x, w - x), Math.max(y, h - y)) + 2;
+      x /= zoom; y /= zoom; radius /= zoom;
       running = true;
       // the page's own colour transitions (the top bar fades its background) would show mid-way in the circle
       document.documentElement.classList.add('dg-theme-vt');
@@ -706,7 +713,7 @@
       vt.ready.then(function () {
         document.documentElement.animate(
           { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'] },
-          { duration: 450, easing: 'cubic-bezier(.4, 0, .2, 1)', pseudoElement: '::view-transition-new(root)' });
+          { duration: 1000, easing: 'cubic-bezier(.2, 0, 0, 1)', fill: 'both', pseudoElement: '::view-transition-new(root)' });   // tuned with the owner on a demo page
       }).catch(function () {});
       function done() { running = false; document.documentElement.classList.remove('dg-theme-vt'); }
       vt.finished.then(done, done);
@@ -785,6 +792,13 @@
       // The two "time for food" reminders: the list of leads sat flush against the switch above it (owner's screenshot).
       + 'body.app #mbeg-lead,body.app #mrem-lead{margin-top:14px}'
       + 'body.app.dg-drawer-open .appnav{display:none}'
+      // The top bar is a floating pill like the tab bar below (dg-apps#54, owner: "as in Telegram, the text should be seen
+      // where the beard was"): no solid band under the clock, the page shows through above and around the pill.
+      + 'body.app .tbar,body.app.scrolled .tbar{background:transparent;box-shadow:none}'
+      + 'body.app .tbar>*{position:relative}'
+      + 'body.app .tbar::before{content:"";position:absolute;left:10px;right:10px;top:calc(' + SAT + ' + 2px);bottom:2px;border-radius:30px;'
+      + 'background:color-mix(in srgb,var(--dg-surface) 80%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);'
+      + 'border:1px solid var(--dg-border);box-shadow:0 8px 24px rgba(0,0,0,.12)}'
       // "Link copied" from the menu's share (settings.js showBubbleNotification): its styles are
       // the site's (extrastyles.css), which this page does not load, so it was a bare full-width bar.
       // It and the page's own toast sit above the tab bar, not under it.

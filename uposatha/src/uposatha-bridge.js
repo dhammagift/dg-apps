@@ -564,6 +564,9 @@
     if (!App || typeof App.addListener !== 'function') return;
     App.addListener('backButton', function (ev) {
       if (closeRatePrompt()) return;
+      // The loading-failed window (launch-screens.js): Back closes it, the page stays.
+      var lsErr = document.getElementById('dglsErr');
+      if (lsErr) { lsErr.remove(); return; }
       if (document.body.classList.contains('dg-drawer-open')) {
         var close = document.querySelector('#dg-drawer .dg-drawer-close');
         if (close) { close.click(); return; }

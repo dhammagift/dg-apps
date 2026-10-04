@@ -86,6 +86,24 @@
         '@keyframes dgls-spin{to{transform:rotate(360deg)}}',
         '@media (prefers-reduced-motion:reduce){.dgls *,.dgls *::after{animation:none!important}.dgls-dc .hk,.dgls-dc .st,.dgls-dc .ul,.dgls-up .cl{stroke-dashoffset:0}',
         '.dgls-dg img{-webkit-mask:none;mask:none}.dgls-dg::after{display:none}.dgls-dc .dt{opacity:1}.dgls.out{transition:none}}',
+        // The loading-failed window (error() below): over the page, the page dimmed behind it.
+        '.dgls.dglsc{background:rgba(0,0,0,.38);padding:0 22px;animation:dglsc-in .18s ease-out both}',
+        '.dglsc-card{width:100%;max-width:380px;box-sizing:border-box;border-radius:20px;padding:20px 20px 14px;text-align:left;',
+        'background:var(--p);color:var(--t);box-shadow:0 12px 40px rgba(0,0,0,.28)}',
+        '@media (prefers-color-scheme:dark){.dglsc-card{background:#1f2120}}',
+        '.dglsc-hd{font-size:18px;font-weight:700;line-height:1.3;margin:0 0 6px;overflow-wrap:anywhere}',
+        '.dglsc-bd{font-size:15px;line-height:1.45;color:var(--t2);margin:0 0 16px}',
+        '.dglsc-bd.is-detail{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--tm);overflow-wrap:anywhere}',
+        '.dglsc-ex{margin:-6px 0 14px;padding:10px 12px;border-radius:12px;background:var(--ab);color:var(--aob);font-size:14px;line-height:1.4}',
+        '.dglsc-st{font-size:12px;color:var(--tm);margin:-8px 0 12px}',
+        '.dglsc-st:empty{display:none}',
+        '.dglsc-row{display:flex;gap:8px;justify-content:flex-end}',
+        '.dglsc-row button{height:40px;padding:0 18px;border-radius:999px;border:0;font:700 15px/1 inherit;font-family:inherit;cursor:pointer;',
+        'display:inline-flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal;box-shadow:none}',
+        '.dglsc-close{background:transparent;color:var(--aob)}',
+        '.dglsc-bt{background:var(--a);color:#fff}',
+        '.dglsc-bt[disabled]{opacity:.6;cursor:default}',
+        '@keyframes dglsc-in{from{opacity:0}to{opacity:1}}',
     ].join('');
 
     var TEXT = {
@@ -93,14 +111,14 @@
             none: ['Нет соединения.', 'Проверьте интернет и повторите.'],
             down: ['Не удалось загрузить', 'Попробуйте ещё раз.'],
             retry: ['Проверяем соединение…', 'Это займёт несколько секунд.'],
-            btn: 'Повторить', busy: 'Проверяем…', auto: 'Повторим сами, когда сеть появится',
+            btn: 'Повторить', close: 'Закрыть', busy: 'Проверяем…', auto: 'Повторим сами, когда сеть появится',
             upo: 'Напоминания уже стоят на телефоне и придут без сети.',
         },
         en: {
             none: ['No connection.', 'Check the internet and try again.'],
             down: ['Couldn’t load', 'Please try again.'],
             retry: ['Checking the connection…', 'This takes a few seconds.'],
-            btn: 'Try again', busy: 'Checking…', auto: 'We’ll retry by ourselves once you’re online',
+            btn: 'Try again', close: 'Close', busy: 'Checking…', auto: 'We’ll retry by ourselves once you’re online',
             upo: 'Your reminders are set on this phone and will arrive without it.',
         },
     };
@@ -214,32 +232,37 @@
         }
     }
 
+    // Loading failed: a small window over the page, never the whole screen (owner, 2026-10-04: every app
+    // has its own interface bundled — the home page, the multitool, the calendar — so there is always a
+    // page to show it over). It says what failed and what the request answered (opts.what / opts.detail),
+    // not a guessed cause; "No connection" only when the device reports itself offline. Try again, Close,
+    // and Back (native-bridge.js) take it away. state: 'none' (offline) | 'down' (a request failed).
     function error(app, state, opts) {
         opts = opts || {};
         var existing = document.getElementById('dglsErr');
         if (existing) return existing.__dgls;
+        addStyle();
         var t = TEXT[lang()];
-        var el = build(app, opts, 'dgls-err');
+        var el = document.createElement('div');
+        el.className = 'dgls dglsc';
         el.id = 'dglsErr';
-        el.setAttribute('role', 'alert');
-        var title = app === 'dict' ? 'Dict.Dhamma.Gift' : app === 'upo' ? 'Uposatha' : 'Dhamma.Gift';
-        el.insertAdjacentHTML('beforeend',
-            '<div class="dgls-h"></div><div class="dgls-tx"><span class="dgls-hd"></span><span class="dgls-bd"></span>'
-            + (app === 'upo' ? '<span class="dgls-ex"></span>' : '') + '</div>'
-            + '<button type="button" class="dgls-bt"></button><div class="dgls-st"></div>');
-        el.querySelector('.dgls-h').textContent = title;
-        var head = el.querySelector('.dgls-hd'), body = el.querySelector('.dgls-bd');
-        var btn = el.querySelector('button'), foot = el.querySelector('.dgls-st');
+        el.setAttribute('role', 'alertdialog');
+        el.innerHTML = '<div class="dglsc-card"><div class="dglsc-hd"></div><div class="dglsc-bd"></div>'
+            + (app === 'upo' ? '<div class="dglsc-ex"></div>' : '')
+            + '<div class="dglsc-st"></div>'
+            + '<div class="dglsc-row"><button type="button" class="dglsc-close"></button>'
+            + '<button type="button" class="dglsc-bt"></button></div></div>';
+        var head = el.querySelector('.dglsc-hd'), body = el.querySelector('.dglsc-bd');
+        var btn = el.querySelector('.dglsc-bt'), foot = el.querySelector('.dglsc-st');
+        var close = el.querySelector('.dglsc-close');
+        close.textContent = t.close;
         var busy = false;
 
         function show(st) {
             var pair = t[st];
-            // 'down' says what failed and what the request answered (opts.what / opts.detail), not a
-            // guessed cause: the network and the server can both be fine while the request was cut
-            // (an app frozen in the background, owner 2026-10-04). Only 'none' (the device reports
-            // itself offline) is about the connection.
             head.textContent = st === 'down' && opts.what ? pair[0] + ' ' + opts.what : pair[0] + (st === 'down' ? '.' : '');
             body.textContent = st === 'down' && opts.detail ? opts.detail : pair[1];
+            body.className = 'dglsc-bd' + (st === 'down' && opts.detail ? ' is-detail' : '');
             btn.disabled = st === 'retry';
             btn.innerHTML = '';
             if (st === 'retry') {
@@ -265,12 +288,15 @@
                 }, Math.max(0, 800 - (Date.now() - started)));
             });
         }
+        function dismiss() { if (el.parentNode) el.parentNode.removeChild(el); }
         btn.addEventListener('click', again);
+        close.addEventListener('click', dismiss);
+        el.addEventListener('click', function (e) { if (e.target === el) dismiss(); });
         window.addEventListener('online', function () { if (document.getElementById('dglsErr')) again(); });
-        if (app === 'upo') el.querySelector('.dgls-ex').textContent = t.upo;   // the reminders do not need the network
+        if (app === 'upo') el.querySelector('.dglsc-ex').textContent = t.upo;   // the reminders do not need the network
         show(state === 'down' ? 'down' : 'none');
         mount(el);
-        el.__dgls = { retry: again };
+        el.__dgls = { retry: again, close: dismiss };
         return el.__dgls;
     }
 

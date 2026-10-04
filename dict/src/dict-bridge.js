@@ -307,6 +307,9 @@
     if (!App || typeof App.addListener !== 'function') return;
     App.addListener('backButton', function (ev) {
       if (closeRatePrompt()) return;
+      // The loading-failed window (launch-screens.js): Back closes it, the page stays.
+      var lsErr = document.getElementById('dglsErr');
+      if (lsErr) { lsErr.remove(); return; }
       // The burger/history panel is an overlay, so closing it is what "back" means while it is up.
       var open = document.querySelector('.panel[data-open="true"]');
       if (open && typeof window.closePanels === 'function') { window.closePanels(); return; }

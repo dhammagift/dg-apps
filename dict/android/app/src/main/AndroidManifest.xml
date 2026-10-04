@@ -36,9 +36,27 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
 
+        </activity>
+
+        <!-- The text-selection item lives on a trampoline, not on MainActivity: the caller (Chrome,
+             any TextView) starts PROCESS_TEXT with startActivityForResult, and an activity started
+             for a result always joins the CALLER's task — singleTask is ignored. MainActivity used
+             to open as a second copy inside Chrome's task: Recents showed Chrome's card with our
+             UI, and there was no way back to the tab. ProcessTextActivity forwards the text to
+             MainActivity in its own task and finishes at once; Share (ACTION_SEND) never had the
+             problem, it is a plain startActivity.
+             Its android:label is what the selection menu prints, so it is the app's own title. -->
+        <activity
+            android:name=".ProcessTextActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:exported="true">
             <!-- Text selection: select a word in any app and the dictionary sits in the selection
                  toolbar (or its overflow) next to Copy/Translate. The label Android prints is this
-                 activity's own (android:label above). android:priority="1000": the platform appends
+                 activity's own (android:label). android:priority="1000": the platform appends
                  these items in queryIntentActivities order, which for activities is
                  RESOLVE_PRIORITY_SORTER — priority first, then system-before-user, and only then
                  the package name alphabetically; at the default 0 the item sorted below every
@@ -49,7 +67,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/*" />
             </intent-filter>
-
         </activity>
 
         <provider

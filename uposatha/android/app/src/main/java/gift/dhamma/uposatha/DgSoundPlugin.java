@@ -12,6 +12,7 @@ import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.MediaStore;
+import android.os.Bundle;
 import android.provider.Settings;
 import android.provider.OpenableColumns;
 import android.webkit.MimeTypeMap;
@@ -108,6 +109,14 @@ public class DgSoundPlugin extends Plugin {
         try {
             Intent intent = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            // Scroll the list to this app and flash its row (owner: the list is long, Uposatha is at the bottom). The
+            // keys are the ones the Settings app's own search uses to land on an entry; undocumented, so a settings app
+            // that does not know them just shows the plain list, as before.
+            String pkg = getContext().getPackageName();
+            Bundle highlight = new Bundle();
+            highlight.putString(":settings:fragment_args_key", pkg);
+            intent.putExtra(":settings:fragment_args_key", pkg);
+            intent.putExtra(":settings:show_fragment_args", highlight);
             getContext().startActivity(intent);
             call.resolve();
         } catch (Exception e) {

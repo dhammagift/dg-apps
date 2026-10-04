@@ -9,7 +9,11 @@ import android.view.View;
 import android.webkit.WebView;
 
 
+import androidx.browser.customtabs.CustomTabsIntent;
+
 import com.getcapacitor.BridgeActivity;
+
+import java.util.regex.Pattern;
 
 public class MainActivity extends BridgeActivity {
     // Guards against handling the same launch twice. BridgeActivity.load() — called from its
@@ -19,6 +23,12 @@ public class MainActivity extends BridgeActivity {
     // cold start: two loadUrl() calls for one shortcut tap, the second restarting a navigation the
     // first had already begun, racing the bridge's own initial load of the start page.
     private Intent handledIntent;
+
+    // Pages of the site this app does not contain (the same list as EXTERNAL_ROUTES in native-bridge.js): a dhamma.gift link to
+    // one of them is opened in a Custom Tab right here. Handing it to the page instead (?_nativeRoute=) loaded the home page, and on
+    // a cold start its Browser.open came before the bridge was ready and was lost: the screen blinked, Back had one step too many,
+    // and only the second tap opened the docs (owner, dhamma.gift/docs/uposatha).
+    private static final Pattern SITE_ONLY = Pattern.compile("^/(ru/)?(dict|memorize|docs|uposatha-calendar)(/|$)");
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -166,6 +176,14 @@ public class MainActivity extends BridgeActivity {
             // fixed extra.
             Uri data = intent.getData();
             String path = data.getPath();
+            if (path != null && SITE_ONLY.matcher(path).find()) {
+                try {
+                    new CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(this, data);
+                    return;
+                } catch (Exception e) {
+                    // No browser for a Custom Tab: the page's own route below still sends it out.
+                }
+            }
             String route = (path == null || path.isEmpty() ? "/" : path)
                 + (data.getQuery() != null ? "?" + data.getQuery() : "");
             url = "https://localhost/?_nativeRoute=" + Uri.encode(route);

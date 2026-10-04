@@ -73,6 +73,8 @@ dependencies {
     implementation "androidx.core:core-google-shortcuts:1.1.0"
     // MediaSessionCompat and the media-style notification behind DgTtsPlugin's lock-screen player.
     implementation "androidx.media:media:1.7.0"
+    // Custom Tabs for the site's own pages a dhamma.gift link names (MainActivity.SITE_ONLY); the same version @capacitor/browser uses.
+    implementation "androidx.browser:browser:1.9.0"
     // Native Google sign-in (DgGoogleSignInPlugin): the system account sheet instead of a browser page.
     implementation "androidx.credentials:credentials:1.3.0"
     implementation "androidx.credentials:credentials-play-services-auth:1.3.0"

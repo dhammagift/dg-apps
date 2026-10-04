@@ -2,7 +2,7 @@
 // BUNDLED in the APK working and current. Pasted into each bridge by its build.js at the marker
 // "// @site-updater"; the bridge defines SITE_CONFIG first and calls updateSite() when the page has loaded.
 //
-//   SITE_CONFIG = { site: 'https://dict.dhamma.gift', urlFor: function (path) { return path; } }
+//   SITE_CONFIG = { site: 'https://dict.dhamma.gift', urlFor: function (path) { return path; }, updatable: optional (path) => bool }
 //
 // Uses the bridge's Cap (window.Capacitor) and store() (localStorage read).
   // ---- no service worker ---------------------------------------------------------------------
@@ -63,7 +63,8 @@
     var hashes = {};
     try { hashes = JSON.parse(store('dgSiteHashes')) || {}; } catch (e) { hashes = {}; }
     fetch('/site-manifest.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (manifest) {
-      var queue = manifest.files.slice(), seen = {}, changes = [], changed = 0, fetched = 0;
+      var ok = SITE_CONFIG.updatable || function () { return true; };
+      var queue = manifest.files.filter(ok), seen = {}, changes = [], changed = 0, fetched = 0;
       manifest.files.forEach(function (f) { seen[f] = 1; });
       function next() {
         var path = queue.shift();
@@ -82,7 +83,7 @@
             // (a first version followed those and pulled 30 MB), and what a script fetches on demand is in the bundle
             // already (the snapshot's browser ran it).
             if (/\.(html|css)$/.test(path)) {
-              referencedPaths(new TextDecoder().decode(buf), path).forEach(function (p) { if (!seen[p]) { seen[p] = 1; queue.push(p); } });
+              referencedPaths(new TextDecoder().decode(buf), path).forEach(function (p) { if (!seen[p] && ok(p)) { seen[p] = 1; queue.push(p); } });
             }
             if (sha === had) return null;
             changes.push({ path: path, data: bytesToBase64(new Uint8Array(buf)), sha: sha });

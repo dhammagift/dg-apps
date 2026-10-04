@@ -61,7 +61,7 @@ on:
         required: false
         type: string
       release:
-        description: 'Which store gets this build, one app at a time (owner, 2026-09-29: the same shape for all three apps, and never ship an app nobody asked for). dg = Dhamma.Gift to Play (INTERNAL track: testers only, production still needs a promote in the console); dg-ios = Dhamma.Gift to TestFlight; dg-both = Dhamma.Gift to both, in one run; dict / dict-ios = the dictionary to Play / TestFlight; uposatha / uposatha-ios = Uposatha to Play / TestFlight. none (default) = build only, nothing uploaded. A dict/uposatha choice skips the Dhamma.Gift build (and its database) entirely. A tag always releases everything.'
+        description: 'Which store gets this build, one app at a time (owner, 2026-09-29: the same shape for all three apps, and never ship an app nobody asked for). dg = Dhamma.Gift to Play (open testing, beta; production still needs a promote in the console); dg-ios = Dhamma.Gift to TestFlight; dg-both = Dhamma.Gift to both, in one run; dict / dict-ios = the dictionary to Play (closed testing, alpha) / TestFlight; uposatha / uposatha-ios = Uposatha to Play (closed testing, alpha) / TestFlight. none (default) = build only, nothing uploaded. A dict/uposatha choice skips the Dhamma.Gift build (and its database) entirely. A tag always releases everything.'
         required: false
         type: choice
         default: none
@@ -76,6 +76,11 @@ on:
         required: false
         type: boolean
         default: false
+      screenshots_local:
+        description: 'With screenshots: keep the Uposatha pictures in the workflow artifact only, nothing goes to App Store Connect (to look at the app without touching the listing)'
+        required: false
+        type: boolean
+        default: false
       video:
         description: 'Record the emulator test as a video (flow.mp4) as well as screenshots'
         required: false
@@ -86,8 +91,13 @@ on:
         required: false
         type: boolean
         default: false
+      uposatha:
+        description: 'Build the Uposatha APK (debug and release, uploaded nowhere) without the iOS checks: a manual run for a test APK. release=uposatha / ios_checks build it too.'
+        required: false
+        type: boolean
+        default: false
       dict_only:
-        description: 'Run ONLY the dictionary app jobs and skip the reader app entirely. For checking a change under dict/ without building the offline library: minutes instead of the better part of an hour. A tag ignores it — a release builds everything.'
+        description: 'Run ONLY the dictionary app jobs and skip Dhamma.Gift entirely. For checking a change under dict/ without building the offline library: minutes instead of the better part of an hour. A tag ignores it — a release builds everything.'
         required: false
         type: boolean
         default: false
@@ -777,11 +787,10 @@ jobs:
   # Same shape as ios-release below, and dormant for the same reason: no secret, no upload, and a
   # job summary that says so, instead of a green tick that reads like a release happened.
   #
-  # The INTERNAL track on purpose. It is the only track that reaches a device in minutes with no
-  # review, it is limited to the testers listed in the console, and production still costs a
-  # deliberate promote there — so an automated upload can never be the thing that ships to readers
-  # by accident. Promoting internal -> production stays a human decision, which is the one part of
-  # this nobody asked to automate.
+  # A testing track, never production: Dhamma.Gift goes to open testing (beta), the dictionary and
+  # Uposatha to closed testing (alpha) — the owner moved them up from internal (2026-10-04). Production
+  # still costs a deliberate promote in the console, so an automated upload can never be the thing that
+  # ships to readers by accident; that promote stays a human decision.
   #
   # What this needs once, in the Play Console (docs/ANDROID_RELEASE.md):
   #   Setup -> API access -> link a Google Cloud project -> create a service account -> JSON key;
@@ -839,7 +848,7 @@ jobs:
           retention-days: 14
 
   android-release:
-    name: Android release (Play internal track)
+    name: Android release (Play open testing, beta)
     needs: [build, android-tests]
     if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'dg' || inputs.release == 'dg-both')) || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -890,7 +899,7 @@ jobs:
           {
             echo "### Android release: uploaded"
             echo ""
-            echo "versionCode ${{ github.run_number }} is on the **internal** track of \`gift.dhamma.twa\`."
+            echo "versionCode ${{ github.run_number }} is on the **open testing (beta)** track of \`gift.dhamma.twa\`."
             echo "Testers get it within minutes. Production needs a promote in the Play Console."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -990,7 +999,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Same keystore and the same secret names as the reader app (this repo's ANDROID_* or
+      # Same keystore and the same secret names as Dhamma.Gift (this repo's ANDROID_* or
       # dg-twa's KEYSTORE_* — whichever set exists), so one key signs both apps. When no secret is
       # present the release build is skipped rather than failing: a fork must still be able to run
       # this workflow.
@@ -1031,7 +1040,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEYSTORE_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
-        # gift.dhamma.pali, not the reader app's gift.dhamma.twa: this AAB updates the dictionary's
+        # gift.dhamma.pali, not Dhamma.Gift's gift.dhamma.twa: this AAB updates the dictionary's
         # own listing, which is the one the TWA created.
         run: ./gradlew bundleRelease -PdgVersionCode=${{ github.run_number }} --stacktrace
 
@@ -1057,8 +1066,10 @@ jobs:
   uposatha-build:
     name: Uposatha app (Android)
     runs-on: ubuntu-latest
-    # Same gate as dict-build, its own target only (owner, 2026-10-01).
-    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release == 'uposatha' || inputs.release == 'uposatha-ios' }}
+    # Same gate as dict-build, its own target only (owner, 2026-10-01), plus ios_checks: the iOS
+    # simulator job below needs this job's web bundle, and a manual ios_checks run asks for nothing
+    # else (release=none uploads nothing anywhere).
+    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release == 'uposatha' || inputs.release == 'uposatha-ios' || inputs.ios_checks || inputs.uposatha }}
     timeout-minutes: 40
     permissions:
       contents: read
@@ -1082,18 +1093,38 @@ jobs:
         working-directory: uposatha
         run: npm ci
 
-      # The app bundles the calendar page: it opens with no network, and updates itself from the site when
-      # there is one (uposatha/tools/snapshot.js). A real browser loads the page off the site and records
-      # everything it fetches. The site is dhamma.gift, production (the same value as SITE in
-      # uposatha/src/uposatha-bridge.js). Fails the job when the site cannot be reached: an APK with no
-      # page in it must never be built quietly.
-      - name: Take the calendar page off the site
-        working-directory: uposatha
-        env:
-          SITE: https://dhamma.gift
+      # The app bundles the calendar page: it opens with no network. The page is taken from the dg-node
+      # checkout the build is pinned to (DG_NODE_REF, or the dg_node_ref input), not from a running site: a
+      # build no longer depends on what production serves at that minute, and a change to the calendar
+      # reaches an app by being in dg-node, not by being deployed. Only the texts (json) follow the site at
+      # run time (updatable in uposatha-bridge.js). Fails the job when a file of the page is not in dg-node.
+      - name: Resolve dg-node ref
+        id: pin
         run: |
-          npx playwright install --with-deps chromium
-          node tools/snapshot.js
+          REF="${{ inputs.dg_node_ref }}"
+          if [ -z "$REF" ]; then REF="$(tr -d '[:space:]' < DG_NODE_REF)"; fi
+          if [ -z "$REF" ]; then echo "::error::DG_NODE_REF is empty and no dg_node_ref input given"; exit 1; fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout dg-node (the calendar page and what it loads)
+        run: |
+          mkdir -p "$RUNNER_TEMP/dg-node"
+          cd "$RUNNER_TEMP/dg-node"
+          git init -q
+          git remote add origin https://github.com/dhammagift/dg-node.git
+          git fetch --depth 1 origin "${{ steps.pin.outputs.ref }}" -q
+          git checkout -q FETCH_HEAD
+          echo "dg-node@${{ steps.pin.outputs.ref }} = $(git rev-parse HEAD)"
+
+      - name: Lay the calendar page out from dg-node
+        working-directory: uposatha
+        run: node tools/bundle-from-repo.js "$RUNNER_TEMP/dg-node"
+
+      # The edge-to-edge check below drives the bundled page in a real browser; the snapshot step that
+      # used to install it is gone.
+      - name: Install the browser for the page checks
+        working-directory: uposatha
+        run: npx playwright install --with-deps chromium
 
       # src/ -> www/ -> android/app/src/main/assets/public: the bundled page, uposatha-bridge.js and
       # the offline page where MainActivity and Capacitor read them from.
@@ -1114,7 +1145,7 @@ jobs:
 
       - name: Build Debug APK
         working-directory: uposatha/android
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug -PdgVersionCode=${{ github.run_number }} --stacktrace
 
       - name: Upload debug APK artifact
         if: success()
@@ -1183,11 +1214,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # The Uposatha app's Play release: the signed AAB uposatha-build made, uploaded to the INTERNAL track of gift.dhamma.uposatha.
+  # The Uposatha app's Play release: the signed AAB uposatha-build made, uploaded to the closed testing (alpha) track of gift.dhamma.uposatha.
   # Only on a hand-started run with release = uposatha: it is a separate app with its own listing, so it does not ride along
   # with `play`, `both` or a tag (those keep shipping the reader and the dictionary only).
   uposatha-release:
-    name: Uposatha app release (Play internal track)
+    name: Uposatha app release (Play closed testing, alpha)
     needs: uposatha-build
     if: (github.event_name == 'workflow_dispatch' && inputs.release == 'uposatha') || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -1235,7 +1266,7 @@ jobs:
           {
             echo "### Uposatha app uploaded"
             echo ""
-            echo "versionCode ${{ github.run_number }} is on the **internal** track of \`gift.dhamma.uposatha\`."
+            echo "versionCode ${{ github.run_number }} is on the **closed testing (alpha)** track of \`gift.dhamma.uposatha\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Uposatha on iOS (uposatha/ios): builds the app for the simulator from the same web bundle as the APK, launches it and
@@ -1321,34 +1352,26 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Run it in a simulator and take a screenshot
+      - name: Generate the rotation test project
         run: |
-          APP="uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app"
-          test -d "$APP" || { echo "::error::no App.app was built"; exit 1; }
-          DEV=$(xcrun simctl list devices available | grep -E "iPhone" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
-          echo "simulator $DEV"
-          xcrun simctl boot "$DEV" || true
-          xcrun simctl bootstatus "$DEV" -b
-          xcrun simctl install "$DEV" "$APP"
-          mkdir -p shots
-          # The whole launch (and a couple of taps) as a video, on request: the same "look at it without
-          # a phone" as the Android emulator's flow.mp4 (dg-apps#41, edge to edge).
-          if [ "${{ inputs.ios_video }}" = "true" ]; then
-            xcrun simctl io "$DEV" recordVideo --codec h264 --force shots/ios-flow.mp4 &
-            REC=$!
-            sleep 2
-          fi
-          xcrun simctl launch "$DEV" gift.dhamma.uposatha
-          sleep 14
-          xcrun simctl io "$DEV" screenshot shots/uposatha-ios-1.png
-          xcrun simctl ui "$DEV" appearance dark
-          sleep 4
-          xcrun simctl io "$DEV" screenshot shots/uposatha-ios-2-dark.png
-          if [ "${{ inputs.ios_video }}" = "true" ]; then
-            kill -INT "$REC" 2>/dev/null || true
-            wait "$REC" 2>/dev/null || true
-            ls -la shots
-          fi
+          brew install xcodegen >/dev/null 2>&1 || brew install xcodegen
+          (cd uposatha/test/ios-sim/rotatetest && xcodegen generate)
+
+      # tools/ios-edgetoedge.sh measures each screenshot (tools/edge-pixels.py) — a blank page must
+      # not pass as evidence. Without Pillow the runner reported every shot "blank" (run 446).
+      - name: Python imaging for the screenshot checks
+        # --break-system-packages: the macOS runner's Homebrew python is externally managed and
+        # refuses a plain --user install (run 447 died on exactly that).
+        run: python3 -m pip install --user --quiet --break-system-packages pillow
+
+      # Edge to edge (dg-apps#41), the iOS proof: portrait and landscape, light and dark, one
+      # screenshot per combination, plus the whole pass as a video on request. tools/ios-edgetoedge.sh
+      # rotates through the XCUI test above (simctl cannot) and verifies each rotation from the
+      # screenshot's own dimensions.
+      - name: Run it in a simulator (portrait/landscape, light/dark)
+        env:
+          VIDEO: ${{ inputs.ios_video && '1' || '0' }}
+        run: tools/ios-edgetoedge.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app shots gift.dhamma.uposatha
 
       - name: Upload the screenshots
         if: always()
@@ -1791,6 +1814,7 @@ jobs:
             --app ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
 
       - name: Upload to App Store Connect (version 1.0, en-US) — never sent for review
+        if: ${{ !inputs.screenshots_local }}
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -1888,7 +1912,7 @@ jobs:
             build 2>&1 | tee ../../ios-tour-build.log | tail -30
 
       # App Store Connect's iPhone slot for THIS app asks for the 6.5" frame (1242x2688 or 1284x2778), not 6.7"/6.9"
-      # (owner confirmed from the live Console page) — the same size the reader app's own screenshot job already
+      # (owner confirmed from the live Console page) — the same size Dhamma.Gift's own screenshot job already
       # settles on for the same reason. The runner image ships only current iPhone types, so the device is CREATED
       # from an older device type on the newest iOS runtime.
       - name: Prepare a 6.5" device (the size the store page accepts)
@@ -1921,6 +1945,7 @@ jobs:
             --app ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
 
       - name: Upload to App Store Connect (version 1.0, en-US) — never sent for review
+        if: ${{ !inputs.screenshots_local }}
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -1956,18 +1981,17 @@ jobs:
   # ---------------------------------------------------------------------------------------------
   # The dictionary half of the Play release path, the same shape as android-release above and
   # gated by the same choice: `release: play` (or `both`, or any tag) uploads BOTH Android apps,
-  # each to its own package on the INTERNAL track. `release: none` — the default — uploads neither.
+  # each to its own package on a testing track. `release: none` — the default — uploads neither.
   #
-  # Internal on purpose, for the same reason as the reader app: it is the only track that reaches a
-  # device in minutes with no review, it is limited to the testers listed in the console, and
-  # promoting it to production stays a human decision in the Play Console.
+  # Closed testing (alpha), for the same reason as Dhamma.Gift's testing track: promoting it to
+  # production stays a human decision in the Play Console.
   #
-  # The same PLAY_SERVICE_ACCOUNT_JSON as the reader app, and the same service account: it already
+  # The same PLAY_SERVICE_ACCOUNT_JSON as Dhamma.Gift, and the same service account: it already
   # holds "Release apps to testing tracks" on gift.dhamma.pali (dg-twa's workflow uploaded this
   # package with it). If that permission is ever revoked, the upload fails here with a 401/403 —
   # which is the point of asking Play rather than assuming.
   dict-release:
-    name: Dictionary app release (Play internal track)
+    name: Dictionary app release (Play closed testing, alpha)
     needs: dict-build
     if: (github.event_name == 'workflow_dispatch' && inputs.release == 'dict') || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -2018,7 +2042,7 @@ jobs:
           {
             echo "### Dictionary app uploaded"
             echo ""
-            echo "versionCode ${{ github.run_number }} is on the **internal** track of \`gift.dhamma.pali\`."
+            echo "versionCode ${{ github.run_number }} is on the **closed testing (alpha)** track of \`gift.dhamma.pali\`."
             echo "Testers get it within minutes. Production needs a promote in the Play Console."
           } >> "$GITHUB_STEP_SUMMARY"
 

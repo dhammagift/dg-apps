@@ -46,10 +46,11 @@ function capacitorStub() {
             LocalNotifications: {
                 requestPermissions: () => Promise.resolve({ display: 'granted' }),
                 createChannel: (c) => { window.__calls.channels.push(c); return Promise.resolve(); },
-                getPending: () => Promise.resolve({ notifications: [] }),
+                getPending: () => Promise.resolve({ notifications: window.__pendingNative || [] }),
+                cancel: (o) => { window.__calls.cancelled = o.notifications.map((n) => n.id); return Promise.resolve(); },
                 getDeliveredNotifications: () => Promise.resolve({ notifications: window.__delivered || [] }),
                 removeDeliveredNotifications: (o) => { window.__calls.removed = (window.__calls.removed || []).concat(o.notifications.map((n) => n.id)); return Promise.resolve(); },
-                cancel: () => Promise.resolve(),
+                addListener: () => ({ remove() {} }),
                 schedule: (o) => { window.__calls.scheduled.push(o.notifications); return Promise.resolve(); },
             },
         },
@@ -150,6 +151,51 @@ function capacitorStub() {
             await ctx.close();
         }
 
+        // 3b. What the app sets is remembered: a reminder is never set — and so never rung — twice, and one the app never
+        // managed to set (its time passed before any schedule held it) is shown once at the next launch, not on every one.
+        {
+            const seed = () => {
+                localStorage.setItem('dgUposathaTz', 'UTC');
+                localStorage.setItem('dgUposathaRemind', JSON.stringify({ on: true, lead: 24, d8: true, d14: true, d15: true, sound: 'gong', ownChannel: '', ownName: '' }));
+            };
+            const launch = async (ctx, iso) => {
+                const page = await ctx.newPage();
+                await page.clock.install({ time: new Date(iso) });
+                await page.goto(PAGE, { waitUntil: 'load' });
+                await page.waitForTimeout(2500);
+                const got = await page.evaluate(() => (window.__calls.scheduled.flat() || [])
+                    .filter((n) => new Date(n.schedule.at).getTime() < Date.now() + 20000).map((n) => n.title));
+                const seen = await page.evaluate(() => JSON.parse(localStorage.getItem('dgUposathaNotified') || '[]'));
+                await page.close();
+                return { got, seen };
+            };
+            const freshCtx = async () => {
+                const c = await ctxOf('light', 'ru');
+                await c.addInitScript(capacitorStub);
+                await c.addInitScript(seed);
+                await c.addInitScript(BRIDGE);
+                return c;
+            };
+            // 09:00 UTC on Oct 1: the 8th day's Uposatha begins the next evening, so its "24 h before" reminder (18:00 today)
+            // is still ahead — armed, nothing is shown yet.
+            const ctx = await freshCtx();
+            const armed = await launch(ctx, '2026-10-01T09:00:00Z');
+            check('a reminder still ahead is armed, nothing is shown early', armed.got, []);
+            // A day later, in the same app: that reminder has come (the device delivered it, as it was set for 18:00). It must
+            // not be set again — the 24 h the list keeps it for used to be 24 h of it ringing on every launch.
+            const after = await launch(ctx, '2026-10-02T09:00:00Z');
+            check('a reminder that was armed and has come is not shown again on the next launch', after.got, []);
+            await ctx.close();
+            // A reminder whose time passed while the app was never open before it: shown once, at the launch that finds it.
+            const late = await freshCtx();
+            const first = await launch(late, '2026-10-02T09:00:00Z');
+            check('a reminder whose time passed before it was ever set is shown once', first.got.length, 1);
+            console.log('       shown late:', JSON.stringify(first.got), '— remembered:', JSON.stringify(first.seen));
+            const next = await launch(late, '2026-10-02T09:05:00Z');
+            check('and not again on the launch after that', next.got, []);
+            await late.close();
+        }
+
         // 4. The sound source: the alarm stream or the notification stream, per the setting.
         for (const stream of ['notification', 'alarm']) {
             const ctx = await ctxOf('light', 'ru');
@@ -170,9 +216,28 @@ function capacitorStub() {
                 icons: [...new Set((window.__calls.scheduled.flat() || []).map((n) => n.largeIcon))],
                 alarms: (window.__calls.alarms || []).map((a) => [a.sound, a.at > 0]),
             }));
-            // A reminder left in the tray must not turn the next one with the same id into a silent update.
-            await page.evaluate(() => { window.__delivered = [{ id: 7000 }, { id: 7990 }, { id: 1 }]; window.__calls.removed = []; return window.Capacitor.Plugins.LocalNotifications.schedule({ notifications: [{ id: 7000, title: 't', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at: new Date(Date.now() + 60000) } }] }); });
-            check(`stream ${stream}: what is left of ours in the tray is taken away before a new reminder`, await page.evaluate(() => window.__calls.removed), [7000, 7990]);
+            // The tray is left alone (owner: the sound came, the notification was gone), and the next reminder never takes
+            // the id of one still there: its id is its own minute.
+            const tray = await page.evaluate(async () => {
+                window.__delivered = [{ id: 7000 }, { id: 7990 }, { id: 1 }]; window.__calls.removed = []; window.__calls.scheduled = [];
+                const at = new Date(Math.ceil((Date.now() + 86400000) / 60000) * 60000);   // a day ahead: still ahead when the source is changed below
+                await window.Capacitor.Plugins.LocalNotifications.schedule({ notifications: [
+                    { id: 7000, title: 't', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at } },
+                    { id: 7001, title: 't2', body: 'b2', channelId: 'uposatha-gong-v1', schedule: { at } }] });
+                return { removed: window.__calls.removed, ids: window.__calls.scheduled.flat().map((n) => n.id), minute: Math.floor(at.getTime() / 60000) % 100000 };
+            });
+            const minute = tray.minute; delete tray.minute;
+            check(`stream ${stream}: nothing of ours is taken out of the tray, each reminder has an id of its own minute`,
+                tray, { removed: [], ids: [1000000 + minute * 10, 1000000 + minute * 10 + 1] });
+            // The page cancels what is pending by its own range (7000-7099): getPending shows ours as that range, cancel maps back.
+            check(`stream ${stream}: the page's own cancel still reaches the pending reminders`,
+                await page.evaluate(async () => {
+                    const LN = window.Capacitor.Plugins.LocalNotifications;
+                    window.__pendingNative = [{ id: 1000123 }, { id: 1000456 }, { id: 7990 }];
+                    const seen = await LN.getPending();
+                    await LN.cancel({ notifications: seen.notifications.filter((n) => n.id >= 7000 && n.id < 7100) });
+                    return [seen.notifications.map((n) => n.id), window.__calls.cancelled];
+                }), [[7000, 7001, 7990], [1000123, 7000, 1000456, 7001]]);
             const suffix = stream === 'alarm' ? '-alarm' : '';
             check(`stream ${stream}: channels are made natively on the ${stream} stream, asking to sound through Do Not Disturb`,
                 got.native.some((n) => n[0] === 'uposatha-gong-v1' + (stream === 'alarm' ? '-alarm' : '') && n[1] === stream && n[2] === (stream === 'alarm' ? '' : 'gong.mp3') && n[3] === true) && got.plugin.length === 0, true);
@@ -252,7 +317,8 @@ function capacitorStub() {
                 return { notify: window.__ios.notify.map((n) => [n.id, n.title, n.sound]), cancel: window.__ios.cancel, android: (window.__calls.scheduled || []).length, channels: (window.__calls.channels || []).length,
                     shortcuts: (window.__calls.shortcuts.slice(-1)[0] || []).map((i) => i.id), listener: typeof window.__ios.listeners.shortcut };
             });
-            check('ios: reminders go to DgNotify with the sound of their channel (the reader\'s own sound is the default one; a past reminder is dropped by the native side)', got.notify, [[7000, 'T', 'gong'], [7001, 'T2', 'pubbanha'], [7002, 'T3', ''], [7003, 'T4', 'vikala']]);
+            check('ios: reminders go to DgNotify with the sound of their channel (the reader\'s own sound is the default one; a past reminder is dropped by the native side)', got.notify.map((n) => n.slice(1)), [['T', 'gong'], ['T2', 'pubbanha'], ['T3', ''], ['T4', 'vikala']]);
+            check('ios: ids are their own minute, not the place in the list', got.notify.every((n) => n[0] >= 1000000), true);
             check('ios: cancel goes to DgNotify; nothing goes to the Android paths', [got.cancel, got.android, got.channels], [[7000], 0, 0]);
             check('ios: quick actions are pushed and a tap is listened for', [got.shortcuts.length, got.listener], [4, 'function']);
             await ctx.close();

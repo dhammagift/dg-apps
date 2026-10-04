@@ -32,9 +32,9 @@ function errorPageSource() {
     return fs.readFileSync(path.join(SRC, 'index.html'), 'utf8')
         .replace('<!-- @launch-screens -->', () => '<script>\n' + launchScreens() + '</script>');
 }
-module.exports = { bridgeSource, errorPageSource, coverViewport, bundleSnapshot };
+module.exports = { bridgeSource, errorPageSource, bundleSnapshot };
 
-// The snapshot of the calendar page (tools/snapshot.js: the page and everything it loads, laid out as the
+// The snapshot of the calendar page (tools/bundle-from-repo.js: the page and everything it loads, laid out as the
 // site serves it) is what the app opens with no network at all: it becomes www/, with the page itself also
 // as www/index.html, and a manifest of what is in it (site-manifest.json: the paths and their SHA-256) that
 // the updater compares the site against.
@@ -50,29 +50,35 @@ function copyTree(from, to, list) {
     }
 }
 
-// Edge to edge (owner, dg-apps#41, after the Dhamma.Gift app in a706f50): viewport-fit=cover lets the
-// page run under the transparent status and gesture bars — Capacitor's SystemBars passes the insets
-// through (env(safe-area-inset-*)) instead of padding the WebView and showing the window background
-// there. App build only, like build-page.js of the reader app: on the site the meta stays as it is.
-// Safe against the site updater: /index.html is not part of site-manifest.json (only the snapshot
-// tree is), so it is never compared with the site or replaced by an unpatched copy. The bridge
-// enforces the rest at runtime, on whatever page the app ends up loading (the top bar steps down by
-// the inset where the platform really pays it: uposatha-bridge.js).
-const VIEWPORT = '<meta name="viewport" content="width=device-width, initial-scale=1">';
-function coverViewport(html) {
-    if (!html.includes(VIEWPORT)) throw new Error('uposatha/build.js: viewport meta not found in the snapshot page — update VIEWPORT');
-    return html.replace(VIEWPORT, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">');
+// viewport-fit=cover is not written into the bundled files: the snapshot stays the site's page (the
+// updater compares it against the site). Android gets it from uposatha-bridge.js as the page is
+// parsed (dg-apps#54: the page draws under the bars, SystemBars passes the insets through), iOS
+// from DgSiteRouter at serve time (DgApp.swift).
+
+// The snapshot has to BE the calendar page. Run 466 bundled something else — a page titled
+// "Dhamma.gift" that loads the reader's offline scripts and has no .tbar — and the app would have
+// shipped it: the only guards were "the file exists" and "it is not empty". These markers are the
+// calendar's own (its stylesheet, its top bar, its drawer and the app-only Rate Us row), so a
+// redirect, a 404 page or a different app's shell fails the build here instead of in someone's hand.
+const CALENDAR_MARKERS = ['uposatha-calendar.css', 'class="tbar"', 'id="dg-drawer"', 'id="up-rate"'];
+function isCalendarPage(html) {
+    return CALENDAR_MARKERS.filter((m) => html.includes(m));
 }
 
 function bundleSnapshot() {
     if (!fs.existsSync(path.join(SNAPSHOT, 'uposatha-calendar.html'))) {
-        throw new Error('uposatha/snapshot/ is missing: run  SITE=https://dhamma.gift node tools/snapshot.js  first (CI does).');
+        throw new Error('uposatha/snapshot/ is missing: run  node tools/bundle-from-repo.js <dg-node dir>  first (CI does).');
     }
     const files = [];
     copyTree(SNAPSHOT, WWW, files);
-    const page = coverViewport(fs.readFileSync(path.join(SNAPSHOT, 'uposatha-calendar.html'), 'utf8'));
-    if (!page.includes('viewport-fit=cover')) throw new Error('uposatha/build.js: the page lost viewport-fit=cover');
-    fs.writeFileSync(path.join(WWW, 'index.html'), page);
+    const raw = fs.readFileSync(path.join(SNAPSHOT, 'uposatha-calendar.html'), 'utf8');
+    const found = isCalendarPage(raw);
+    if (found.length !== CALENDAR_MARKERS.length) {
+        const missing = CALENDAR_MARKERS.filter((m) => found.indexOf(m) === -1);
+        throw new Error('uposatha/build.js: the snapshot is not the calendar page (missing ' + missing.join(', ')
+            + ') — the site answered with something else; title: ' + (raw.match(/<title>([^<]*)/) || [])[1]);
+    }
+    fs.writeFileSync(path.join(WWW, 'index.html'), raw);
     const empty = files.filter((f) => fs.statSync(path.join(WWW, f)).size === 0);
     if (empty.length) throw new Error('the snapshot has empty files (a bundle with blank styles is worse than none): ' + empty.join(', '));
     const hashes = {};

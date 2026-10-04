@@ -2,7 +2,7 @@ import Foundation
 import Capacitor
 
 // Lets the App Store screenshot tour (test/ios-sim/tour.js) tell a simulator run which view is on screen, the same
-// device the reader app uses for its own tour: one file, overwritten per stage, in Documents. A GitHub runner has no
+// device Dhamma.Gift uses for its own tour: one file, overwritten per stage, in Documents. A GitHub runner has no
 // debugger to look at, so the page hands its progress out this one native call and the driver script screenshots on
 // the signal instead of guessing at timings.
 //

@@ -34,6 +34,25 @@
   var CALENDAR_PATH = /^\/(uposatha-calendar(\.html)?\/?|index\.html)?$/;
   var onCalendar = CALENDAR_PATH.test(location.pathname);
 
+  // Android (dg-apps#54): the page draws under the system bars, as on iOS (DgSiteRouter adds the
+  // same at serve time). With viewport-fit=cover Capacitor's SystemBars passes the insets through
+  // to the page (WebView 140+) instead of padding the window, so the strips under the clock and the
+  // navigation bar are the page's own paint, and a theme switch repaints them in the same frame.
+  // Patched here, as the parser inserts the tag, so the bundled copy and a downloaded one are alike.
+  if (!IOS && onCalendar) coverViewport();
+  function coverViewport() {
+    function patch() {
+      var m = document.querySelector('meta[name=viewport]');
+      if (!m) return false;
+      var c = m.getAttribute('content') || '';
+      if (!/viewport-fit\s*=\s*cover/.test(c)) m.setAttribute('content', c + ', viewport-fit=cover');
+      return true;
+    }
+    if (patch()) return;
+    var mo = new MutationObserver(function () { if (patch()) mo.disconnect(); });
+    mo.observe(document, { childList: true, subtree: true });
+  }
+
   // The page's own rule (uposatha-calendar.js: ?lang=, then the stored dhammaLanguage, then the phone's
   // language) — not <html lang>, which the page sets late.
   function isRu() {
@@ -51,7 +70,9 @@
   var SITE_CONFIG = {
     site: 'https://dhamma.gift',   // where the page comes from: the production site (owner, 2026-09-30)
     // The page's file in the bundle is /uposatha-calendar.html; on the site it is /uposatha-calendar.
-    urlFor: function (path) { return path === '/uposatha-calendar.html' ? '/uposatha-calendar' : path; }
+    urlFor: function (path) { return path === '/uposatha-calendar.html' ? '/uposatha-calendar' : path; },
+    // The code (html, css, js) is what the build took from the repository; only the texts (json) follow the site.
+    updatable: function (path) { return /\.json$/.test(path); }
   };
   // @site-updater (inlined from src/site-updater.js by uposatha/build.js)
 
@@ -213,12 +234,36 @@
 
   var NATIVE_ID_BASE = 7000;   // the page's ids for its reminders (uposatha-calendar.js: NATIVE_ID_BASE + list index; the test reminder is 7990)
 
-  function clearDeliveredOurs(LN) {
-    if (!LN || typeof LN.getDeliveredNotifications !== 'function') return Promise.resolve();
-    return LN.getDeliveredNotifications().then(function (d) {
-      var ours = ((d && d.notifications) || []).filter(function (n) { return n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + 1000; }).map(function (n) { return { id: n.id }; });
-      return ours.length ? LN.removeDeliveredNotifications({ notifications: ours }) : null;
-    }).catch(function () { /* the tray could not be read: schedule anyway */ });
+  // Every reminder has an id of its own, made from its minute (owner: "the sound was there, the notification was not").
+  // The page numbers its reminders by their place in the list (the next one is always 7000), and re-plans after each
+  // one fires, so the next reminder took the id of the one in the tray and replaced it; the tray was also emptied
+  // before every re-plan so that the replacement would not arrive silent. Now nothing in the tray is touched: an id
+  // is the minute it rings at (and the place within that minute: the meal and a part of the day can share one), so
+  // a reminder never lands on another. getPending/cancel are translated back, so the page still cancels by its range.
+  var UNIQUE_BASE = 1000000;
+  function isUnique(id) { return id >= UNIQUE_BASE && id < UNIQUE_BASE + 1000000; }
+  function uniqueId(n) {
+    if (!(n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + 100)) return n.id;   // the test reminders (7990+) keep theirs
+    var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
+    return UNIQUE_BASE + (Math.floor(at / 60000) % 100000) * 10 + (n.id % 10);
+  }
+  var pendingAlias = {};   // the page's id -> ours, from the last getPending the page saw
+  function pageView(p) {
+    pendingAlias = {};
+    var k = 0;
+    var list = ((p && p.notifications) || []).map(function (n) {
+      if (!isUnique(n.id) || k >= 100) return n;
+      var alias = NATIVE_ID_BASE + k++;
+      pendingAlias[alias] = n.id;
+      return Object.assign({}, n, { id: alias });
+    });
+    return Object.assign({}, p, { notifications: list });
+  }
+  // An alias stands for one of ours; an id from before this change (7000+, still pending after an update) is cancelled as itself too.
+  function nativeIds(ids) {
+    var out = [];
+    ids.forEach(function (id) { if (pendingAlias[id] != null) out.push(pendingAlias[id]); out.push(id); });
+    return out;
   }
 
   // What the page last asked of the plugin, so a change of the source can be applied without reloading the page:
@@ -328,19 +373,17 @@
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at) : null;
               // The status-bar icon is the moon of the day the reminder is for.
               var moon = at && !isNaN(at) ? { smallIcon: moonName('ic_stat_moon', moonIndexAt(at)) } : {};
-              return Object.assign({ largeIcon: 'uposatha_notification' }, moon, n, { channelId: suffixed(n.channelId) });
+              return Object.assign({ largeIcon: 'uposatha_notification' }, moon, n, { id: uniqueId(n), channelId: suffixed(n.channelId) });
             });
             // The plugin posts every notification "alert once": one that REPLACES a notification of the same id still in the
-            // tray makes no sound and no vibration. The page's ids are their place in the list (the next reminder is always
-            // 7000, and the test reminder is 7990), so a reminder that fires after another has been left in the tray would
-            // arrive silent. Whatever of ours is still in the tray is taken away before new ones are set.
+            // tray makes no sound. With an id per minute (uniqueId) a reminder never replaces another, so the tray is left alone.
             // The sound itself, on the alarm stream, at the same minute.
             var alarm = alarmPlugin();
             var items = directAlarm() ? ((o && o.notifications) || []).map(function (n) {
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
-              return { id: n.id, at: at, sound: rawSoundOf(n.channelId) };
+              return { id: uniqueId(n), at: at, sound: rawSoundOf(n.channelId) };
             }).filter(function (i) { return i.at > 0 && i.sound; }) : [];
-            return clearDeliveredOurs(target).then(function () { return items.length ? alarm.schedule({ items: items }) : null; }).then(function () { return target.schedule(Object.assign({}, o, { notifications: list })); }).then(function (res) {
+            return Promise.resolve(items.length ? alarm.schedule({ items: items }) : null).then(function () { return target.schedule(Object.assign({}, o, { notifications: list })); }).then(function (res) {
               if (list.length) setTimeout(function () { refreshDnd().then(maybeAskDnd); }, 2500);   // the page has settled; is the access there?
               return res;
             });
@@ -349,11 +392,12 @@
         if (key === 'cancel') {
           return function (o) {
             var alarm = alarmPlugin();
-            var ids = ((o && o.notifications) || []).map(function (n) { return n.id; });
+            var ids = nativeIds(((o && o.notifications) || []).map(function (n) { return n.id; }));
             if (alarm && ids.length) alarm.cancel({ ids: ids });
-            return target.cancel(o);
+            return target.cancel({ notifications: ids.map(function (id) { return { id: id }; }) });
           };
         }
+        if (key === 'getPending') return function () { return target.getPending().then(pageView); };
         var v = target[key];
         return typeof v === 'function' ? v.bind(target) : v;
       }
@@ -380,13 +424,13 @@
             lastSchedule = o;
             var items = ((o && o.notifications) || []).map(function (n) {
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
-              return { id: n.id, title: n.title || '', body: n.body || '', at: at, sound: rawSoundOf(n.channelId) === 'own' ? '' : rawSoundOf(n.channelId) };
+              return { id: uniqueId(n), title: n.title || '', body: n.body || '', at: at, sound: rawSoundOf(n.channelId) === 'own' ? '' : rawSoundOf(n.channelId) };
             }).filter(function (i) { return i.at > 0; });
             return N().schedule({ items: items }).then(function () { return { notifications: items.map(function (i) { return { id: i.id }; }) }; });
           };
         }
-        if (key === 'cancel') return function (o) { return N().cancel({ ids: ((o && o.notifications) || []).map(function (n) { return n.id; }) }); };
-        if (key === 'getPending') return function () { return N().getPending(); };
+        if (key === 'cancel') return function (o) { return N().cancel({ ids: nativeIds(((o && o.notifications) || []).map(function (n) { return n.id; })) }); };
+        if (key === 'getPending') return function () { return N().getPending().then(pageView); };
         var v = target[key];
         return typeof v === 'function' ? v.bind(target) : v;
       }
@@ -418,7 +462,16 @@
         var ours = ((p && p.notifications) || []).filter(function (n) { return n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + 100; }).map(function (n) { return { id: n.id }; });
         return ours.length ? LN.cancel({ notifications: ours }) : null;
       })
-      .then(function () { return lastSchedule && lastSchedule.notifications && lastSchedule.notifications.length ? LN.schedule(lastSchedule) : null; })
+      // What is replayed is only what is still ahead: LocalNotifications fires an `at` already in the past at once (its own
+      // catch-up), so replaying a schedule that has since partly come due would ring for reminders the reader has already
+      // heard. The sound source is a setting of the moment, not a reason to repeat a reminder.
+      .then(function () {
+        var items = ((lastSchedule && lastSchedule.notifications) || []).filter(function (n) {
+          var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
+          return at > Date.now();
+        });
+        return items.length ? LN.schedule(Object.assign({}, lastSchedule, { notifications: items })) : null;
+      })
       .catch(function (e) { console.log('[dg-uposatha-stream] could not move the reminders:', (e && e.message) || e); });
   }
 
@@ -532,71 +585,311 @@
 
   // @rate-prompt (inlined from src/native-bridge.js by uposatha/build.js)
 
-  // The OS status/navigation bar ICON STYLE. Edge to edge (dg-apps#41): the page now runs under the
-  // transparent bars itself, so there is no strip to paint (the DgBars plugin is gone) — only the
-  // icons have to stay readable on what the page shows there. The page's own theme decides it:
-  // data-theme on <html> (uposatha-calendar.js setTheme) with data-bs-theme as the fallback the
-  // shared scripts write. Both bars in one go: the bottom one sits over the page background too
-  // (app-refresh.css pads the tab bar with env(safe-area-inset-bottom)). Sent only when it changes,
-  // and again when the app comes back to the front (a system dialog may have reset it).
-  // The old code read data-bs-theme only: the page never set it itself, so the icons stayed light
-  // (near-invisible) on the light theme — one of the reasons the plugin painted strips instead.
+  // The OS status/navigation bars (dg-apps#54). One owner per platform:
+  //   * Android: DgInsets.setTheme sets the icons AND the window colour in one native call. Not
+  //     Capacitor's SystemBars.setStyle: that one ends by repainting the window in the SYSTEM's
+  //     background (SystemBars.java, setStyle -> decorView.setBackgroundColor(windowBackground)),
+  //     so on a light phone a dark page got white strips above and below it, and on a dark phone a
+  //     light page got black ones (owner's screenshots) — whichever call landed last won.
+  //   * iOS: SystemBars.setStyle (one status bar; the bar names are ignored there).
+  // The colour is the page's own background (--dg-page, also the navy "lunar" look), read from the
+  // layout, so the window under the bars is never a different shade from the page.
+  // Sent only when it changes, and again when the app comes back to the front.
+  function rgbOf(c) {
+    var m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?/.exec(c || '');
+    return m ? [+m[1], +m[2], +m[3], m[4] == null ? 1 : +m[4]] : null;
+  }
+  function pageColor() {
+    var hex = pageColorOnly();
+    // The menu open on a WebView older than 140: the window is padded natively and its colour is the strip under the
+    // clock, so it takes the menu's dimming as well (the tablet screenshot: a white strip over the dimmed page).
+    var scrim = document.body.classList.contains('dg-drawer-open') && document.getElementById('dg-drawer-backdrop');
+    var dim = scrim && rgbOf(getComputedStyle(scrim).backgroundColor);
+    if (!hex || !dim || !dim[3]) return hex;
+    var base = [1, 3, 5].map(function (i) { return parseInt(hex.substr(i, 2), 16); });
+    return '#' + base.map(function (v, i) { return ('0' + Math.round(v * (1 - dim[3]) + dim[i] * dim[3]).toString(16)).slice(-2); }).join('');
+  }
+  function pageColorOnly() {
+    var c = getComputedStyle(document.body).backgroundColor || '';
+    var m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c);
+    var rgb = m ? [+m[1], +m[2], +m[3]] : null;
+    if (!rgb) {
+      // color-mix() comes back as color(srgb r g b) with 0..1 channels
+      m = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(c);
+      if (m) rgb = [m[1], m[2], m[3]].map(function (v) { return Math.round(Math.min(1, +v) * 255); });
+    }
+    if (!rgb) return '';
+    return '#' + rgb.map(function (v) { return ('0' + v.toString(16)).slice(-2); }).join('');
+  }
   function syncSystemBars(force) {
-    var SystemBars = Cap.Plugins && Cap.Plugins.SystemBars;
-    if (!SystemBars || typeof SystemBars.setStyle !== 'function') return;
+    if (!document.body) return;
     var root = document.documentElement;
     var theme = root.getAttribute('data-theme') || root.getAttribute('data-bs-theme');
-    var style = (theme || document.body.classList.contains('dark')) === 'dark' ? 'DARK' : 'LIGHT';
-    if (!force && style === lastBarStyle) return;
-    lastBarStyle = style;
+    var dark = (theme || (document.body.classList.contains('dark') ? 'dark' : '')) === 'dark';
+    var color = pageColor() || (dark ? '#111111' : '#ffffff');
+    var key = dark + color;
+    if (!force && key === lastBarStyle) return;
+    lastBarStyle = key;
+    var Insets = Cap.Plugins && Cap.Plugins.DgInsets;
+    if (!IOS && Insets && typeof Insets.setTheme === 'function') {
+      Insets.setTheme({ dark: dark, color: color }).catch(function () { lastBarStyle = ''; });
+      return;
+    }
+    var SystemBars = Cap.Plugins && Cap.Plugins.SystemBars;
+    if (!SystemBars || typeof SystemBars.setStyle !== 'function') return;
+    var style = dark ? 'DARK' : 'LIGHT';
     SystemBars.setStyle({ style: style, bar: 'StatusBar' }).catch(function () { lastBarStyle = ''; });
     SystemBars.setStyle({ style: style, bar: 'NavigationBar' }).catch(function () { lastBarStyle = ''; });
   }
   var lastBarStyle = '';
+
+  // ---- links and sharing (dg-apps#56) -------------------------------------------------------------
+  // The page lives at the app's own origin (https://uposatha.dhamma.gift), which is not a site: a
+  // path of the site opened here (the menu's Help, window.open('/docs/uposatha/')) fell back to the
+  // calendar itself, and Share then handed out that address. Every such path goes to dhamma.gift.
+  function pageRu() { return /^ru/i.test(document.documentElement.lang || '') || (!document.documentElement.lang && isRu()); }
+  function siteUrl(url) {
+    var u;
+    try { u = new URL(url, location.href); } catch (e) { return url; }
+    if (u.origin !== location.origin || CALENDAR_PATH.test(u.pathname)) return url;
+    return SITE_CONFIG.site + u.pathname + u.search + u.hash;
+  }
+  // What Share hands out (owner): the app's page in the docs, which leads to both stores and opens
+  // in a browser or in Dhamma.Gift alike.
+  function shareUrl() { return SITE_CONFIG.site + (pageRu() ? '/ru' : '') + '/docs/uposatha'; }
+
+  function wireLinksAndShare() {
+    var open = window.open;
+    window.open = function (url) {
+      var args = Array.prototype.slice.call(arguments);
+      if (typeof url === 'string' && url) args[0] = siteUrl(url);
+      return open.apply(window, args);
+    };
+    // The system share sheet. iOS has navigator.share; Android's WebView does not, so both share
+    // buttons (the page's and the menu's) fell back to "Link copied". DgShare is the native sheet.
+    var send = typeof navigator.share === 'function' ? navigator.share.bind(navigator) : null;
+    var Share = Cap.Plugins && Cap.Plugins.DgShare;
+    if (!send && Share && typeof Share.share === 'function') send = function (d) { return Share.share(d); };
+    if (!send) return;
+    navigator.share = function (data) {
+      return send({ title: (data && data.title) || 'Uposatha', url: shareUrl() });
+    };
+  }
+
+  // ---- the theme switch: a circle from the tap (dg-apps#55, as in Telegram) ---------------------
+  // The page switches the theme synchronously (setTheme / themeswitch.js), so the same click is
+  // replayed inside a View Transition and the new theme is revealed through a growing circle. The
+  // system bars follow in the same frame (syncSystemBars, from the observer). No View Transitions
+  // (WebView < 111, iOS < 18) or reduced motion: the plain instant switch, as before.
+  function animateThemeSwitch() {
+    if (typeof document.startViewTransition !== 'function') return;
+    var replaying = false, running = false;
+    document.addEventListener('click', function (e) {
+      if (replaying || running) return;
+      var btn = e.target && e.target.closest && e.target.closest('#app-theme, #dg-theme-seg button');
+      if (!btn) return;
+      if (btn.id === 'app-theme' && document.body.classList.contains('dg-drawer-open')) return;   // the share button there
+      if (btn.getAttribute('aria-pressed') === 'true') return;
+      if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      // From the button's centre (owner), in the transition layer's own pixels: the page's font size zooms <html>, and
+      // the layer's clip-path is zoomed with it, so the centre and the radius are divided by the zoom (without it the
+      // circle started 10% off to the side). The radius reaches the farthest corner of the SCREEN: on a phone the
+      // snapshot is the large viewport, taller than innerHeight, and a smaller circle stopped short of the bottom.
+      var r = btn.getBoundingClientRect();
+      var zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      var x = r.left + r.width / 2, y = r.top + r.height / 2;
+      var w = Math.max(innerWidth, document.documentElement.clientWidth), h = Math.max(innerHeight, screen.height || 0, document.documentElement.clientHeight);
+      var radius = Math.hypot(Math.max(x, w - x), Math.max(y, h - y)) + 2;
+      x /= zoom; y /= zoom; radius /= zoom;
+      running = true;
+      // the page's own colour transitions (the top bar fades its background) would show mid-way in the circle
+      document.documentElement.classList.add('dg-theme-vt');
+      var vt = document.startViewTransition(function () {
+        replaying = true;
+        try { btn.click(); } finally { replaying = false; }
+      });
+      vt.ready.then(function () {
+        document.documentElement.animate(
+          { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'] },
+          { duration: 450, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'both', pseudoElement: '::view-transition-new(root)' });   // the timing of build 491, which the owner found smooth on a phone (1000 and 1500 ms stuttered)
+      }).catch(function () {});
+      function done() { running = false; document.documentElement.classList.remove('dg-theme-vt'); }
+      vt.finished.then(done, done);
+    }, true);
+  }
   function watchSystemBars() {
     syncSystemBars(true);
-    var mo = new MutationObserver(function (muts) {
-      for (var i = 0; i < muts.length; i++) {
-        if (muts[i].attributeName === 'data-theme' || muts[i].attributeName === 'data-bs-theme') { syncSystemBars(false); return; }
-      }
-    });
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-bs-theme', 'class'] });
+    var mo = new MutationObserver(function () { syncSystemBars(false); });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-bs-theme'] });
+    // body.dark and the navy look (body[data-look]) change the page colour too
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-look', 'data-theme'] });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') syncSystemBars(true); });
     window.addEventListener('focus', function () { syncSystemBars(true); });
     // The inset is re-read when the view changes (rotation, a cutout moving to the side): the bar
     // padding lives in a style tag of its own, so a stale value would stay for the whole session.
-    window.addEventListener('resize', function () { applyTopInset(); });
+    window.addEventListener('resize', function () { applyTopInset(); syncSystemBars(false); });
   }
 
   // The page's own top bar (.tbar, sticky at top: 0) has no top inset: the site never needed one
-  // while Capacitor padded the WebView away from the status bar. With viewport-fit=cover it reaches
-  // under it, so the search row would sit behind the clock. Only where the insets really reach the
-  // page is anything added — a WebView too old to pass them through (SystemBars pads it instead,
-  // env() there is 0) must NOT get a second pad. The value is written as a plain px padding on the
-  // bar; env(safe-area-inset-top) cannot be used for it, see below.
+  // while Capacitor kept the WebView inside the safe area. Edge to edge (dg-apps#41) that padding is
+  // gone on BOTH platforms, so the bar would sit behind the clock / Dynamic Island.
+  //
+  // The padding is the pattern Capacitor's own SystemBars documentation prescribes (system-bars.md,
+  // "Android Note"): the plugin injects --safe-area-inset-* on Android — as a fallback for WebViews
+  // below version 140, whose env() is broken — and env() is what iOS uses, live in the engine.
+  //
+  //   padding-top: calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))
+  //
+  // It is CSS only: no number is measured and written once at load. That measurement was a race —
+  // run 448 probed before WKWebView reported the inset, got 0, wrote no padding, and the bar sat
+  // under the clock, while runs 445/446 measured 62px from the same build and looked right.
+  var insetsDiag = { plugin: false, answer: null };
+
   function applyTopInset() {
-    if (IOS) return;   // iOS pads the page through its own safe area, never under the status bar
     if (!document.body) return;
-    var probe = document.createElement('div');
-    probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top,0px);';
-    (document.body || document.documentElement).appendChild(probe);
-    var inset = Math.round(probe.getBoundingClientRect().height);
-    probe.remove();
     var css = document.getElementById('dg-safe-top');
     if (!css) { css = document.createElement('style'); css.id = 'dg-safe-top'; document.head.appendChild(css); }
-    // Capacitor's SystemBars reports the same number as a custom property; the padding is written
-    // from whichever is there, so the native value survives a WebView whose env() is broken (the
-    // Chromium bug the plugin works around for versions below 140).
-    var native = parseInt((getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top') || '').trim(), 10);
-    var top = inset || (isNaN(native) ? 0 : native);
-    css.textContent = top > 0 ? 'body.app .tbar{padding-top:calc(10px + ' + top + 'px)}' : '';
+    // The top bar, and the burger menu's drawer (the reader pads its own drawer the same way:
+    // dg-node home.css, html.dg-app #dg-drawer{padding-top: var(--dg-sat)}). Without it the drawer
+    // opens under the clock on Android — the main screen looked right while the menu did not.
+    // Every inset is divided by --dg-zoom: the page's font-size setting zooms <html> (home.js,
+    // applyUiScale sets zoom and --dg-zoom), so a CSS px there is the zoomed one while the inset is
+    // a viewport measurement. The site divides its own --dg-sat/--dg-sab exactly so (home.css);
+    // without it the padding would grow with the font size and the bar would sit lower each step.
+    var TOP_PAD = 4;   // px above the bar's content row; the site's own 10px made the app bar sit lower than WhatsApp/Notion
+    var SAT = 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) / var(--dg-zoom, 1)';
+    var SAL = 'var(--safe-area-inset-left, env(safe-area-inset-left, 0px)) / var(--dg-zoom, 1)';
+    var SAR = 'var(--safe-area-inset-right, env(safe-area-inset-right, 0px)) / var(--dg-zoom, 1)';
+    // The top bar, and the burger menu's drawer (the reader pads its own drawer the same way:
+    // dg-node home.css, html.dg-app #dg-drawer{padding-top: var(--dg-sat)}). Without it the drawer
+    // opens under the clock on Android — the main screen looked right while the menu did not.
+    css.textContent = 'body.app .tbar{padding-top:calc(' + TOP_PAD + 'px + ' + SAT + ')}'
+      + 'body.app #dg-drawer{padding-top:calc(' + SAT + ')}'
+      // Owner: the chosen half of a segmented control (language, theme, week start) is grey
+      // (--dg-surface-active) while a switched-on toggle is the accent green (--dg-toggle-row
+      // [aria-pressed=true] .dg-tgl{background:var(--dg-accent)}). One colour for both states.
+      + 'body.app .dg-segmented button[aria-pressed="true"],body.app .segrow button[aria-pressed="true"]'
+      + '{background:var(--dg-accent);color:var(--dg-on-accent,#fff)}'
+      + 'body.app .dg-segmented button[aria-pressed="true"] .dg-seg-ic{color:inherit}'
+      + 'body.app .dg-segmented button[aria-pressed="true"] svg{color:inherit}'
+      // The page's own side panel (uposatha-calendar.css .drawer/.panel, padding 16px 18px 30px)
+      // is fixed at top: 0 as well — the same trap the burger menu fell into.
+      + 'body.app .drawer,body.app .panel{padding-top:calc(16px + ' + SAT + ')}'
+      // Landscape on a phone with a camera cutout: the insets move to the sides. The page's content
+      // is inset, and so is the drawer (fixed, right: 0), which would otherwise sit under the cutout.
+      // The page's content spans the viewport, so both sides are inset. The drawer only touches the
+      // RIGHT edge (right: 0): padding it on the left as well drew an empty band between the page and
+      // the drawer's content — the "лишние полоски" the owner saw on a tablet in landscape, where the
+      // side navigation bar makes those insets non-zero.
+      + 'body.app{padding-left:calc(' + SAL + ');padding-right:calc(' + SAR + ')}'
+      + 'body.app #dg-drawer{padding-right:calc(' + SAR + ')}'
+      // The tab bar's own z-index (app-nav.css: 1090) is above the drawer's (dg-node home.css:
+      // 1085), so the pill bar was drawn over the open burger menu — badly visible in landscape,
+      // where the menu is narrow and the screen short. While the menu is open (the page sets
+      // body.dg-drawer-open), the bar has no business on screen.
+      // The two "time for food" reminders: the list of leads sat flush against the switch above it (owner's screenshot).
+      + 'body.app #mbeg-lead,body.app #mrem-lead{margin-top:14px}'
+      + 'body.app.dg-drawer-open .appnav{display:none}'
+      // "Link copied" from the menu's share (settings.js showBubbleNotification): its styles are
+      // the site's (extrastyles.css), which this page does not load, so it was a bare full-width bar.
+      // It and the page's own toast sit above the tab bar, not under it.
+      + 'body.app .bubble-notification,body.app .toast{position:fixed;left:50%;right:auto;top:auto;bottom:calc(96px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));'
+      + 'max-width:calc(100% - 32px);transform:translate(-50%,20px);background:var(--dg-navy,#1d2b4a);color:#fff;padding:9px 16px;border-radius:999px;'
+      + 'font-size:13px;line-height:1.35;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:2000}'
+      + 'body.app .bubble-notification.show,body.app .toast.on{opacity:1;transform:translate(-50%,0)}'
+      // the theme circle (animateThemeSwitch): the new theme is clipped in over the old one
+      + '::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}'
+      + 'html.dg-theme-vt *{transition:none!important}';
+    // iOS: ask the app for the web view's own insets, at the moment the page is ready. Android's
+    // SystemBars plugin injects the same variables itself (and env() covers the modern WebViews),
+    // so this only runs where the plugin exists.
+    // Android (dg-apps#54): no second source. The page is viewport-fit=cover there and Capacitor's
+    // SystemBars passes the insets through (WebView 140+: env() and --safe-area-inset-*), or pads
+    // the window itself and writes 0 (older WebViews). Asking natively as well was the double gap.
+    var Insets = IOS && Cap.Plugins && Cap.Plugins.DgInsets;
+    insetsDiag = { plugin: !!Insets, answer: null };
+    if (Insets && typeof Insets.get === 'function') {
+      Insets.get().then(function (i) {
+        insetsDiag.answer = i;
+        var root = document.documentElement;
+        ['top', 'right', 'bottom', 'left'].forEach(function (k) {
+          var v = Math.round((i && i[k]) || 0);
+          if (v > 0) root.style.setProperty('--safe-area-inset-' + k, v + 'px');
+          else root.style.removeProperty('--safe-area-inset-' + k);
+        });
+        setTimeout(function () { reportInset(effectiveInset()); }, 30);
+      }).catch(function () { setTimeout(function () { reportInset(effectiveInset()); }, 30); });
+    }
+    var top = effectiveInset();
     if (top > 0) document.body.classList.add('dg-safe-top-on');
+    setTimeout(function () { reportInset(top); }, 60);
+  }
+
+  // The page's own measurements, for an automated proof. DgSelfTest is registered in DEBUG builds
+  // only (uposatha/ios/App/App/DgSelfTestPlugin.swift), so a shipped app and Android ignore this.
+  // The inset the page really ended up with: what the bar's own padding comes to, whichever source
+  // supplied it (the live env(), the plugin's variable, or nothing at all). Read from the layout, so
+  // a probe that ran too early cannot flatter it.
+  function effectiveInset() {
+    var bar = document.querySelector('.tbar');
+    if (!bar) return 0;
+    return Math.max(0, Math.round((parseFloat(getComputedStyle(bar).paddingTop) || 0) - 4));
+  }
+
+  // Where a proof reads the page's own measurements from: the iOS DEBUG plugin writes a file in the
+  // app's Documents; on Android the same JSON goes through DgSite (files/site/), which the emulator
+  // check reads with `adb shell run-as`. A shipped app has neither, and loses nothing.
+  function sendReport(obj) {
+    var Self = Cap.Plugins && Cap.Plugins.DgSelfTest;
+    if (Self && typeof Self.report === 'function') { Self.report(obj).catch(function () {}); return; }
+    var Site = Cap.Plugins && Cap.Plugins.DgSite;
+    if (!Site || typeof Site.put !== 'function' || typeof window.btoa !== 'function') return;
+    try {
+      Site.put({ path: '/dg-edgetoedge.json', data: window.btoa(unescape(encodeURIComponent(JSON.stringify(obj)))) })
+        .catch(function () {});
+    } catch (e) { /* no transport: a release build without the proof plugins */ }
+  }
+
+  function reportInset(top) {
+    var meta = document.querySelector('meta[name=viewport]');
+    var bar = document.querySelector('.tbar');
+    var rect = bar ? bar.getBoundingClientRect() : null;
+    // The burger menu's drawer: its content must clear the status bar too (it is the failure the
+    // owner hit on Android — the page looked right, the menu opened under the clock).
+    var drawer = document.getElementById('dg-drawer');
+    var drawerRect = drawer ? drawer.getBoundingClientRect() : null;
+    var drawerPad = drawer ? (parseFloat(getComputedStyle(drawer).paddingTop) || 0) : 0;
+    // The bar is sticky at top: 0 and its padding is what keeps it clear of the status bar, so what
+    // matters is where its CONTENT starts, not the (always 0) top of the element.
+    var padTop = bar ? (parseFloat(getComputedStyle(bar).paddingTop) || 0) : 0;
+    sendReport({
+      topInset: effectiveInset(),
+      // What the native side answered (diagnostics for the iOS proof: the env() value there cannot
+      // be trusted, so the answer and whether the plugin exists are the things to look at).
+      insetsPlugin: insetsDiag.plugin,
+      insetsAnswer: insetsDiag.answer,
+      // Portrait or landscape: the iPhone app is portrait only now, and the proof judges the
+      // portrait state (the last write used to be a landscape one with top 0, which read as a
+      // failure of the page).
+      orientation: window.innerWidth > window.innerHeight ? 'landscape' : 'portrait',
+      viewportFit: !!(meta && /viewport-fit\s*=\s*cover/.test(meta.getAttribute('content') || '')),
+      barTop: rect ? Math.round(rect.top + padTop) : -1,
+      barContentTop: rect ? Math.round(rect.top + padTop) : -1,
+      barBottom: rect ? Math.round(rect.bottom) : -1,
+      drawerOpen: !!(drawer && !drawer.hasAttribute('hidden')),
+      drawerContentTop: drawerRect ? Math.round(drawerRect.top + drawerPad) : -1,
+      theme: document.documentElement.getAttribute('data-theme') || ''
+    });
   }
 
   function start() {
     if (!onCalendar) { if (!IOS) wireBackButton(); return; }
     watchSystemBars();
     applyTopInset();
+    wireLinksAndShare();
+    animateThemeSwitch();
     if (IOS) { wrapIosNotifications(); wireIosShortcutTaps(); }
     else { wireBackButton(); wrapLocalNotifications(); watchStreamRow(); }
     // #up-rate's href is dg-node's own static markup (uposatha-calendar.html) — the Play Store URL,
@@ -613,7 +906,18 @@
       if (a) { try { localStorage.setItem(RATE_FLAG, '1'); } catch (err) { /* no storage */ } }
     }, true);
     // UposathaCore is loaded by the page: give it until the page has finished loading.
-    function afterLoad() { pushShortcuts(); setTimeout(updateSite, 6000); applyTopInset(); }
+    function afterLoad() {
+      pushShortcuts();
+      setTimeout(updateSite, 6000);
+      applyTopInset();
+      // ?drawer=1: the proof opens the burger menu itself (Android: android-screens mode=edgetoedge).
+      // A tap cannot be aimed at a WebView element from adb, and a check that guesses coordinates
+      // ends up testing the guess.
+      if (/[?&]drawer=1/.test(location.search)) {
+        var burger = document.getElementById('b-menu');
+        if (burger) { burger.click(); setTimeout(function () { reportInset(effectiveInset()); }, 700); }
+      }
+    }
     if (document.readyState === 'complete') afterLoad();
     else window.addEventListener('load', afterLoad, { once: true });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') pushShortcuts(); });

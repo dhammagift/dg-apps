@@ -1,5 +1,5 @@
 // The App Store screenshot tour: walks the calendar page through the views the listing shows and tells the driver
-// when each is on screen. The same device as the reader app's test/ios-sim/tour.js — see there for why a tour
+// when each is on screen. The same device as Dhamma.Gift's test/ios-sim/tour.js — see there for why a tour
 // rather than fixed timings (a screenshot taken at the wrong moment is worse than none: it looks like a bug).
 //
 // The tour does not know about light/dark itself — the driver (drive.sh) flips the simulator's OS appearance

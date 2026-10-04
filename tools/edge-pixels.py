@@ -105,6 +105,45 @@ def main():
             text_top = y
             break
 
+    # The status bar's own furniture on a modern iPhone: the Dynamic Island (or the notch) is a
+    # solid black blob at the top centre. Detected by its continuous run (a title's letters are
+    # separate glyphs, so they never form one). Everything the PAGE draws must start below it —
+    # this is the check for the failure run 444 showed: the page's own top bar under the clock and
+    # the island. On a device without a cutout (this Android emulator) nothing is detected and the
+    # rule is skipped; there the status bar is an inset the page pads around.
+    blob_bottom = None
+    blob_x = (0, 0)
+    for y in range(0, int(h * 0.15)):
+        best = 0
+        best_run = (0, 0)
+        run = 0
+        start = 0
+        for x in range(0, w):
+            if sum(px[x, y][:3]) < 40:
+                if run == 0:
+                    start = x
+                run += 1
+                if run > best:
+                    best = run
+                    best_run = (start, x)
+            else:
+                run = 0
+        if best > 0.12 * w:
+            blob_bottom = y
+            blob_x = best_run
+    # The page's own ink outside the cutout's columns, in rows wide enough to be a bar rather than
+    # the clock's few digits.
+    page_text_top = None
+    if blob_bottom is not None:
+        for y in range(0, min(blob_bottom + int(h * 0.08), h)):
+            row = [px[x, y] for x in range(0, w, 3)
+                   if not (blob_x[0] - 8 <= x <= blob_x[1] + 8)]
+            wide = sum(1 for p in row if not near(p, page_bg, 32) and sum(p[:3]) > 60)
+            if wide > (w / 3) * 0.10:
+                page_text_top = y
+                break
+    page_clear_of_status = True if blob_bottom is None else (page_text_top is None or page_text_top >= blob_bottom + 10)
+
     verdict = {
         # Edge to edge: the page reaches the screen's own edges (no flat painted band there) AND the
         # very first row of the screen is the page's own background, not another colour of the app.
@@ -126,6 +165,9 @@ def main():
         "status_rows": status_rows,
         "empty_page": empty_page,
         "ink_ratio": round(ink_ratio, 5),
+        "cutout_bottom": blob_bottom,
+        "page_text_top": page_text_top,
+        "page_clear_of_status": page_clear_of_status,
         "theme": theme,
         "size": [w, h],
     }
@@ -134,7 +176,7 @@ def main():
     print(json.dumps(verdict))
     for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg",
               "top_matches_page", "bottom_matches_page", "frame_left", "frame_right", "text_top", "status_rows",
-              "empty_page", "ink_ratio", "top_row_uniform"):
+              "empty_page", "ink_ratio", "top_row_uniform", "cutout_bottom", "page_text_top", "page_clear_of_status"):
         print(f"{k}={verdict[k]}")
 
 

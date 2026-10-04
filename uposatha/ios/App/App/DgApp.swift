@@ -7,23 +7,47 @@ import Capacitor
 // the Home Screen quick actions (DgShortcuts). The same contract as Android's DgAlarm/DgSound and DgShortcuts plugins, as far as
 // iOS has the same things: no notification channels or streams here, no launcher icon change.
 
-// The root: the page sits inside the safe area (under the status bar and above the home indicator) on the page's own colour, so
-// nothing of it is hidden by the Dynamic Island or the home bar.
+// The page's own background (white by day, #111111 at night) — what shows behind the first paint and
+// at the overscroll edges, matching Android's windowBackground pair (values/colors.xml and
+// values-night). A dynamic colour, so the simulator's/simctl's appearance switch re-tints it the way
+// the page re-tints itself.
+private let dgPageBackground = UIColor { traits in
+    traits.userInterfaceStyle == .dark
+        ? UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 1)
+        : UIColor.white
+}
+
+// The root: the page runs EDGE TO EDGE (dg-apps#41) — the WKWebView spans the whole screen, under
+// the transparent status bar and the home indicator, and the page's own CSS keeps its bar clear of
+// both (viewport-fit=cover in the bundled page, env(safe-area-inset-*), the bridge's top-inset
+// padding). What this replaces: the page sat inside the safe area and the fields above and below it
+// were this view's own colour — the iOS half of the "борода" dg-apps#40/#41. The same change as
+// Android's (a706f50, c019579).
 final class DgRootViewController: UIViewController {
     private let bridgeController = DgBridgeViewController()
 
+    // The status bar's icon colour is the page's decision, not ours: the bridge calls
+    // SystemBars.setStyle when its theme changes, which lands on the bridge view controller's
+    // preferredStatusBarStyle. UIKit asks the WINDOW'S root (this VC), so the query has to be
+    // forwarded or this VC's implicit .default would win and the icons would stay dark on the
+    // page's dark theme.
+    // The names are Swift's, not the Objective-C ones: the Xcode 26 SDK no longer takes the older
+    // `childViewControllerForStatusBarStyle`/`...Hidden` spellings (the iOS build failed on them,
+    // dg-apps#41) — `childForStatusBarStyle`/`childForStatusBarHidden` is the same property.
+    override var childForStatusBarStyle: UIViewController? { bridgeController }
+    override var childForStatusBarHidden: UIViewController? { bridgeController }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = dgPageBackground
         addChild(bridgeController)
         bridgeController.view.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bridgeController.view)
-        let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            bridgeController.view.topAnchor.constraint(equalTo: guide.topAnchor),
-            bridgeController.view.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
-            bridgeController.view.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
-            bridgeController.view.trailingAnchor.constraint(equalTo: guide.trailingAnchor)
+            bridgeController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            bridgeController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            bridgeController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bridgeController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
         bridgeController.didMove(toParent: self)
     }
@@ -65,7 +89,57 @@ class DgBridgeViewController: CAPBridgeViewController {
         return configuration
     }
 
+    // The safe-area insets, handed to the page the way Android's SystemBars plugin hands them over:
+    // as --safe-area-inset-*, which the page's CSS reads first (var(--safe-area-inset-top,
+    // env(safe-area-inset-top, 0px))). iOS needs this: WKWebView's own env(safe-area-inset-top) is
+    // NOT reliable in an app — it came out 62px in one run and 0 in the next two, same build, same
+    // simulator (runs 446/448/449), and a page whose top bar is padded by env() then sits under the
+    // Dynamic Island. The web view's own safeAreaInsets are the value the system really reports.
+    private func pushSafeAreaInsets() {
+        guard let webView = webView else { return }
+        let i = webView.safeAreaInsets
+        let js = """
+        try {
+          var r = document.documentElement.style;
+          r.setProperty('--safe-area-inset-top', '\(i.top)px');
+          r.setProperty('--safe-area-inset-right', '\(i.right)px');
+          r.setProperty('--safe-area-inset-bottom', '\(i.bottom)px');
+          r.setProperty('--safe-area-inset-left', '\(i.left)px');
+        } catch (e) {}
+        """
+        webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    // Called on every layout change (rotation, a split view, the keyboard): the values are written
+    // again, which is what the page's resize handling expects. The async repeats cover the page
+    // arriving after the first layout — the write is idempotent and cheap.
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        pushSafeAreaInsets()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        pushSafeAreaInsets()
+    }
+
+    private func pushSafeAreaInsetsSoon() {
+        pushSafeAreaInsets()
+        for delay in [0.5, 2.0, 5.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.pushSafeAreaInsets()
+            }
+        }
+    }
+
     override func capacitorDidLoad() {
+        // Edge to edge (dg-apps#41): Capacitor would leave the web view on systemBackground; what
+        // shows through before the first paint (and under overscroll) is the page's own background
+        // instead — the same dynamic colour as the root view behind it.
+        webView?.backgroundColor = dgPageBackground
+        webView?.scrollView.backgroundColor = dgPageBackground
+        pushSafeAreaInsetsSoon()
+
         // Edge swipe = browser Back (a WKWebView leaves it off), and there is no Back button on iOS.
         webView?.allowsBackForwardNavigationGestures = true
         // No scroll indicators: the page is the whole interface.
@@ -83,8 +157,9 @@ class DgBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(DgNotifyPlugin())
         bridge?.registerPluginInstance(DgShortcutsPlugin())
         bridge?.registerPluginInstance(DgSitePlugin())
+        bridge?.registerPluginInstance(DgInsetsPlugin())
         #if DEBUG
-        // Debug builds only, for the same reason as the reader app's DgSelfTestPlugin: the App Store screenshot
+        // Debug builds only, for the same reason as Dhamma.Gift's DgSelfTestPlugin: the App Store screenshot
         // tour (test/ios-sim/tour.js) needs one native call to say which view is on screen; a release build's
         // Capacitor.Plugins.DgSelfTest is undefined.
         bridge?.registerPluginInstance(DgSelfTestPlugin())
@@ -141,6 +216,21 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         ["Content-Type": type, "Content-Length": String(length), "Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"]
     }
 
+    // Edge to edge (dg-apps#41): the page has to carry viewport-fit=cover or WKWebView reports
+    // env(safe-area-inset-top) as 0 and the bridge's top-bar padding comes out 0 too — the run 444
+    // screenshots show the page's own bar drawn under the Dynamic Island. build.js patches the
+    // BUILD's index.html, but this router answers "/" with the site's own /uposatha-calendar.html
+    // (both the bundled snapshot and, after an update, the copy DgSite downloaded), which is the
+    // page as dhamma.gift serves it: the meta is added here, where every copy passes through.
+    private static func withViewportCover(_ data: Data, type: String) -> Data {
+        guard type.hasPrefix("text/html") else { return data }
+        guard let html = String(data: data, encoding: .utf8), !html.contains("viewport-fit=cover") else { return data }
+        let patched = html.replacingOccurrences(
+            of: "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+            with: "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">")
+        return patched == html ? data : (patched.data(using: .utf8) ?? data)
+    }
+
     private func isStopped(_ task: WKURLSchemeTask) -> Bool {
         lock.lock(); defer { lock.unlock() }
         return stopped.contains(ObjectIdentifier(task))
@@ -158,9 +248,10 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         }
         if let file = DgSiteStore.file(for: path), let data = try? Data(contentsOf: file), !data.isEmpty {
             let type = Self.typeOf(path)
-            if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: data.count)) {
+            let body = Self.withViewportCover(data, type: type)
+            if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: body.count)) {
                 urlSchemeTask.didReceive(response)
-                urlSchemeTask.didReceive(data)
+                urlSchemeTask.didReceive(body)
                 urlSchemeTask.didFinish()
                 return
             }
@@ -170,9 +261,10 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         // (index.html, the offline splash) instead of the calendar page every "/" request actually wants.
         if let bundle = Bundle.main.url(forResource: "public" + path, withExtension: nil), let data = try? Data(contentsOf: bundle) {
             let type = Self.typeOf(path)
-            if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: data.count)) {
+            let body = Self.withViewportCover(data, type: type)
+            if let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: body.count)) {
                 urlSchemeTask.didReceive(response)
-                urlSchemeTask.didReceive(data)
+                urlSchemeTask.didReceive(body)
                 urlSchemeTask.didFinish()
                 return
             }
@@ -266,6 +358,39 @@ public class DgSitePlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func clear(_ call: CAPPluginCall) {
         try? FileManager.default.removeItem(at: DgSiteStore.root)
         call.resolve()
+    }
+}
+
+// MARK: - The safe-area insets
+
+// Edge to edge (dg-apps#41) needs the page to know how far the status bar (the Dynamic Island) and
+// the home indicator reach into it. Android's SystemBars plugin injects --safe-area-inset-* by
+// itself; iOS has no such thing, and WKWebView's own env(safe-area-inset-*) is not dependable in an
+// app — it read 62px in one run and 0 in the next two, same build and simulator (runs 446/448/449),
+// which left the page's top bar under the clock.
+//
+// So the page ASKS for them, at the moment it is ready (the bridge's applyTopInset): the answer is
+// the web view's own safeAreaInsets, which is what the system really reports. Registering a push
+// instead (writing the variables from the native side) loses the write when it lands before the
+// page's document exists — which is what run 451 showed.
+@objc(DgInsetsPlugin)
+public class DgInsetsPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "DgInsetsPlugin"
+    public let jsName = "DgInsets"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "get", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func get(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let insets = self.bridge?.webView?.safeAreaInsets ?? .zero
+            call.resolve([
+                "top": Double(insets.top),
+                "right": Double(insets.right),
+                "bottom": Double(insets.bottom),
+                "left": Double(insets.left)
+            ])
+        }
     }
 }
 

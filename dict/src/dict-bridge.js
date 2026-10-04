@@ -97,7 +97,7 @@
   // The three entries the switch turns off when it is on. They used to be static shortcuts in
   // res/xml/shortcuts.xml, and three statics there cost exactly the slots the history needs: the
   // launcher counts DECLARED shortcuts against its four-entry menu even when they are disabled at
-  // runtime, which is why the reader app shows three "recently read" entries and this app showed
+  // runtime, which is why Dhamma.Gift shows three "recently read" entries and this app showed
   // two. One static (Favorites & History) plus these three as dynamic is four either way.
   // Each carries the drawable it had while it was static (res/drawable-*/shortcut_N.png, the same
   // files the TWA used — see the plugin's iconFor): a dynamic shortcut must be handed an icon, and
@@ -114,7 +114,7 @@
   //
   // History only — the owner was explicit (2026-09-24: "не нужно брать избранное. в словаре только
   // история слов"): favourites are a different errand and have their own entry in the menu above.
-  // The reader app mixes the two because its history is a list of texts it can rank; the dictionary
+  // Dhamma.Gift mixes the two because its history is a list of texts it can rank; the dictionary
   // has one list, and it is this one.
   function collectShortcuts() {
     if (!shortcutsOn()) {
@@ -300,7 +300,7 @@
 
   // Back (Android's gesture / button). Capacitor's default with NO listener is a bare
   // WebView.goBack() and nothing else: from the dictionary's home screen a reader presses back and
-  // the app just sits there, and with a panel open it does not close either. The reader app wires
+  // the app just sits there, and with a panel open it does not close either. Dhamma.Gift wires
   // the same three steps for the same reason (src/native-bridge.js, its quick modal).
   function wireBackButton() {
     var App = Cap.Plugins && Cap.Plugins.App;
@@ -377,7 +377,7 @@
     if (document.visibilityState === 'hidden') pushShortcuts();
   });
   window.addEventListener('pagehide', pushShortcuts);
-  // The reader app's own belt (src/native-bridge.js): the first visit of a session has nothing in
+  // Dhamma.Gift's own belt (src/native-bridge.js): the first visit of a session has nothing in
   // history yet, so an app-state change is the only thing that would ever push — and if that event
   // never arrives, the launcher stays empty for the whole session. One delayed push costs nothing.
   setTimeout(pushShortcuts, 4000);

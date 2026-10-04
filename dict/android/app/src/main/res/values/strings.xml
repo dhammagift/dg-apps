@@ -15,7 +15,7 @@
          Android's own 10-character guidance for the short label is a display hint, not a hard cap:
          the system ellipsizes, which is still better than a second name that never meant anything
          on its own.
-         "DG " because the reader app declares a shortcut with exactly this name — both apps can sit
+         "DG " because Dhamma.Gift declares a shortcut with exactly this name — both apps can sit
          on one phone and both open dhamma.gift/4as, so the prefix is the only thing telling them
          apart. The other three entries are dynamic now and their labels live in src/dict-bridge.js,
          next to the routes they open. -->

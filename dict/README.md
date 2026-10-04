@@ -49,7 +49,7 @@ site's own classes so they do not look bolted on:
 
 - **Recent words in app shortcuts** — the switch that decides whether the launcher's long-press menu
   shows the four programmed shortcuts (`res/xml/shortcuts.xml`) or Favorites & History plus three
-  recent words. Off by default, like the reader app's equivalent.
+  recent words. Off by default, like Dhamma.Gift's equivalent.
 - **App version** — `versionName (versionCode)`, prepended to the injected script by `MainActivity`
   (the site has no way to know it).
 - **Rate Us** — opens the Play listing. Its button is `5️⃣⭐️🙏` — three emoji at one size, smaller
@@ -67,7 +67,7 @@ site's own classes so they do not look bolted on:
 
 That is the whole trick, and it is the part the migration got wrong twice. The launcher's long-press
 menu holds four entries, and it counts what the manifest DECLARES against that budget **even when a
-declared shortcut is disabled at runtime**. The reader app learned this first (`dg-apps` adcd32d:
+declared shortcut is disabled at runtime**. Dhamma.Gift learned this first (`dg-apps` adcd32d:
 "four static shortcuts left room for two 'recently read' texts, not three"), then went back to four
 declared statics while hiding three with `disableShortcuts()` (3b08f69) — and the dictionary app
 copied that shape, which is why the owner counted two history entries out of three while the row
@@ -91,7 +91,7 @@ History **only**: the dictionary has no favourites in this set (owner: "не н�
 словаре только история слов"). Each route comes from the site's `dictUrl()`, so a shortcut opens
 exactly the address the history entry does.
 
-Pushes happen on page load, once four seconds later (the reader app's own belt: the first visit of a
+Pushes happen on page load, once four seconds later (Dhamma.Gift's own belt: the first visit of a
 session has nothing in history yet), on every lookup — the bridge wraps the site's `addToHistory()` —
 and when the app is backgrounded (`appStateChange` *and* `visibilitychange`, since either can be the
 only one that fires on a given device). The switch's row states how many entries the app is handing
@@ -99,7 +99,7 @@ over, and adds what Android accepted when the two disagree.
 
 Favorites & History carries the full wording in BOTH labels — "DG Favorites & History" — because the
 launcher renders the SHORT label: an abbreviated one is all a reader ever sees. `DG ` is there because
-the reader app declares a shortcut with exactly that name, both apps can sit on one phone and both
+Dhamma.Gift declares a shortcut with exactly that name, both apps can sit on one phone and both
 open dhamma.gift/4as.
 
 ## The system bars
@@ -118,7 +118,7 @@ Capacitor's own default, with no listener registered, is a bare `WebView.goBack(
 so from the dictionary's home screen a reader presses Back and the app simply sits there, and with
 the burger panel open it does not close either. `dict-bridge.js` registers a `backButton` listener
 and takes the three steps in order: close an open panel, else `history.back()` when there is anywhere
-to go, else leave the app. The reader app wires the same thing for its own modal
+to go, else leave the app. Dhamma.Gift wires the same thing for its own modal
 (`src/native-bridge.js`).
 
 ## Building
@@ -136,7 +136,7 @@ JAVA_HOME=/path/to/jdk-21 ./gradlew assembleRelease    # unsigned unless ANDROID
 `versionCode` is 3 — the first code Play has not already seen for `gift.dhamma.pali` (the TWA
 shipped 2). Override it with `-PdgVersionCode=N`.
 
-Release signing uses the same environment variables as the reader app
+Release signing uses the same environment variables as Dhamma.Gift
 (`ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`);
 with none of them set the release build is simply unsigned.
 
@@ -155,7 +155,7 @@ launcher, so the APK itself still needs a real device.
 
 ## Continuous integration
 
-Two jobs in `.github/workflows/build-app.yml`, deliberately separate from the reader app's `build`
+Two jobs in `.github/workflows/build-app.yml`, deliberately separate from Dhamma.Gift's `build`
 job: that one exists to produce the offline library (a dg-node checkout, a ~213MB database built on
 the runner, the TOC snapshot) and none of it is needed here — the dictionary's UI is the live site,
 so there is no `www/` to generate.
@@ -163,19 +163,19 @@ so there is no `www/` to generate.
 - **`dict-build`** — `npm ci`, `npm run sync-android`, then the Gradle tasks. Runs on every tag and
   on every manual run. Uploads three artifacts: `dg-dict-apk-<run>` (debug, installable straight
   away), `dg-dict-apk-release-<run>` and `dg-dict-aab-release-<run>`. `versionCode` is the run
-  number (`-PdgVersionCode`), like the reader app — it must only ever climb, and the TWA last
+  number (`-PdgVersionCode`), like Dhamma.Gift — it must only ever climb, and the TWA last
   uploaded 2 under this package id.
-- **`dict-release`** — the same gate as the reader app's `android-release`: a tag, or a manual run
+- **`dict-release`** — the same gate as Dhamma.Gift's `android-release`: a tag, or a manual run
   with `release: play` / `both`. Uploads `gift.dhamma.pali` to the **internal** track of Google
   Play. With `release: none` (the default) it does not run, so a manual run never burns a
   versionCode in the console. Promoting internal → production stays a human decision.
 
-Both jobs use the secrets that are already in the repository, under the same names the reader app
+Both jobs use the secrets that are already in the repository, under the same names Dhamma.Gift
 uses (`ANDROID_KEYSTORE_BASE64 || KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD || KEYSTORE_PASSWORD`,
 `ANDROID_KEY_ALIAS || KEYSTORE_ALIAS`, `ANDROID_KEY_PASSWORD || KEY_PASSWORD`,
 `PLAY_SERVICE_ACCOUNT_JSON`), and the same Play service account — it already holds "Release apps to
 testing tracks" on `gift.dhamma.pali`, because dg-twa's workflow uploaded this package with it. The
-release assets are not attached to the reader app's GitHub release on purpose: that page already has
+release assets are not attached to Dhamma.Gift's GitHub release on purpose: that page already has
 two Android files that are easy to confuse.
 
 ## Not done here

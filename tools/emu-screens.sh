@@ -54,7 +54,7 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = edgetoedge ]; then
     adb shell settings put system user_rotation "$1" > /dev/null 2>&1
     adb shell cmd window user-rotation lock "$1" > /dev/null 2>&1
     local i
-    for i in 1 2 3 4 5 6; do
+    for i in $(seq 1 10); do
       sleep 3
       adb exec-out screencap -p > "$OUT/.rot.png" 2>/dev/null
       local shape
@@ -64,9 +64,14 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = edgetoedge ]; then
     done
     return 1
   }
-  measure() { # $1 = name, $2 = light|dark
+  measure() { # $1 = name, $2 = light|dark, $3 = port|land (the orientation the shot must be)
     adb shell cmd uimode night "$([ "$2" = dark ] && echo yes || echo no)" > /dev/null 2>&1
     launch 8
+    # Rotate AFTER the launch: a fresh activity start put the emulator back to portrait in run 24,
+    # so a rotation taken before it was gone by the time the screenshot was made (the light
+    # landscape shot there is 1080x2400 and passed only because a portrait shot skips the left/right
+    # checks). The orientation is then part of the verdict, not an assumption.
+    if [ "${3:-port}" = land ] && ! rotate 1; then ko "$1: the emulator never turned landscape"; fi
     wait_page 30 || ko "$1: the page never painted"
     sleep 3
     adb exec-out screencap -p > "$OUT/edge-$1.png"
@@ -77,7 +82,7 @@ v = json.load(open(sys.argv[1]))
 for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg",
           "top_matches_page", "bottom_matches_page", "top_row_uniform", "frame_left", "frame_right",
           "landscape", "text_top", "status_rows", "empty_page", "ink_ratio"):
-    print("v_%s=%s" % (k, "true" if v[k] is True else v[k]))
+    print("v_%s=%s" % (k, str(v[k]).lower()))   # booleans as the shell compares them
 PY
 )"
     echo "$1: page_bg=$v_page_bg status_bar_rows=$v_status_rows top_bar_text=$v_text_top ink=$v_ink_ratio" >> "$res"
@@ -109,25 +114,99 @@ w = [int(sys.argv[2][i:i+2], 16) for i in (1, 3, 5)]
 sys.exit(0 if all(abs(a - b) <= 8 for a, b in zip(c, w)) else 1)
 PY
     [ "$v_bottom_matches_page" = true ] && ok "$1: the bottom edge is the page's own background too" || ko "$1: the bottom edge is $v_bottom_color, not the page's $v_page_bg"
-    # 4. Landscape: the camera cutout is on a side there, so the left and right edges are checked too.
-    if [ "$v_landscape" = true ]; then
-      [ "$v_frame_left" = 0 ] && ok "$1: the page reaches the left edge (no cutout strip)" || ko "$1: $v_frame_left px of a strip at the left"
-      [ "$v_frame_right" = 0 ] && ok "$1: the page reaches the right edge" || ko "$1: $v_frame_right px of a strip at the right"
+    # 3b. ... and not far below it either: the padding must be the status bar's height, not more
+    #     (that is the owner's "отступ слишком большой" — the plugin had reported 52 CSS px for a
+    #     22 px drawn bar). The bar's own text starts right under it: 10px of its padding plus the
+    #     glyph's ascent, so a gap over ~45 device px means the page was over-padded.
+    if [ -n "$v_text_top" ] && [ "$v_text_top" != None ] && [ -n "$v_status_rows" ]; then
+      gap=$((v_text_top - v_status_rows))
+      if [ "$gap" -le 45 ]; then
+        ok "$1: the top bar sits right below the status bar (gap ${gap}px), not a strip lower"
+      else
+        ko "$1: the top bar starts ${gap}px below the status bar — over-padded"
+      fi
+    fi
+
+    # 4. Landscape: the camera cutout is on a side there, so the left and right edges are checked
+    #    too. A landscape pass whose screenshot is portrait is not evidence of anything: it is a
+    #    failure of the rotation, never a pass.
+    if [ "${3:-port}" = land ]; then
+      if [ "$v_landscape" = true ]; then
+        ok "$1: the shot really is landscape ($(python3 -c "from PIL import Image;im=Image.open('$OUT/edge-$1.png');print(f'{im.width}x{im.height}')"))"
+        [ "$v_frame_left" = 0 ] && ok "$1: the page reaches the left edge (no cutout strip)" || ko "$1: $v_frame_left px of a strip at the left"
+        [ "$v_frame_right" = 0 ] && ok "$1: the page reaches the right edge" || ko "$1: $v_frame_right px of a strip at the right"
+      else
+        ko "$1: the screenshot is NOT landscape — the emulator did not rotate, nothing was proved"
+      fi
     fi
   }
+  adb shell settings put system accelerometer_rotation 0 > /dev/null 2>&1
+  adb shell cmd window user-rotation lock 0 > /dev/null 2>&1
   adb logcat -c 2>/dev/null || true
   adb shell settings put system accelerometer_rotation 0
   adb shell settings put system user_rotation 0
   adb shell pm clear "$PKG" > /dev/null 2>&1 || true   # first run: the default light theme, no stored state
   measure light light
   measure dark dark
-  # Landscape and the tablet width (owner: "нужно посмотреть в альбомной и планшетной"). One profile
-  # per run (the workflow's "profile" input, pixel_7 or pixel_tablet), so the tablet pass is only
-  # taken there; every run takes the landscape one, cutout sides included.
-  TABLET=$([ "$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | head -1)" = "2560x1600" ] && echo yes || echo no)
+  # Landscape, on the owner's word ("собери сразу с пейзаж портрет"): the wide layout is measured
+  # again, sides included (a cutout or a side navigation bar moves the insets there).
   adb shell cmd uimode night no > /dev/null 2>&1
-  if rotate 1; then measure landscape-light light; else echo "landscape: skipped (the emulator did not rotate)" >> "$res"; fi
+  measure landscape-light light land
   rotate 0 || true
+  launch 8; wait_page 30 || true
+  adb shell cmd uimode night yes > /dev/null 2>&1
+  sleep 3
+  measure landscape-dark dark land
+  rotate 0 || true
+  adb shell cmd uimode night no > /dev/null 2>&1
+  #
+  # The tablet case (owner: "а андроид с планшетный сможешь сделать?") is taken on THIS emulator by
+  # resizing its display to a tablet's CSS size — 1600x2560 at density 2 (800x1280 CSS px is what a
+  # 10" tablet gives a page). The pixel_tablet system image never came up on the runner twice (a
+  # corrupt download, "Error on ZipFile unknown archive"), and the layout question is about the
+  # page's CSS width, not about the machine.
+  tablet_pass() {
+    adb shell wm size 1600x2560 > /dev/null 2>&1
+    adb shell wm density 320 > /dev/null 2>&1
+    sleep 6
+    measure tablet-light light
+    # the burger menu at tablet width: the same page's-own-numbers check as on the phone
+    adb shell am force-stop "$PKG"
+    adb shell am start -W -n "$PKG/gift.dhamma.uposatha.MainActivity" -a android.intent.action.MAIN --es route "/?drawer=1" > /dev/null
+    wait_page 30 || true
+    sleep 3
+    adb exec-out screencap -p > "$OUT/edge-tablet-drawer.png"
+    adb shell run-as "$PKG" cat files/site/dg-edgetoedge.json > "$OUT/dg-edgetoedge-tablet.json" 2>/dev/null || true
+    if [ -s "$OUT/dg-edgetoedge-tablet.json" ]; then
+      if python3 - "$OUT/dg-edgetoedge-tablet.json" <<'TEOF' | tee -a "$res"
+import json, sys
+d = json.load(open(sys.argv[1]))
+ok = True
+def check(cond, text):
+    global ok
+    print(("PASS " if cond else "FAIL ") + text)
+    ok = ok and cond
+check(d.get("drawerOpen") is True, "tablet: the burger menu is really open")
+# dg-apps#54: the inset reaches the page only where SystemBars passes it through (WebView 140+); on an older
+# WebView the window is padded natively and the page rightly gets 0 (the pixel checks above see the bar clear
+# of the clock either way). What must hold in both: the menu's content is not above the inset the page has.
+top, drawer = d.get("topInset"), d.get("drawerContentTop")
+check(top == 0 or (top or 0) >= 20, "tablet: the page's inset is the status bar's or none (window padded): %s px" % top)
+check(drawer is not None and top is not None and drawer >= top,
+      "tablet: the drawer's content starts at %s px, at or below the inset %s px" % (drawer, top))
+sys.exit(0 if ok else 1)
+TEOF
+      then :; else fail=1; fi
+    else
+      ko "tablet: no report from the page"
+    fi
+    adb shell wm size reset > /dev/null 2>&1
+    adb shell wm density reset > /dev/null 2>&1
+    sleep 4
+  }
+  tablet_pass || ko "tablet: the resized pass did not run"
+  TABLET=yes
+
   # A short tour for the video: the app layer, a tab, then the dark theme (the page follows the
   # system appearance through prefers-color-scheme, so the same path a reader takes is exercised).
   launch 8; wait_page 30 || true
@@ -137,9 +216,6 @@ PY
   adb exec-out screencap -p > "$OUT/edge-light-to-dark.png"
   launch 8; wait_page 30 || true
   adb shell input tap 250 1790; sleep 4     # the Calendar tab, on the dark page
-  # Landscape again, on the dark page, while the video is still running (the cutout and the bars).
-  if rotate 1; then adb exec-out screencap -p > "$OUT/edge-landscape-dark.png"; else echo "landscape-dark: skipped (the emulator did not rotate)" >> "$res"; fi
-  rotate 0 || true
   adb shell input keyevent KEYCODE_HOME; sleep 2
   stop_rec
   [ -s "$OUT/flow.mp4" ] && echo "video: flow.mp4 ($(du -h "$OUT/flow.mp4" | cut -f1))" >> "$res"

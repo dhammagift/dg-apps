@@ -12,6 +12,7 @@
   "plugins": {
     "SystemBars": {
       "style": "DEFAULT",
+      "insetsHandling": "css",
       "initialViewportFitValueHint": "cover"
     },
     "LocalNotifications": {

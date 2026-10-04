@@ -148,10 +148,15 @@ class DgBridgeViewController: CAPBridgeViewController {
 
         // The bridge (www/uposatha-bridge.js, the same file Android injects) runs before the page's own scripts. Added here and not
         // in webViewConfiguration(for:), because Capacitor replaces the user content controller after that call.
+        // With it, the installed version as a global, as Android's MainActivity does ("1.0 (509)"): the page's "App version" row
+        // showed "preview", its fallback for a page with no native shell, because only Android set it.
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = "\(info["CFBundleShortVersionString"] as? String ?? "") (\(info["CFBundleVersion"] as? String ?? ""))"
+        let versionJS = "window.__DG_APP_VERSION__=\"\(version)\";\n"   // digits, dots, a space and brackets: nothing to escape
         if let url = Bundle.main.url(forResource: "uposatha-bridge", withExtension: "js", subdirectory: "public"),
            let source = try? String(contentsOf: url, encoding: .utf8) {
             webView?.configuration.userContentController.addUserScript(
-                WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+                WKUserScript(source: versionJS + source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
 
         bridge?.registerPluginInstance(DgNotifyPlugin())

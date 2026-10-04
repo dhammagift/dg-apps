@@ -102,4 +102,13 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <queries>
+        <!-- Text-selection menu inside our own WebView (dg-apps#48): from Android 11 an app only
+             sees other apps' PROCESS_TEXT handlers it declares here, so the selection toolbar in
+             Uposatha showed neither DG nor the dictionary, and the dictionary did not show DG. -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
 </manifest>

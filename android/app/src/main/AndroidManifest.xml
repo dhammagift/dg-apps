@@ -202,6 +202,13 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Android 11+ package visibility: without this the TextToSpeech engine (DgTtsPlugin) is not found. -->
     <queries>
+        <!-- Text-selection menu inside our own WebView (dg-apps#48): from Android 11 an app only
+             sees other apps' PROCESS_TEXT handlers it declares here, so the selection toolbar in
+             Uposatha showed neither DG nor the dictionary, and the dictionary did not show DG. -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>

@@ -83,4 +83,13 @@
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Alarms are lost on reboot: the LocalNotifications plugin re-arms them on boot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <queries>
+        <!-- Text-selection menu inside our own WebView (dg-apps#48): from Android 11 an app only
+             sees other apps' PROCESS_TEXT handlers it declares here, so the selection toolbar in
+             Uposatha showed neither DG nor the dictionary, and the dictionary did not show DG. -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
 </manifest>

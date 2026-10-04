@@ -323,13 +323,40 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
                 .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
                         .setMediaSession(session.getSessionToken())
                         .setShowActionsInCompactView(0, 1));
+        Notification notification = b.build();
+        // While it reads, the notification is held by a foreground service (DgTtsService), so Android
+        // does not freeze the app a few minutes into the background; on pause it is a plain one again.
+        if (playing) holdForeground(ctx, notification);
+        else releaseForeground(ctx);
         try {
-            NotificationManagerCompat.from(ctx).notify(NOTIFICATION_ID, b.build());
+            NotificationManagerCompat.from(ctx).notify(NOTIFICATION_ID, notification);
             showing = playing;
         } catch (SecurityException e) {
             // Android 13+ without POST_NOTIFICATIONS: the lock screen controls are gone, the reading
             // is not. Nothing to recover from, and nothing worth failing a speak() over.
         }
+    }
+
+    private boolean foreground;
+
+    private void holdForeground(Context ctx, Notification notification) {
+        if (foreground) return;   // already held: notify() above updates the same notification
+        Intent i = new Intent(ctx, DgTtsService.class)
+                .putExtra(DgTtsService.EXTRA_NOTIFICATION, notification)
+                .putExtra(DgTtsService.EXTRA_ID, NOTIFICATION_ID);
+        try {
+            ContextCompat.startForegroundService(ctx, i);
+            foreground = true;
+        } catch (Exception e) {
+            // Android 12+ refuses a foreground start from the background in some states (resuming
+            // from the notification's own Play): the reading goes on with the plain notification.
+        }
+    }
+
+    private void releaseForeground(Context ctx) {
+        if (!foreground) return;
+        foreground = false;
+        try { ctx.stopService(new Intent(ctx, DgTtsService.class)); } catch (Exception ignored) { }
     }
 
     // The buttons drawn on the lock screen are the system's own and arrive through the session
@@ -383,6 +410,7 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
     }
 
     private void teardown() {
+        releaseForeground(getContext());
         abandonFocus();
         showing = null;
         NotificationManagerCompat.from(getContext()).cancel(NOTIFICATION_ID);

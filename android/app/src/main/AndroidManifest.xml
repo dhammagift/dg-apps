@@ -165,6 +165,13 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Keeps the app alive while it reads aloud (see DgTtsService): the player notification alone
+             did not, and a few minutes into the background Android froze the WebView mid-reading. -->
+        <service
+            android:name=".DgTtsService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <!-- The Quick Settings tile (DgTileService): Dhamma.gift in the shade, one tap from
              anywhere, offline — the Android counterpart of a Control Center button. exported="true"
              is required because the system's tile host binds this service from outside the app;
@@ -195,6 +202,7 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Read by the Network plugin (hasNetworkConsent in app.js) to tell Wi-Fi from cellular

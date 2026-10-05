@@ -154,11 +154,10 @@ const ASSETS = [
     { url: '/reader/lang_th.json', sources: [f('configs/reader/lang_th.json')] },
     { url: '/reader/bu-pm-fragment.html', sources: [f('reader/bu-pm-fragment.html')] },
     { url: '/reader/bi-pm-fragment.html', sources: [f('reader/bi-pm-fragment.html')] },
-    { url: '/assets/js/translators.json', sources: [l('js/translators.json')] },
-    // dg-node's offline shim caches this one explicitly for offline use (OFFLINE_EXTRA_URLS in
-    // public/offline/app.js). The app has no service worker, so the file has to BE there — miss
-    // it and reader translator labels silently disappear offline.
-    { url: '/assets/js/translators.js', sources: [l('js/translators.js')] },
+    // The translators' names, from dg-node itself (configs/reader/translators.json, what the site serves at
+    // this URL): the legacy site's copy in siteroot/assets was a stale duplicate. The duplicate
+    // translators.js is gone from dg-node; nothing in the app loads it.
+    { url: '/assets/js/translators.json', sources: [f('configs/reader/translators.json')] },
     { url: '/nodejs/res/lang_ru.json', sources: [f('configs/search/lang_ru.json')] },
     { url: '/nodejs/res/lang_en.json', sources: [f('configs/search/lang_en.json')] },
     { url: '/assets/i18n/lang_global_en.json', sources: [f('public/overrides/i18n/lang_global_en.json')] },

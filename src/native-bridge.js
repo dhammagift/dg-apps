@@ -1610,6 +1610,7 @@
         document.body.appendChild(strip);
       }
       strip.style.background = topBg;
+      clearTopBars();
     }
     var top = (dark || document.body.classList.contains('dg-state-home')) ? 'DARK' : 'LIGHT';
     var bottom = dark ? 'DARK' : 'LIGHT';
@@ -1618,10 +1619,41 @@
     Bars.setStyle({ style: top, bar: 'StatusBar' }).catch(function () { last = ''; });
     Bars.setStyle({ style: bottom, bar: 'NavigationBar' }).catch(function () { last = ''; });
   }
+  // The page must start below the strip, whatever its markup does. The build gives the html element a top margin (build-assets.js);
+  // here the rest: (1) the margin itself when the page took the style out of reach, (2) position:fixed/sticky bars at top:0, which a
+  // margin does not move (only bars, a small share of the screen, not full-screen overlays), (3) a last guard: if anything visible
+  // still starts above the strip's bottom (a negative margin in the page), the whole page goes down by the difference.
+  function clearTopBars() {
+    var strip = document.getElementById('dg-edge-strip');
+    var h = strip ? strip.offsetHeight : 0;
+    if (!h) return;
+    var root = document.documentElement;
+    var base = parseFloat(getComputedStyle(root).marginTop) || 0;
+    if (base < h - 1) { root.style.position = 'relative'; root.style.marginTop = h + 'px'; base = h; }
+    var all = document.body.getElementsByTagName('*'), min = Infinity;
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el === strip) continue;
+      var cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      var bar = cs.position === 'fixed' || cs.position === 'sticky';
+      if (bar && !el.getAttribute('data-dg-top') && parseFloat(cs.top) === 0 && r.height > 0 && r.height <= window.innerHeight * 0.3) {
+        el.setAttribute('data-dg-top', '1');
+        el.style.top = h + 'px';
+        continue;
+      }
+      if (bar || r.height < 4 || r.width < 4 || cs.visibility === 'hidden' || cs.display === 'none' || r.bottom <= 0 || r.top < -1) continue;
+      if (r.top < min) min = r.top;
+    }
+    if (window.scrollY === 0 && min < h - 1 && !clearTopBars.pushed) {
+      clearTopBars.pushed = true;
+      root.style.marginTop = (base + (h - min)) + 'px';
+    }
+  }
   function watch() {
     var mo = new MutationObserver(function () { run(false); });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme', 'data-theme', 'class', 'style'] });
     mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(function () { clearTimeout(clearTopBars.t); clearTopBars.t = setTimeout(clearTopBars, 300); }).observe(document.body, { childList: true, subtree: true });
     run(true);
     // The page's own script may set its theme a moment after this one runs.
     window.addEventListener('load', function () { run(true); setTimeout(function () { run(true); }, 600); });

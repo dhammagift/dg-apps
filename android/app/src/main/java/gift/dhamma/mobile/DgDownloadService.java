@@ -144,16 +144,20 @@ public class DgDownloadService extends Service {
         try {
             stopForeground(true);
             NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID);
-            if (error == null && transferred) {
-                // The archive is on disk. The page unpacks it into the database when the app is open (JavaScript cannot run
-                // in the background), so the reader is told to open it.
+            // Always a last word: the reader may be anywhere but in the app (the page cannot say it - it is frozen).
+            boolean cancelledByUser = "cancelled".equals(error);
+            if (!cancelledByUser && (error != null || transferred)) {
+                String text = error == null
+                        ? "The library is downloaded. Open the app to finish."
+                        : "The download stopped (" + error + "). Open the app to continue.";
                 Notification done = new androidx.core.app.NotificationCompat.Builder(this, "dg_download_v2")
                         .setSmallIcon(R.drawable.ic_tile)
                         .setContentTitle("Dhamma.gift")
-                        .setContentText("The library is downloaded. Open the app to finish.")
+                        .setContentText(text)
                         .setContentIntent(android.app.PendingIntent.getActivity(this, 0,
                                 new Intent(this, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP),
                                 android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE))
+                        .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
                         .setAutoCancel(true).build();
                 NotificationManagerCompat.from(this).notify(DONE_NOTIFICATION_ID, done);
             }

@@ -257,16 +257,18 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb shell input keyevent KEYCODE_HOME; sleep 2              # the app is in the background from here on
   state() { adb shell dumpsys notification --noredact | grep -oE "(Downloading the offline library[^\"]*|The library is downloaded[^\"]*)" | tail -1; }
   prev=""; grew=0; finished=0
-  for i in 1 2 3 4 5 6; do
+  # Up to 6 minutes in the background: long enough for the whole archive on a CI emulator, so the closing notification shows too.
+  for i in $(seq 1 36); do
     sleep 10; cur=$(state); echo "t+$((i*10+5))s background: ${cur:-<no notification>}" >> "$res"
-    case "$cur" in *downloaded*) finished=1 ;; esac
+    case "$cur" in *downloaded*) finished=1; break ;; esac
     mb=$(echo "$cur" | grep -oE "[0-9]+ of" | grep -oE "[0-9]+"); pmb=$(echo "$prev" | grep -oE "[0-9]+ of" | grep -oE "[0-9]+")
     if [ -n "$mb" ] && [ -n "$pmb" ] && [ "$mb" -gt "$pmb" ]; then grew=1; fi
     prev="$cur"
   done
   adb shell cmd statusbar expand-notifications; sleep 2; adb exec-out screencap -p > "$OUT/download-1-shade-in-background.png"
   adb shell cmd statusbar collapse
-  if [ "$grew" = 1 ] || [ "$finished" = 1 ]; then ok "the download goes on with the app in the background (progress grew: $grew, finished: $finished)"; else ko "no progress in the background"; fi
+  if [ "$grew" = 1 ]; then ok "the download goes on with the app in the background"; else ko "no progress in the background"; fi
+  if [ "$finished" = 1 ]; then ok "the closing notification (\"The library is downloaded\") arrived with the app in the background"; else ko "no closing notification within 6 minutes"; fi
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 45
   adb exec-out screencap -p > "$OUT/download-2-reopened.png"
   adb logcat -d | grep -iE "dg-offline|DgDownload|FATAL" | tail -40 > "$OUT/download-logcat.txt"

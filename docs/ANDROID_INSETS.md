@@ -24,3 +24,16 @@ Bottom: sheets and floating buttons add `--dg-sab` (translate), the gesture bar 
 1. Never `top:0` without `padding-top: var(--dg-sat)` (or `top: var(--dg-sat)`); bottom-anchored: add `--dg-sab`.
 2. Keep its z-index below 2147483000.
 3. Add a shot of it to `tools/emu-screens.sh` (light and dark) before shipping.
+
+## Every HTML page in the app (29 files in www/) and who looks after its top edge
+| Page | Owner of the top edge | Checked |
+|---|---|---|
+| `index.html` (home, results, TOC, reader, drawer, quick window) | home.css: strip `body::before` + `--dg-sat` | emulator screens |
+| `settings/index.html`, `settings/preview-frame.html` | the page itself (also loaded in a frame) | emulator screens |
+| `login/index.html`, `login/app-apple.html` (+ `ru/` copies) | build-assets.js `coverViewportInSubpages()` + native-bridge.js | `tools/probe-insets.js` |
+| `memo/index.html` (+ `ru/`) | same | same |
+| `assets/diff/index.html`, `lbl.html`, `lbl-en.html`, `listdiff.html`, `makelist.html`, `rr.html`, `rrbi.html`, `materials/prat.html`, `common/abbr.html`, `history.html`, `syrkin.html` | same | same |
+| `assets/grammar/` declentions, nouns, nouns2, pronouns, pronouns2, verbs, verbs2 | same | same |
+| `reader/bu-pm-fragment.html`, `bi-pm-fragment.html` | fragments inserted into the reader, not pages | n/a |
+
+How the site pages work: the build adds `viewport-fit=cover` to every page (inserts the meta where a page had none) and a rule giving `<html>` a top margin of the status bar's height (a margin, so an `position:absolute; top:0` bar moves with it); native-bridge.js draws the strip, moves `position:fixed/sticky` bars down, and as a last guard pushes the page down if anything visible still starts above the strip. The probe (a headless browser, `--safe-area-inset-top: 24px`, the real www/ and the real native-bridge.js) lists any visible element starting above the strip: it must be empty for all 24 pages.

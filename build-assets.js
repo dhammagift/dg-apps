@@ -942,8 +942,13 @@ function injectBridgeIntoPages() {
 // the page keeps clear of them with the safe-area insets (env(), and Capacitor's injected --safe-area-inset-* for a WebView whose env() stays 0). Not index.html (done in build-page.js) and not
 // settings/ (it clears the bars itself, and is also loaded inside a frame).
 function coverViewportInSubpages() {
-    const PLAIN = /<meta\s+name="viewport"\s+content="width=device-width,\s*initial-scale=1(?:\.0)?"\s*\/?>/i;
-    const STYLE = '<style id="dg-edge">html{padding:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px)) max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px)) 0 max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px))}</style>';
+    // Any viewport meta without viewport-fit gets it; a page with no viewport meta at all gets the usual mobile one.
+    const META = /<meta\s+name=["']viewport["']\s+content=["']([^"']*)["']\s*\/?>/i;
+    const COVER = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">';
+    // The html element is moved down by the status bar's height (margin, not padding: an absolutely positioned bar at top:0
+    // is placed against html's box, so it moves with it). native-bridge.js does the same for a page whose markup took this
+    // style out of reach, and moves position:fixed bars (a margin does not move those).
+    const STYLE = '<style id="dg-edge">html{position:relative;margin-top:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px))}</style>';
     let patched = 0;
     const walk = (dir, top) => {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -954,12 +959,14 @@ function coverViewportInSubpages() {
                 continue;
             }
             if (!entry.name.endsWith('.html') || (top && entry.name === 'index.html')) continue;
-            const html = fs.readFileSync(full, 'utf8');
-            if (!PLAIN.test(html) || !html.includes('</head>')) continue;
-            const next = html
-                .replace(PLAIN, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">')
-                .replace('</head>', STYLE + '\n</head>');
-            fs.writeFileSync(full, next, 'utf8');
+            let html = fs.readFileSync(full, 'utf8');
+            if (!/<(html|body|head)[\s>]/i.test(html)) continue;     // a fragment (inserted with innerHTML), not a page
+            const m = META.exec(html);
+            if (m && /viewport-fit\s*=\s*cover/.test(m[1])) continue; // already done
+            if (m) html = html.replace(META, '<meta name="viewport" content="' + m[1].replace(/\s*,?\s*$/, '') + ', viewport-fit=cover">');
+            else html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (h) => h + '\n' + COVER) : COVER + '\n' + html;
+            html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, STYLE + '\n</head>') : html.replace(/<body[^>]*>/i, (b) => STYLE + '\n' + b);
+            fs.writeFileSync(full, html, 'utf8');
             patched++;
         }
     };

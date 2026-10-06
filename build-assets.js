@@ -943,7 +943,7 @@ function injectBridgeIntoPages() {
 // settings/ (it clears the bars itself, and is also loaded inside a frame).
 function coverViewportInSubpages() {
     const PLAIN = /<meta\s+name="viewport"\s+content="width=device-width,\s*initial-scale=1(?:\.0)?"\s*\/?>/i;
-    const STYLE = '<style id="dg-edge">html{padding:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px)) max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px)) max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)) max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px))}</style>';
+    const STYLE = '<style id="dg-edge">html{padding:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px)) max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px)) 0 max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px))}</style>';
     let patched = 0;
     const walk = (dir, top) => {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

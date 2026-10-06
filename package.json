@@ -23,7 +23,6 @@
     "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/network": "^8.0.0",
     "@capacitor/share": "^8.0.0",
-    "@capacitor/status-bar": "^8.0.0",
     "@sqlite.org/sqlite-wasm": "^3.53.0-build1"
   },
   "devDependencies": {

@@ -4,9 +4,6 @@
   "webDir": "www",
   "ios": {},
   "plugins": {
-    "StatusBar": {
-      "style": "DARK"
-    },
     "SystemBars": {
       "initialViewportFitValueHint": "cover"
     }

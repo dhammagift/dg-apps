@@ -939,11 +939,11 @@ function injectBridgeIntoPages() {
 // home page gets viewport-fit=cover in build-page.js, these had the plain viewport, so Android padded the
 // WebView and the window colour showed as white strips above and below (the dark theme on a white frame,
 // the status icons unreadable). With the cover viewport the page's own background runs under the bars and
-// the page keeps clear of them with the safe-area insets. Not index.html (done in build-page.js) and not
+// the page keeps clear of them with the safe-area insets (env(), and Capacitor's injected --safe-area-inset-* for a WebView whose env() stays 0). Not index.html (done in build-page.js) and not
 // settings/ (it clears the bars itself, and is also loaded inside a frame).
 function coverViewportInSubpages() {
     const PLAIN = /<meta\s+name="viewport"\s+content="width=device-width,\s*initial-scale=1(?:\.0)?"\s*\/?>/i;
-    const STYLE = '<style id="dg-edge">html{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}</style>';
+    const STYLE = '<style id="dg-edge">html{padding:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px)) max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px)) max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)) max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px))}</style>';
     let patched = 0;
     const walk = (dir, top) => {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

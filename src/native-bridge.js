@@ -1577,15 +1577,37 @@
   var Bars = Cap && Cap.Plugins && Cap.Plugins.SystemBars;
   if (!Bars || typeof Bars.setStyle !== 'function') return;
   var last = '';
+  // The colour the page paints at the very top: the first opaque background from the element there up to <html>, then <body>
+  // (a page's background often sits on a wrapper, or on <body> alone, where it also fills the canvas).
+  function clear(c) { return !c || c === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(c); }
+  function topColour() {
+    var el = document.elementFromPoint(Math.round(window.innerWidth / 2), 2);
+    for (; el; el = el.parentElement) { var c = getComputedStyle(el).backgroundColor; if (!clear(c)) return c; }
+    var b = getComputedStyle(document.body).backgroundColor;
+    return clear(b) ? '#ffffff' : b;
+  }
   function run(force) {
     if (!document.body) return;
     var root = document.documentElement;
     var dark = root.getAttribute('data-bs-theme') === 'dark' || root.getAttribute('data-theme') === 'dark';
+    var topBg = topColour();
     if (!dark) {
       // A page that keeps its theme under another name (Settings, Memo, sign-in): read what it paints behind the bars.
-      var bg = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/.exec(getComputedStyle(document.body).backgroundColor);
-      if (!bg || bg[4] === '0') bg = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(root).backgroundColor);
+      var bg = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(topBg);
       if (bg) dark = (0.299 * bg[1] + 0.587 * bg[2] + 0.114 * bg[3]) < 128;
+    }
+    // The strip behind the status bar. The home page and its views have their own (home.css, body::before, above every
+    // layer); a page the app carries as a file (Memo, sign-in, the tools) gets one here, in the colour the page paints.
+    if (!root.classList.contains('dg-app')) {
+      var strip = document.getElementById('dg-edge-strip');
+      if (!strip) {
+        strip = document.createElement('div');
+        strip.id = 'dg-edge-strip';
+        strip.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;pointer-events:none;' +
+          'height:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px))';
+        document.body.appendChild(strip);
+      }
+      strip.style.background = topBg;
     }
     var top = (dark || document.body.classList.contains('dg-state-home')) ? 'DARK' : 'LIGHT';
     var bottom = dark ? 'DARK' : 'LIGHT';
@@ -1599,6 +1621,8 @@
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme', 'data-theme', 'class', 'style'] });
     mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     run(true);
+    // The page's own script may set its theme a moment after this one runs.
+    window.addEventListener('load', function () { run(true); setTimeout(function () { run(true); }, 600); });
   }
   if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') run(true); });

@@ -387,6 +387,10 @@ for theme in light dark; do
   route login/;              shot "$theme-9-login" 8
   route assets/diff/;        shot "$theme-10-compare" 8
   route 4as;                 shot "$theme-11-quick-window" 8
+  # The burger drawer over the home page: the clock and notification icons must stay on the strip (docs/ANDROID_INSETS.md).
+  adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null
+  sleep 12; adb shell input tap 309 2184; sleep 2
+  adb shell input tap 990 203;  shot "$theme-12-drawer" 3
 done
 adb logcat -d -t 400 > "$OUT/logcat.txt" 2>/dev/null || true
 ls -la "$OUT"

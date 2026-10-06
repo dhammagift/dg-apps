@@ -57,18 +57,45 @@
     // card and the update path are untouched. `update` re-downloads; otherwise a file already on
     // disk is the answer.
     //
-    // Android has no such plugin (its foreground service does the same job for the worker's own
-    // fetch) and a browser has no Capacitor at all, so both keep the code path they have always had.
+    // A browser has no Capacitor at all and keeps the code path it has always had; Android has its own, below.
     function prepareArchive(opts) {
         var Plugins = window.Capacitor && window.Capacitor.Plugins;
         var D = Plugins && Plugins.DgDownload;
         if (!D || typeof D.start !== 'function' || typeof D.existing !== 'function') return Promise.resolve(false);
         var fresh = !!(opts && opts.update);
+        if (window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android') return prepareAndroid(D, fresh);
         return Promise.resolve(fresh ? null : D.existing()).then(function (onDisk) {
             if (onDisk && onDisk.path) return true;
             return Promise.resolve(D.start({ url: REMOTE_BASE + '/' + ARCHIVE }))
                 .then(function (file) { return !!(file && file.path); });
         }).catch(function () { return false; });   // refused, offline, plugin unhappy: the worker's own path
+    }
+
+    // Android: DgDownloadPlugin.java downloads the archive and the manifest in a foreground service into the app's files
+    // directory (resuming after a break; a WebView's JavaScript is frozen in the background and the download stopped with
+    // it, issue #62). The page then reads both through Capacitor's file URL as if that directory were the site: the worker
+    // imports the archive as before, only much sooner. The native progress becomes the page's own progress events, and the
+    // native notification replaces the mirrored one while the transfer runs (native-bridge.js looks at dgNativeDownload).
+    var androidProgressWired = false;
+    function prepareAndroid(D, fresh) {
+        if (!androidProgressWired && typeof D.addListener === 'function') {
+            androidProgressWired = true;
+            D.addListener('progress', function (e) {
+                window.dispatchEvent(new CustomEvent('dg:dl-progress', { detail: { loaded: e.loaded, total: e.total, phase: 'download' } }));
+            });
+            // The archive is only needed until the worker has imported it: the finished download frees ~200 MB.
+            window.addEventListener('dg:dl-progress', function (e) {
+                if (e.detail && e.detail.done && typeof D.clear === 'function') { try { D.clear(); } catch (x) { /* nothing to clear */ } }
+            });
+        }
+        window.dgNativeDownload = true;
+        // The first notification, and with it Android 13+'s permission prompt (the native service posts the later ones).
+        try { var P = window.Capacitor.Plugins.DgProgress; if (P && P.update) P.update({ title: 'Dhamma.gift', text: 'Downloading the offline library', percent: -1 }); } catch (x) { /* no notification */ }
+        return Promise.resolve(D.start({ base: REMOTE_BASE, fresh: fresh })).then(function (r) {
+            if (!r || !r.path) return false;
+            window.dgPlatform.distBase = window.Capacitor.convertFileSrc(r.path);
+            return true;
+        }).catch(function () { return false; }).then(function (ok) { window.dgNativeDownload = false; return ok; });
     }
 
     window.dgPlatform = {

@@ -684,6 +684,8 @@
         window.addEventListener('dg:dl-progress', function (event) {
             var detail = event.detail || {};
             if (detail.done) { clear(); return; }
+            // The native download (DgDownloadService) posts its own notification, also with the page frozen: no second one.
+            if (window.dgNativeDownload) return;
             var percent = detail.total ? Math.min(100, Math.round((detail.loaded / detail.total) * 100)) : -1;
             var now = Date.now();
             // The worker posts every ~200ms; that is right for a smooth in-page bar and far too

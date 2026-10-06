@@ -90,6 +90,32 @@ public class DgProgressPlugin extends Plugin {
         String text = call.getString("text", "");
         String title = call.getString("title", "Dhamma.gift");
 
+        Notification built = buildNotification(context, title, text, percent);
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, built);
+            // Claim the foreground slot with the same notification, so the WebView process is not
+            // treated as idle while 509MB are still crossing the connection. Starting it on every
+            // update is harmless (onStartCommand just re-posts) and means no separate "download
+            // started" signal is needed from the page — the first progress event is that signal.
+            Intent service = new Intent(context, DgDownloadService.class);
+            service.putExtra(DgDownloadService.EXTRA_NOTIFICATION, built);
+            if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(service);
+            else context.startService(service);
+            JSObject result = new JSObject();
+            result.put("shown", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            // Permission revoked between the check and the post, or background-start restrictions:
+            // the in-page card still shows progress, so this is not a failure.
+            call.resolve();
+        }
+    }
+
+
+    /** The ongoing progress notification (also used by DgDownloadService for the native download). */
+    static Notification buildNotification(Context context, String title, String text, int percent) {
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) ensureChannel(manager);
         Intent open = new Intent(context, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
@@ -124,25 +150,7 @@ public class DgProgressPlugin extends Plugin {
             builder.setProgress(0, 0, true);
         }
 
-        Notification built = builder.build();
-        try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, built);
-            // Claim the foreground slot with the same notification, so the WebView process is not
-            // treated as idle while 509MB are still crossing the connection. Starting it on every
-            // update is harmless (onStartCommand just re-posts) and means no separate "download
-            // started" signal is needed from the page — the first progress event is that signal.
-            Intent service = new Intent(context, DgDownloadService.class);
-            service.putExtra(DgDownloadService.EXTRA_NOTIFICATION, built);
-            if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(service);
-            else context.startService(service);
-            JSObject result = new JSObject();
-            result.put("shown", true);
-            call.resolve(result);
-        } catch (Exception e) {
-            // Permission revoked between the check and the post, or background-start restrictions:
-            // the in-page card still shows progress, so this is not a failure.
-            call.resolve();
-        }
+        return builder.build();
     }
 
     /** The download stopped being interesting: finished, cancelled, or failed. */
@@ -150,6 +158,7 @@ public class DgProgressPlugin extends Plugin {
     public void clear(PluginCall call) {
         try {
             NotificationManagerCompat.from(getContext()).cancel(NOTIFICATION_ID);
+            NotificationManagerCompat.from(getContext()).cancel(DgDownloadService.DONE_NOTIFICATION_ID);
         } catch (Exception e) {
             // Nothing to cancel is not a problem.
         }
@@ -161,7 +170,7 @@ public class DgProgressPlugin extends Plugin {
         call.resolve();
     }
 
-    private void ensureChannel(NotificationManager manager) {
+    static void ensureChannel(NotificationManager manager) {
         if (Build.VERSION.SDK_INT < 26) return;
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return;
         NotificationChannel channel = new NotificationChannel(

@@ -382,6 +382,11 @@ for theme in light dark; do
   # Settings (the Cloud row). The Uposatha calendar is not bundled here: the app opens it on the site.
   route settings/;           shot "$theme-6-settings" 10
   up 2;                      shot "$theme-7-settings-scrolled" 4
+  # The site pages the app carries itself (not the SPA): they must clear the status and gesture bars, in step with the theme.
+  route memo/;               shot "$theme-8-memo" 8
+  route login/;              shot "$theme-9-login" 8
+  route assets/diff/;        shot "$theme-10-compare" 8
+  route 4as;                 shot "$theme-11-quick-window" 8
 done
 adb logcat -d -t 400 > "$OUT/logcat.txt" 2>/dev/null || true
 ls -la "$OUT"

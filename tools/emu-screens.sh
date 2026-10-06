@@ -243,6 +243,36 @@ if [ "$PKG" = gift.dhamma.uposatha ]; then
   adb logcat -d -s Capacitor/Console:* Capacitor:* > "$OUT/logcat.txt" 2>/dev/null || true
   grep -cE "Shortcut: *dg-|id=dg-" "$OUT/shortcuts.txt"; exit 0
 fi
+# The library download in the background (issue #62): start it, send the app away, and read the foreground service's own
+# notification while the page cannot run. PASS when the byte count grows between samples (or the "downloaded" message
+# appears) with the app in the background; the app is then reopened so the import by the page can be seen.
+if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
+  res="$OUT/download-result.txt"; : > "$res"; fail=0
+  ok() { echo "PASS $*" >> "$res"; }; ko() { echo "FAIL $*" >> "$res"; fail=1; }
+  adb logcat -c
+  adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>/dev/null
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 18
+  adb exec-out screencap -p > "$OUT/download-0-consent.png"
+  adb shell input tap 768 2184; sleep 3                       # "Download" on the offline-library sheet
+  adb shell input keyevent KEYCODE_HOME; sleep 2              # the app is in the background from here on
+  state() { adb shell dumpsys notification --noredact | grep -oE "(Downloading the offline library[^\"]*|The library is downloaded[^\"]*)" | tail -1; }
+  prev=""; grew=0; finished=0
+  for i in 1 2 3 4 5 6; do
+    sleep 10; cur=$(state); echo "t+$((i*10+5))s background: ${cur:-<no notification>}" >> "$res"
+    case "$cur" in *downloaded*) finished=1 ;; esac
+    mb=$(echo "$cur" | grep -oE "[0-9]+ of" | grep -oE "[0-9]+"); pmb=$(echo "$prev" | grep -oE "[0-9]+ of" | grep -oE "[0-9]+")
+    if [ -n "$mb" ] && [ -n "$pmb" ] && [ "$mb" -gt "$pmb" ]; then grew=1; fi
+    prev="$cur"
+  done
+  adb shell cmd statusbar expand-notifications; sleep 2; adb exec-out screencap -p > "$OUT/download-1-shade-in-background.png"
+  adb shell cmd statusbar collapse
+  if [ "$grew" = 1 ] || [ "$finished" = 1 ]; then ok "the download goes on with the app in the background (progress grew: $grew, finished: $finished)"; else ko "no progress in the background"; fi
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 45
+  adb exec-out screencap -p > "$OUT/download-2-reopened.png"
+  adb logcat -d | grep -iE "dg-offline|DgDownload|FATAL" | tail -40 > "$OUT/download-logcat.txt"
+  grep -qi "FATAL" "$OUT/download-logcat.txt" && ko "a crash is in the log" || ok "no crash in the log"
+  cat "$res"; exit $fail
+fi
 if [ "${4:-}" = shortcuts ]; then
   # Dhamma.Gift launcher shortcuts, end to end, with a verdict (owner, 2026-09-30: "не работают шорткаты
   # в андроид ... авто тесты"). Reads texts, leaves the app (that is when the page pushes its list),

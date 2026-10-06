@@ -935,6 +935,38 @@ function injectBridgeIntoPages() {
     return patched;
 }
 
+// Edge to edge on the pages that come from the site's own tree (Memo, sign-in, grammar, tools ...): the
+// home page gets viewport-fit=cover in build-page.js, these had the plain viewport, so Android padded the
+// WebView and the window colour showed as white strips above and below (the dark theme on a white frame,
+// the status icons unreadable). With the cover viewport the page's own background runs under the bars and
+// the page keeps clear of them with the safe-area insets. Not index.html (done in build-page.js) and not
+// settings/ (it clears the bars itself, and is also loaded inside a frame).
+function coverViewportInSubpages() {
+    const PLAIN = /<meta\s+name="viewport"\s+content="width=device-width,\s*initial-scale=1(?:\.0)?"\s*\/?>/i;
+    const STYLE = '<style id="dg-edge">html{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}</style>';
+    let patched = 0;
+    const walk = (dir, top) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                if (['offline', 'vendor', 'settings'].includes(entry.name)) continue;
+                walk(full, false);
+                continue;
+            }
+            if (!entry.name.endsWith('.html') || (top && entry.name === 'index.html')) continue;
+            const html = fs.readFileSync(full, 'utf8');
+            if (!PLAIN.test(html) || !html.includes('</head>')) continue;
+            const next = html
+                .replace(PLAIN, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">')
+                .replace('</head>', STYLE + '\n</head>');
+            fs.writeFileSync(full, next, 'utf8');
+            patched++;
+        }
+    };
+    walk(WWW, true);
+    return patched;
+}
+
 // The installed app's version, readable by the page. Capacitor's App.getInfo() is the
 // authoritative source on a device, but the settings row has to say something even when the plugin
 // is missing or fails (and on a plain browser, where the row showed up empty — owner's report).
@@ -979,6 +1011,8 @@ function main() {
     const offlineCount = copyOfflineLayer();
     const dirLinks = resolveDirectoryLinksEverywhere();
     const bridged = injectBridgeIntoPages();
+    const covered = coverViewportInSubpages();
+    console.log(`  edge to edge (viewport-fit=cover) in ${covered} sub-pages`);
     buildScriptBundles();
     buildModeTable(args.langs);
     injectNativeBridge();

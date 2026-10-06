@@ -1579,7 +1579,14 @@
   var last = '';
   function run(force) {
     if (!document.body) return;
-    var dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    var root = document.documentElement;
+    var dark = root.getAttribute('data-bs-theme') === 'dark' || root.getAttribute('data-theme') === 'dark';
+    if (!dark) {
+      // A page that keeps its theme under another name (Settings, Memo, sign-in): read what it paints behind the bars.
+      var bg = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/.exec(getComputedStyle(document.body).backgroundColor);
+      if (!bg || bg[4] === '0') bg = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(root).backgroundColor);
+      if (bg) dark = (0.299 * bg[1] + 0.587 * bg[2] + 0.114 * bg[3]) < 128;
+    }
     var top = (dark || document.body.classList.contains('dg-state-home')) ? 'DARK' : 'LIGHT';
     var bottom = dark ? 'DARK' : 'LIGHT';
     if (!force && top + bottom === last) return;
@@ -1589,7 +1596,7 @@
   }
   function watch() {
     var mo = new MutationObserver(function () { run(false); });
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme', 'data-theme', 'class', 'style'] });
     mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     run(true);
   }

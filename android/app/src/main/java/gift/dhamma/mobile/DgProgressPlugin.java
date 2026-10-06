@@ -97,7 +97,7 @@ public class DgProgressPlugin extends Plugin {
         PendingIntent pending = PendingIntent.getActivity(context, 0, open, flags);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_tile)   // the white mark: a coloured launcher icon turns into a flat blob in the status bar
                 .setContentTitle(title)
                 .setContentText(text)
                 .setContentIntent(pending)

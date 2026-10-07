@@ -6,7 +6,9 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 
 import androidx.annotation.Nullable;
@@ -29,8 +31,36 @@ public class DgTtsService extends Service {
     static final String EXTRA_NOTIFICATION = "notification";
     static final String EXTRA_ID = "id";
 
+    // The plugin asks these instead of tracking the service itself: it can stop on its own (the pause timeout).
+    static volatile boolean running;
+    private static DgTtsService instance;
+    // A pause keeps the service (and so the process, and the one notification) for this long, then lets go.
+    private static final long PAUSE_HOLD_MS = 30L * 60 * 1000;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable giveUp = () -> {
+        // The notification stays as an ordinary one: the reader still sees what was read and can press Play.
+        if (Build.VERSION.SDK_INT >= 24) stopForeground(Service.STOP_FOREGROUND_DETACH);
+        stopSelf();
+    };
+
     private PowerManager.WakeLock wakeLock;
     private WifiManager.WifiLock wifiLock;
+
+    /**
+     * Playing: the locks are held and the pause timer is off. Paused: the service stays a foreground one (the
+     * notification is the same one, only redrawn, and Play from it reaches a live page), the locks go back.
+     */
+    static void setPlaying(boolean playing) {
+        DgTtsService s = instance;
+        if (s == null) return;
+        s.handler.removeCallbacks(s.giveUp);
+        if (playing) {
+            s.acquireLocks();
+        } else {
+            s.releaseLocks();
+            s.handler.postDelayed(s.giveUp, PAUSE_HOLD_MS);
+        }
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -52,6 +82,8 @@ public class DgTtsService extends Service {
             } else {
                 startForeground(id, notification);
             }
+            instance = this;
+            running = true;
             acquireLocks();
         } catch (Exception e) {
             stopSelf();
@@ -92,6 +124,9 @@ public class DgTtsService extends Service {
 
     @Override
     public void onDestroy() {
+        handler.removeCallbacks(giveUp);
+        running = false;
+        if (instance == this) instance = null;
         releaseLocks();
         super.onDestroy();
     }

@@ -325,9 +325,12 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
                         .setShowActionsInCompactView(0, 1));
         Notification notification = b.build();
         // While it reads, the notification is held by a foreground service (DgTtsService), so Android
-        // does not freeze the app a few minutes into the background; on pause it is a plain one again.
-        if (playing) holdForeground(ctx, notification);
-        else releaseForeground(ctx);
+        // does not freeze the app a few minutes into the background. On pause the SAME service keeps it (stopping
+        // the service took the notification down and a second one came up a moment later; and with the process
+        // free to be frozen, Play on it reached a page that was no longer running): only its locks are released,
+        // and the service lets go by itself after half an hour of pause.
+        if (playing) holdForeground(ctx, notification);   // a pause never STARTS the service, it only keeps a running one
+        DgTtsService.setPlaying(playing);
         try {
             NotificationManagerCompat.from(ctx).notify(NOTIFICATION_ID, notification);
             showing = playing;
@@ -337,16 +340,13 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
         }
     }
 
-    private boolean foreground;
-
     private void holdForeground(Context ctx, Notification notification) {
-        if (foreground) return;   // already held: notify() above updates the same notification
+        if (DgTtsService.running) return;   // already held: notify() below updates the same notification
         Intent i = new Intent(ctx, DgTtsService.class)
                 .putExtra(DgTtsService.EXTRA_NOTIFICATION, notification)
                 .putExtra(DgTtsService.EXTRA_ID, NOTIFICATION_ID);
         try {
             ContextCompat.startForegroundService(ctx, i);
-            foreground = true;
         } catch (Exception e) {
             // Android 12+ refuses a foreground start from the background in some states (resuming
             // from the notification's own Play): the reading goes on with the plain notification.
@@ -354,8 +354,6 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
     }
 
     private void releaseForeground(Context ctx) {
-        if (!foreground) return;
-        foreground = false;
         try { ctx.stopService(new Intent(ctx, DgTtsService.class)); } catch (Exception ignored) { }
     }
 

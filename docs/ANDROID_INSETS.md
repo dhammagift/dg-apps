@@ -37,3 +37,9 @@ Bottom: sheets and floating buttons add `--dg-sab` (translate), the gesture bar 
 | `reader/bu-pm-fragment.html`, `bi-pm-fragment.html` | fragments inserted into the reader, not pages | n/a |
 
 How the site pages work: the build adds `viewport-fit=cover` to every page (inserts the meta where a page had none) and a rule giving `<html>` a top margin of the status bar's height (a margin, so an `position:absolute; top:0` bar moves with it); native-bridge.js draws the strip, moves `position:fixed/sticky` bars down, and as a last guard pushes the page down if anything visible still starts above the strip. The probe (a headless browser, `--safe-area-inset-top: 24px`, the real www/ and the real native-bridge.js) lists any visible element starting above the strip: it must be empty for all 24 pages.
+
+### Heights of 100vh
+The page is moved down by the strip's height, so anything sized to the whole screen would be taller than the screen by that much (a scrollbar where there was none: login.css `body{min-height:100vh}`, pages with `html{height:100%}`). native-bridge.js `clearTopBars()` finds by the resolved style (min-height or height equal to the window's height; html, body, descendants) and takes the strip's height off, once. Checked on all 24 pages at 0 px and 24 px: short pages have no scroll at either; long pages scroll as they always did.
+
+### Memo in the app
+`saveMemoMp3` (blob + `<a download>`, ignored by a WebView) is replaced in native-bridge.js by Filesystem (cache) + Share, as for the PDFs. The hourglass of the timers is an inline svg (memo.js `timerIcon()`), not an image file.

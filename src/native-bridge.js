@@ -284,6 +284,36 @@
         } catch (e) { /* a non-configurable global: leave pdfmake as it is */ }
     })();
 
+    // The Memo page's "download audio": it makes a blob and clicks <a download>, which an Android WebView ignores (nothing happens).
+    // Same answer as for the PDFs above: the file goes to the cache and the system share sheet opens, where it is saved to Files,
+    // Drive, sent to a chat. memo.js declares saveMemoMp3 as a global function; it is replaced once the page has loaded.
+    (function shareMemoMp3() {
+        var Plugins = window.Capacitor && window.Capacitor.Plugins;
+        if (!Plugins || !Plugins.Filesystem || !Plugins.Share) return;
+        function patch() {
+            if (typeof window.saveMemoMp3 !== 'function' || window.saveMemoMp3.__dgShared) return;
+            var wrapped = function (blob, text) {
+                var clean = String(text || '').trim().replace(/[\/\\?%*:|"<>.,;!\u2014]/g, '');
+                var name = (clean ? clean.split(/\s+/).slice(0, 4).join('_') : 'meditation') + '.mp3';
+                var reader = new FileReader();
+                reader.onload = function () {
+                    var data = String(reader.result).split(',')[1];
+                    Plugins.Filesystem.writeFile({ path: name, data: data, directory: 'CACHE' })
+                        .then(function (written) { return Plugins.Share.share({ title: name, files: [written.uri] }); })
+                        .catch(function (e) {
+                            var msg = (e && e.message) || String(e);
+                            if (!/cancel/i.test(msg)) console.error('[dg-memo] could not share the audio:', msg);
+                        });
+                };
+                reader.readAsDataURL(blob);
+            };
+            wrapped.__dgShared = true;
+            window.saveMemoMp3 = wrapped;
+        }
+        if (document.readyState === 'complete') patch();
+        else window.addEventListener('load', patch);
+    })();
+
     // ---------------------------------------------------------------------------------------
     // Native route handoff: App Shortcuts and dhamma.gift deep links
     // ---------------------------------------------------------------------------------------
@@ -1630,6 +1660,16 @@
     var root = document.documentElement;
     var base = parseFloat(getComputedStyle(root).marginTop) || 0;
     if (base < h - 1) { root.style.position = 'relative'; root.style.marginTop = h + 'px'; base = h; }
+    // The page moved down by h, so anything sized to the whole screen (100vh: login.css's body) is taller than the screen by h: it loses
+    // that much (once). Found by what the browser resolved, not by selector: any element whose min-height or height is the screen's.
+    var vh = window.innerHeight, fit = [document.documentElement, document.body].concat([].slice.call(document.body.getElementsByTagName('*')));
+    fit.forEach(function (el) {
+      if (el === strip || el.getAttribute('data-dg-vh')) return;
+      var c = getComputedStyle(el);
+      if (c.position === 'fixed' || c.position === 'sticky') return;
+      if (Math.abs(parseFloat(c.minHeight) - vh) < 1) { el.setAttribute('data-dg-vh', '1'); el.style.minHeight = (vh - h) + 'px'; }
+      else if (Math.abs(parseFloat(c.height) - vh) < 1 && el !== document.body && (el !== root || c.height !== 'auto')) { el.setAttribute('data-dg-vh', '1'); el.style.height = (vh - h) + 'px'; }
+    });
     var all = document.body.getElementsByTagName('*'), min = Infinity;
     for (var i = 0; i < all.length; i++) {
       var el = all[i];

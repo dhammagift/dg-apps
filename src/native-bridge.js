@@ -901,6 +901,13 @@
                 location.href = u.pathname + u.search + u.hash;
                 return true;
             }
+            // An open window (quick modal, drawer, sheet) owns a history entry in the app, and the
+            // page treats ANY popstate as "back" and only closes it - the 4AS link in the quick
+            // window ended on the page it was opened from. The router's own entry point routes
+            // without a popstate (the settings sheet still needs the popstate to close itself).
+            var sheet = window.DgHome && window.DgHome.isSettingsSheetOpen && window.DgHome.isSettingsSheetOpen();
+            if (!sheet && typeof window.dgNavigateInternal === 'function' &&
+                    window.dgNavigateInternal(u.pathname + u.search + u.hash)) return true;
             history.pushState({ dgNativeNav: true }, '', u.pathname + u.search + u.hash);
             window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
             return true;

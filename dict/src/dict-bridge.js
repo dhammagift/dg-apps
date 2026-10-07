@@ -439,3 +439,30 @@
   window.addEventListener('resize', soon);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { last = ''; soon(); } });
 })();
+
+// A link to the main site (the compass's texts, "Open on Dhamma.Gift", Help) leaves the dictionary: dhamma.gift is
+// in allowNavigation, so a plain link loaded the whole site INTO this WebView - without this bridge, with white strips
+// round it and no way back but the Back button. Such links open in the in-app browser tab over the dictionary.
+(function openSiteLinksOutside() {
+  var Cap = window.Capacitor;
+  var B = Cap && Cap.Plugins && Cap.Plugins.Browser;
+  if (!B || typeof B.open !== 'function') return;
+  function isSite(url) {
+    try {
+      var u = new URL(url, location.href);
+      return /^https?:$/.test(u.protocol) && /(^|\.)dhamma\.gift$/.test(u.hostname) && u.hostname !== 'dict.dhamma.gift';
+    } catch (e) { return false; }
+  }
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('a[href]');
+    if (!a || !isSite(a.href)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    B.open({ url: a.href });
+  }, true);
+  var open = window.open;
+  window.open = function (url) {
+    if (typeof url === 'string' && isSite(url)) { B.open({ url: new URL(url, location.href).href }); return null; }
+    return open.apply(window, arguments);
+  };
+})();

@@ -713,7 +713,14 @@
 
         window.addEventListener('dg:dl-progress', function (event) {
             var detail = event.detail || {};
-            if (detail.done) { clear(); return; }
+            if (detail.done) {
+                // Installed: say so instead of just making the notification vanish.
+                if (typeof plugin.finish === 'function') {
+                    active = false;
+                    Promise.resolve(plugin.finish({ title: 'Dhamma.gift', text: isRu() ? 'Библиотека готова. Читайте без сети.' : 'The library is ready. Read offline.' })).catch(function () {});
+                } else clear();
+                return;
+            }
             // The native download (DgDownloadService) posts its own notification, also with the page frozen: no second one.
             if (window.dgNativeDownload) return;
             var percent = detail.total ? Math.min(100, Math.round((detail.loaded / detail.total) * 100)) : -1;

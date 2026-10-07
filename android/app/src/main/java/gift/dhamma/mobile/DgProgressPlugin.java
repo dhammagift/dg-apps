@@ -153,6 +153,32 @@ public class DgProgressPlugin extends Plugin {
         return builder.build();
     }
 
+    /** Finished and installed: the progress notification gives way to a last, dismissible one that says it is ready. */
+    @PluginMethod
+    public void finish(PluginCall call) {
+        Context context = getContext();
+        try {
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID);
+            context.stopService(new Intent(context, DgDownloadService.class));
+            NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) ensureChannel(manager);
+            Intent open = new Intent(context, MainActivity.class);
+            open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            PendingIntent pending = PendingIntent.getActivity(context, 0, open,
+                    PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
+            Notification done = new NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_tile)
+                    .setContentTitle(call.getString("title", "Dhamma.gift"))
+                    .setContentText(call.getString("text", ""))
+                    .setContentIntent(pending)
+                    .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .build();
+            NotificationManagerCompat.from(context).notify(DgDownloadService.DONE_NOTIFICATION_ID, done);
+        } catch (Exception e) { /* no notification permission: nothing to say */ }
+        call.resolve();
+    }
+
     /** The download stopped being interesting: finished, cancelled, or failed. */
     @PluginMethod
     public void clear(PluginCall call) {

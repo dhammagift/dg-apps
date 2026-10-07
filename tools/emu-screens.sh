@@ -271,6 +271,15 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
   if [ "$finished" = 1 ]; then ok "the closing notification (\"The library is downloaded\") arrived with the app in the background"; else ko "no closing notification within 6 minutes"; fi
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 45
   adb exec-out screencap -p > "$OUT/download-2-reopened.png"
+  # The page unpacks the archive into its storage; when it is done the notification says the library is ready.
+  ready=0
+  for i in $(seq 1 24); do
+    sleep 10; cur=$(adb shell dumpsys notification --noredact | grep -oE "(Unpacking and applying[^\"]*|The library is ready[^\"]*|damaged[^\"]*)" | tail -1)
+    echo "after reopening +$((i*10))s: ${cur:-<none>}" >> "$res"
+    case "$cur" in *ready*) ready=1; break ;; *damaged*) break ;; esac
+  done
+  adb exec-out screencap -p > "$OUT/download-3-ready.png"
+  if [ "$ready" = 1 ]; then ok "the library was installed and the notification says it is ready"; else ko "no 'The library is ready' notification (see the lines above)"; fi
   adb logcat -d | grep -iE "dg-offline|DgDownload|FATAL" | tail -40 > "$OUT/download-logcat.txt"
   grep -qi "FATAL" "$OUT/download-logcat.txt" && ko "a crash is in the log" || ok "no crash in the log"
   cat "$res"; exit $fail

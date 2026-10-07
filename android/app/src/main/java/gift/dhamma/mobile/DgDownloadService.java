@@ -239,8 +239,12 @@ public class DgDownloadService extends Service {
         }
         if (part.length() != total) throw new Exception("the downloaded file has the wrong size");
         if (!sha.isEmpty()) {
+            // The manifest's sha256 is the one of the UNPACKED database (bytes), not of the archive: hash what the archive unpacks to.
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            try (InputStream in = new FileInputStream(part)) { byte[] buf = new byte[65536]; int n; while ((n = in.read(buf)) > 0) md.update(buf, 0, n); }
+            try (InputStream in = new java.util.zip.GZIPInputStream(new FileInputStream(part), 65536)) {
+                byte[] buf = new byte[65536]; int n;
+                while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+            } catch (java.io.IOException e) { part.delete(); partBuild.delete(); throw new Exception("the downloaded file is damaged (cannot be unpacked)"); }
             StringBuilder hex = new StringBuilder(); for (byte b : md.digest()) hex.append(String.format("%02x", b));
             if (!hex.toString().equalsIgnoreCase(sha)) { part.delete(); partBuild.delete(); throw new Exception("the downloaded file is damaged (checksum)"); }
         }

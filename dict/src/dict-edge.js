@@ -25,17 +25,35 @@
     + '.bubble-notification{margin-bottom:var(--dg-sab)}'
     + '#dg-edge-strip{position:fixed;top:0;left:0;right:0;height:var(--dg-sat);background:var(--dg-page,#fff);z-index:2147483647;pointer-events:none}';
 
+  // viewport-fit=cover, and a page scale that can never go below 1: after landscape and back to portrait a WebView was seen to
+  // keep the page at about 0.47 (landscape width / portrait width) with everything in the left half; nothing smaller than
+  // the device's own width is ever wanted here.
   function cover() {
     var m = document.querySelector('meta[name="viewport"]');
     if (!m) {
       m = document.createElement('meta');
       m.name = 'viewport';
-      m.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+      m.content = 'width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover';
       document.head.appendChild(m);
-    } else if (!/viewport-fit\s*=\s*cover/.test(m.content)) {
-      m.content = m.content.replace(/,?\s*viewport-fit\s*=\s*\w+/, '') + ', viewport-fit=cover';
+      return;
     }
+    var c = m.content;
+    if (!/viewport-fit\s*=\s*cover/.test(c)) c = c.replace(/,?\s*viewport-fit\s*=\s*\w+/, '') + ', viewport-fit=cover';
+    if (!/minimum-scale/.test(c)) c += ', minimum-scale=1';
+    if (c !== m.content) m.content = c;
   }
+
+  // If the WebView still ends up zoomed out after a resize, make it compute the scale again by writing the tag anew.
+  function rescale() {
+    var vv = window.visualViewport;
+    var m = document.querySelector('meta[name="viewport"]');
+    if (!vv || !m || vv.scale >= 0.98) return;
+    var c = m.content;
+    m.content = 'width=device-width, initial-scale=1, minimum-scale=1';
+    requestAnimationFrame(function () { m.content = c; });
+  }
+  window.addEventListener('resize', function () { setTimeout(rescale, 300); });
+  window.addEventListener('orientationchange', function () { setTimeout(rescale, 500); });
 
   function dressPage() {
     cover();

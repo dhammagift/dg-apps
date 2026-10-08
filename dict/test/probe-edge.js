@@ -51,7 +51,7 @@ function check(label, ok, detail) {
             sat, bad: bad.slice(0, 5),
             tbarTop: tbar ? Math.round(tbar.getBoundingClientRect().top) : null,
             stripBg: getComputedStyle(strip).backgroundColor, tbarBg: tbar ? getComputedStyle(tbar).backgroundColor : null,
-            cover: /viewport-fit=cover/.test(document.querySelector('meta[name=viewport]').content),
+            cover: /viewport-fit=cover/.test(document.querySelector('meta[name=viewport]').content) && /minimum-scale=1/.test(document.querySelector('meta[name=viewport]').content),
           };
         });
         check(`${tag}: viewport-fit=cover`, top.cover, '');

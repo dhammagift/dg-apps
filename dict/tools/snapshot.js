@@ -18,6 +18,9 @@ snapshot({
         { url: '/ru/', save: '/ru/index.html' },
     ],
     skip: (p, type) => p === '/sw.js' || p.startsWith('/api/'),
+    // Find on the page is loaded only when it is opened, which the crawl never does: taken as it is so it works with no network.
+    extras: ['/static/dg-page-find.js', '/static/dg-page-find-ui.js', '/ru/static/dg-page-find.js', '/ru/static/dg-page-find-ui.js',
+        '/static/find-icons/gear.svg', '/static/find-icons/list-ul-solid-full.svg', '/static/find-icons/arrow-up-dark.svg', '/static/find-icons/xmark.svg'],
     async interact(page) {
         await page.evaluate(() => { const m = document.querySelector('.burger, #menu, [aria-label=menu]'); if (m) m.click(); });
         await page.waitForTimeout(800);

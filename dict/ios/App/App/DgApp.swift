@@ -92,6 +92,27 @@ class DgBridgeViewController: CAPBridgeViewController {
         }
     }
 
+    // The strip with the arrows and the check mark that iOS puts above the keyboard for a web page's field: the letters row sat on
+    // top of it with an empty gap between, and the strip does nothing the dictionary needs (one field). The web view's content
+    // view is given a subclass whose inputAccessoryView is nil - the same way the Capacitor Keyboard plugin hides it.
+    private func hideFormAccessoryBar() {
+        guard let webView = webView else { return }
+        for subview in webView.scrollView.subviews where String(describing: type(of: subview)).hasPrefix("WKContent") {
+            let name = "\(type(of: subview))_NoInputAccessoryView"
+            var target: AnyClass? = NSClassFromString(name)
+            if target == nil, let base = object_getClass(subview), let created = objc_allocateClassPair(base, name, 0) {
+                let selector = #selector(getter: UIResponder.inputAccessoryView)
+                if let method = class_getInstanceMethod(UIView.self, selector) {
+                    let block: @convention(block) (AnyObject) -> AnyObject? = { _ in nil }
+                    class_addMethod(created, selector, imp_implementationWithBlock(unsafeBitCast(block, to: AnyObject.self)), method_getTypeEncoding(method))
+                }
+                objc_registerClassPair(created)
+                target = created
+            }
+            if let target = target { object_setClass(subview, target) }
+        }
+    }
+
     private func reportKeyboard(_ points: CGFloat) {
         webView?.evaluateJavaScript("window.__dgIme && window.__dgIme(\(Int(points.rounded())))", completionHandler: nil)
     }
@@ -114,6 +135,7 @@ class DgBridgeViewController: CAPBridgeViewController {
                 WKUserScript(source: "window.__DG_APP_VERSION__=\(quoted);\n" + source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
         watchKeyboard()
+        hideFormAccessoryBar()
 
         bridge?.registerPluginInstance(DgShortcutsPlugin())
         bridge?.registerPluginInstance(DgSitePlugin())

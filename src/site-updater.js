@@ -108,6 +108,19 @@
     }
   })();
 
+  // A new version of the app brings a new bundle: what an older version downloaded (it sits in front of the bundled files, and its
+  // hashes are compared with the site instead of the bundle's) is dropped, so the bundle is the starting point again.
+  (function versionGuard() {
+    var DS = Cap.Plugins && Cap.Plugins.DgSite, v = window.__DG_APP_VERSION__;
+    if (!v || !DS || typeof DS.clear !== 'function' || store('dgAppVersion') === v) return;
+    DS.clear().then(function () {
+      try {
+        ['dgSiteHashes', 'dgSiteCheckedAt', 'dgSiteFresh', 'dgSiteBoots'].forEach(function (k) { localStorage.removeItem(k); });
+        localStorage.setItem('dgAppVersion', v);
+      } catch (e) { /* no storage */ }
+    }, function () { /* try again at the next start */ });
+  })();
+
   var checking = false;
   // force: a person asked (the version row in the menu) - no waiting for SITE_CHECK_EVERY. Resolves {state: 'offline' | 'busy' | 'failed' | 'new' | 'current'}.
   function updateSite(force) {

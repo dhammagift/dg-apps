@@ -63,6 +63,7 @@
       paliNote: 'A row with ā ī ū ṁ ṅ ñ ṭ ḍ ṇ ḷ and Paste while you type.',
       version: 'App version',
       verCheck: 'Tap to check for updates',
+      verBtn: 'check',
       verBusy: 'Checking…',
       verCurrent: 'Everything is up to date',
       verNew: 'Updated - use the Update button below',
@@ -79,6 +80,7 @@
       paliNote: 'Ряд с ā ī ū ṁ ṅ ñ ṭ ḍ ṇ ḷ и кнопкой «Вставить» при наборе.',
       version: 'Версия приложения',
       verCheck: 'Нажмите, чтобы проверить обновления',
+      verBtn: 'проверить',
       verBusy: 'Проверяю…',
       verCurrent: 'Всё актуально',
       verNew: 'Обновлено - нажмите «Обновить» внизу',
@@ -300,6 +302,13 @@
     var verText = window.__DG_APP_VERSION__ || '';
     var ver = row('dg-version-row', t.version, verText ? verText + ' · ' + t.verCheck : t.verCheck);
     ver.style.cursor = 'pointer';
+    // The site's own action button (icon + word, like "reset" in Settings): the row is not just a label.
+    var vbtn = document.createElement('button');
+    vbtn.type = 'button';
+    vbtn.className = 'rb act';
+    vbtn.innerHTML = '<i class="gi i-reset"></i>';
+    vbtn.appendChild(document.createTextNode(t.verBtn));
+    ver.appendChild(vbtn);
     ver.addEventListener('click', function () {
       var check = window.__dgCheckSiteUpdate;
       var em = ver.querySelector('em');
@@ -307,9 +316,10 @@
       ver.__busy = true;
       var say = function (m) { em.textContent = (verText ? verText + ' · ' : '') + m; };
       say(t.verBusy);
+      var spin = vbtn.firstChild.animate ? vbtn.firstChild.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: 800, iterations: Infinity }) : null;
       check().then(function (r) {
         say({ new: t.verNew, current: t.verCurrent, offline: t.verOffline }[r.state] || t.verFailed);
-      }, function () { say(t.verFailed); }).then(function () { ver.__busy = false; });
+      }, function () { say(t.verFailed); }).then(function () { ver.__busy = false; if (spin) spin.cancel(); });
     });
     out.push(ver);
 

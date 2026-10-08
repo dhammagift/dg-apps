@@ -11,9 +11,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.media.AudioAttributes;
-import android.media.AudioFocusRequest;
-import android.media.AudioManager;
 import android.os.Build;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
@@ -83,7 +80,6 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
     private String title = "Dhamma.gift";
     private String artist = "";
     private Bitmap artwork;
-    private AudioFocusRequest focusRequest;
     // Asked at most once per process. Android stops showing the dialog after two refusals anyway,
     // and a reader who said no should not be asked again every time they press play.
     private boolean askedNotifications;
@@ -159,7 +155,6 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
                 }
             }
             tts.setSpeechRate(call.getDouble("rate", 1.0).floatValue());
-            requestFocus();
             if (tts.speak(call.getString("text", ""), TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.SUCCESS) {
                 call.resolve();
             } else {
@@ -248,10 +243,10 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
             if ("none".equals(state)) { teardown(); return; }
             boolean playing = "playing".equals(state);
             ensureSession();
-            // No audio focus request here: a voice played by the page's own <audio> (the neuro voices) already holds the WebView's
-            // focus, and a second GAIN from this plugin is a permanent loss for it - Chromium paused the audio it had just resumed,
-            // so Play in the notification did nothing. Native speech takes its own focus in speak(); a pause lets go of it.
-            if (!playing) abandonFocus();
+            // No audio focus request anywhere in this plugin: the page keeps a silent <audio> playing while it reads (voice.js), and
+            // the WebView holds the audio focus for it. A second GAIN from here is a permanent loss for the WebView: Chromium pauses
+            // its audio (the voice, or that silent one the page's play/pause state hangs on), the page and the notification fall out of
+            // step, and Play in the notification does nothing (emulator test: tools/emu-tray.js, native and neural voices).
             session.setActive(true);
             session.setMetadata(metadata());
             session.setPlaybackState(new PlaybackStateCompat.Builder()
@@ -381,44 +376,8 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
         manager.createNotificationChannel(c);
     }
 
-    // Ducking, not pausing: a TTS reading is speech, and the system handles the mixing. Transient
-    // loss (a call, a notification) is left to Android's own behaviour rather than second-guessed.
-    private boolean focusHeld;
-
-    private void requestFocus() {
-        AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (focusRequest == null) {
-                focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                        .setAudioAttributes(new AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build())
-                        .build();
-            }
-            am.requestAudioFocus(focusRequest);
-        } else {
-            am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
-        }
-        focusHeld = true;
-    }
-
-    private void abandonFocus() {
-        if (!focusHeld) return;
-        focusHeld = false;
-        AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (focusRequest != null) am.abandonAudioFocusRequest(focusRequest);
-        } else {
-            am.abandonAudioFocus(null);
-        }
-    }
-
     private void teardown() {
         releaseForeground(getContext());
-        abandonFocus();
         showing = null;
         NotificationManagerCompat.from(getContext()).cancel(NOTIFICATION_ID);
         if (session != null) {

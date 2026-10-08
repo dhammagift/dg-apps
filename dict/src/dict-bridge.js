@@ -59,6 +59,8 @@
     en: {
       group: 'App',
       shortcuts: 'Recent words in app shortcuts',
+      pali: 'Pāli letters above the keyboard',
+      paliNote: 'A row with ā ī ū ṁ ṅ ñ ṭ ḍ ṇ ḷ and Paste while you type.',
       version: 'App version',
       rate: 'Rate Us',
       privacy: 'Privacy Policy',
@@ -67,6 +69,8 @@
     ru: {
       group: 'Приложение',
       shortcuts: 'Недавние слова в ярлыках',
+      pali: 'Палийские буквы над клавиатурой',
+      paliNote: 'Ряд с ā ī ū ṁ ṅ ñ ṭ ḍ ṇ ḷ и кнопкой «Вставить» при наборе.',
       version: 'Версия приложения',
       rate: 'Оценить приложение',
       privacy: 'Политика конфиденциальности',
@@ -211,6 +215,21 @@
     });
     sc.appendChild(box);
     out.push(sc);
+
+    // The Pāli letters row above the keyboard (src/pali-bar.js): on by default, and the dictionary also finds words typed without the
+    // diacritics (the suggestions say so), so it can be switched off.
+    var pb = row('dg-pali-row', t.pali, t.paliNote);
+    var pbox = document.createElement('input');
+    pbox.className = 'sw';
+    pbox.type = 'checkbox';
+    pbox.id = 'dg-pali-toggle';
+    pbox.checked = localStorage.getItem('dgPaliBar') !== 'off';
+    pbox.addEventListener('change', function () {
+      localStorage.setItem('dgPaliBar', pbox.checked ? 'on' : 'off');
+      window.dispatchEvent(new Event('dg:pali-bar'));
+    });
+    pb.appendChild(pbox);
+    out.push(pb);
 
     // Rate Us sits ABOVE the version, and the version closes the menu — the owner's own rule
     // (2026-09-24): "версия же обычно последний пункт". The row itself is PERMANENT: it stays after
@@ -386,59 +405,9 @@
   setTimeout(pushShortcuts, 4000);
 })();
 
-// The strips behind the system bars (status bar, gesture bar, the camera cutout in landscape) in the
-// page's own colours instead of a fixed navy frame (owner, dg-apps#40: "борода"). The native DgBars
-// plugin paints them; this reports the colour at the page's top edge and of its body when the theme
-// or the view has changed it. Not on scroll, and not for a shade nobody can see (#fff vs #fdfdfd):
-// each report repaints native chrome, and a stream of them made page switches jump (owner, 380).
-// Android only — iOS has no such plugin.
-(function syncSystemBars() {
-  var Cap = window.Capacitor;
-  if (!Cap || !Cap.isPluginAvailable || !Cap.isPluginAvailable('DgBars')) return;
-  var last = '', timer = 0;
-  function hex(c) {
-    var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/.exec(c || '');
-    if (!m || (m[4] !== undefined && +m[4] < 0.95)) return '';   // see-through (a sheet's scrim too): look further up
-    return '#' + [m[1], m[2], m[3]].map(function (v) { return ('0' + (Math.round(+v)).toString(16)).slice(-2); }).join('');
-  }
-  // The first element up the tree with a solid background: its colour, and the element itself.
-  function paint(el) {
-    for (; el && el.nodeType === 1; el = el.parentElement) { var h = hex(getComputedStyle(el).backgroundColor); if (h) return { c: h, el: el }; }
-    return { c: '', el: null };
-  }
-  function bgOf(el) { return paint(el).c; }
-  // Two colours closer than this read as one: report the body colour, not a near-twin of it.
-  function near(a, b) {
-    if (!a || !b) return false;
-    var d = 0;
-    for (var i = 1; i < 7; i += 2) d += Math.abs(parseInt(a.substr(i, 2), 16) - parseInt(b.substr(i, 2), 16));
-    return d < 24;
-  }
-  function run() {
-    if (!document.body) return;
-    var bottom = bgOf(document.body) || bgOf(document.documentElement) || '#111111';
-    var hit = paint(document.elementFromPoint(window.innerWidth / 2, 1)), top = hit.c || bottom;
-    if (near(top, bottom)) { top = bottom; hit.el = null; }
-    // A header band (not the page itself): how far down it reaches, so a landscape cutout strip beside it matches.
-    var band = hit.el && hit.el !== document.body && hit.el !== document.documentElement && top !== bottom
-      ? Math.max(0, Math.round(hit.el.getBoundingClientRect().bottom)) : 0;
-    var key = top + bottom + band;
-    if (key === last) return;
-    last = key;
-    Cap.Plugins.DgBars.set({ top: top, bottom: bottom, band: band }).catch(function () { last = ''; });
-  }
-  function soon() { clearTimeout(timer); timer = setTimeout(run, 300); }
-  function watch() {
-    var mo = new MutationObserver(soon);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-bs-theme', 'data-theme'] });
-    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    soon();
-  }
-  if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
-  window.addEventListener('load', soon);
-  window.addEventListener('resize', soon);
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { last = ''; soon(); } });
-})();
+// @pali-bar (inlined from src/pali-bar.js by dict/build.js): Pāli letters and Paste above the keyboard
+
+// @dict-edge (inlined from src/dict-edge.js by dict/build.js): edge to edge, the page's own strip behind the status bar
 
 // A link to the main site (the compass's texts, "Open on Dhamma.Gift", Help) leaves the dictionary: dhamma.gift is
 // in allowNavigation, so a plain link loaded the whole site INTO this WebView - without this bridge, with white strips

@@ -11,6 +11,9 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 
 import androidx.core.splashscreen.SplashScreen;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsAnimationCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
@@ -24,6 +27,7 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.Collections;
+import java.util.List;
 
 /**
  * The dictionary as a Capacitor app.
@@ -66,8 +70,6 @@ public class MainActivity extends BridgeActivity {
         // created. DgShortcuts pushes the lookup history into the launcher's long-press menu.
         registerPlugin(DgShortcutsPlugin.class);
         registerPlugin(DgSitePlugin.class);
-        // The strips behind the system bars in the page's colours (dg-apps#40, see DgBarsPlugin).
-        registerPlugin(DgBarsPlugin.class);
         // The launch splash is the animated mark (res/drawable/dg_splash_icon.xml, 900 ms). The system takes the
         // splash down the moment the first frame is ready, which on a warm start is before the mark has drawn;
         // holding it for the length of the animation is what lets it play, and costs a cold start nothing it
@@ -92,25 +94,34 @@ public class MainActivity extends BridgeActivity {
             bare.setOverScrollMode(View.OVER_SCROLL_NEVER);
         }
         // Deliberately no handleIntent(getIntent()) here — see handledIntent above.
+        reportKeyboardHeight();
     }
 
-    // SystemBars puts the theme's window background back on these occasions — re-paint the page's colours.
-    @Override
-    public void onResume() {
-        super.onResume();
-        DgBarsPlugin.apply(this);
-    }
+    /**
+     * The keyboard's height, in css px, to the page: window.__dgIme(px) (src/pali-bar.js lifts its row of Pāli letters by it). The
+     * insets animation callback is a second listener on the window and leaves SystemBars' own insets handling alone.
+     */
+    private void reportKeyboardHeight() {
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        final View decor = getWindow().getDecorView();
+        final WebView web = getBridge().getWebView();
+        final float density = getResources().getDisplayMetrics().density;
+        ViewCompat.setWindowInsetsAnimationCallback(decor, new WindowInsetsAnimationCompat.Callback(
+                WindowInsetsAnimationCompat.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+            @Override
+            public WindowInsetsCompat onProgress(WindowInsetsCompat insets, List<WindowInsetsAnimationCompat> running) {
+                return insets;
+            }
 
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) DgBarsPlugin.apply(this);
-    }
-
-    @Override
-    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        DgBarsPlugin.apply(this);
+            @Override
+            public void onEnd(WindowInsetsAnimationCompat animation) {
+                WindowInsetsCompat now = ViewCompat.getRootWindowInsets(decor);
+                if (now == null) return;
+                int px = now.isVisible(WindowInsetsCompat.Type.ime()) ? now.getInsets(WindowInsetsCompat.Type.ime()).bottom : 0;
+                final int css = Math.round(px / density);
+                web.post(() -> web.evaluateJavascript("window.__dgIme&&window.__dgIme(" + css + ")", null));
+            }
+        });
     }
 
     @Override

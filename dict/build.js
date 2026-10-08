@@ -12,7 +12,7 @@ const path = require('path');
 const SRC = path.join(__dirname, 'src');
 const WWW = path.join(__dirname, 'www');
 
-// Two markers, one source each. dict-bridge.js carries "// @rate-prompt": the rating sheet lives
+// Markers, one source each ("@dict-edge" and "@site-updater" too). dict-bridge.js carries "// @rate-prompt": the rating sheet lives
 // once, in the main app's src/native-bridge.js between its @rate-prompt-begin/-end markers, and is
 // pasted in here. The same file and the offline page carry "@launch-screens": the splash and the
 // "no connection" screen live once, in src/launch-screens.js.
@@ -24,7 +24,9 @@ function bridgeSource() {
     const block = main.split(/^.*@rate-prompt-begin.*\n/m)[1].split(/^.*@rate-prompt-end.*\n/m)[0];
     return fs.readFileSync(path.join(SRC, 'dict-bridge.js'), 'utf8')
         .replace(/^.*\/\/ @rate-prompt .*\n/m, () => block)
-        .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'site-updater.js'), 'utf8'));
+        .replace(/^.*\/\/ @pali-bar .*\n/m, () => fs.readFileSync(path.join(SRC, 'pali-bar.js'), 'utf8'))
+        .replace(/^.*\/\/ @dict-edge .*\n/m, () => fs.readFileSync(path.join(SRC, 'dict-edge.js'), 'utf8'))
+        .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'site-no-sw.js'), 'utf8') + fs.readFileSync(path.join(ROOT_SRC, 'site-updater.js'), 'utf8'));
 }
 
 // The offline page: <!-- @launch-screens --> becomes the shared script, inline (the page is served

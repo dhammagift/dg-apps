@@ -2,7 +2,7 @@
 # Screens of the built Dhamma.Gift APK on an Android emulator (workflow android-screens.yml), so a
 # change can be looked at on a real Android WebView before it reaches the owner or a store
 # (owner, 2026-09-29: "сними себе сам ... проверь, пришли скриншоты").
-# Usage: tools/emu-screens.sh <apk> <out-dir> [package] [screens|shortcuts|edgetoedge]
+# Usage: tools/emu-screens.sh <apk> <out-dir> [package] [screens|shortcuts|edgetoedge|tray]
 set -u
 APK=$1; OUT=$2; PKG=${3:-gift.dhamma.mobile}
 REPO=$(cd "$(dirname "$0")/.." && pwd)
@@ -283,6 +283,22 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb logcat -d | grep -iE "dg-offline|DgDownload|FATAL" | tail -40 > "$OUT/download-logcat.txt"
   grep -qi "FATAL" "$OUT/download-logcat.txt" && ko "a crash is in the log" || ok "no crash in the log"
   cat "$res"; exit $fail
+fi
+if [ "${4:-}" = tray ] && [ "$PKG" = gift.dhamma.mobile ]; then
+  # The notification player (Pause / Play on the shade) end to end, on the debug APK (tools/emu-tray.js reads the page over DevTools).
+  adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1
+  adb logcat -c
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
+  adb shell input tap 309 2184; sleep 2
+  adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/sn56.11" "$PKG" > /dev/null; sleep 14
+  pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')
+  adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
+  adb shell cat /proc/net/unix | grep -o 'webview_devtools_remote_[0-9]*' | head -3 > "$OUT/sockets.txt"
+  adb exec-out screencap -p > "$OUT/tray-start.png"
+  node "$REPO/tools/emu-tray.js" "$OUT"; code=$?
+  adb logcat -d -s Capacitor/Console:* Capacitor:* DgTts:* > "$OUT/logcat.txt" 2>/dev/null || true
+  adb logcat -d | grep -iE "DgTts|MEDIA_|mediasession|NotificationService.*dg|gift.dhamma.mobile.*(Exception|FATAL)" | head -60 > "$OUT/logcat-tray.txt" || true
+  exit $code
 fi
 if [ "${4:-}" = shortcuts ]; then
   # Dhamma.Gift launcher shortcuts, end to end, with a verdict (owner, 2026-09-30: "не работают шорткаты

@@ -45,7 +45,7 @@ on:
         type: boolean
         default: false
       mode:
-        description: 'screens, shortcuts (Dhamma.Gift launcher shortcuts test), or edgetoedge (Uposatha edge-to-edge check: PASS/FAIL, red run on a failure)'
+        description: 'screens, shortcuts (Dhamma.Gift launcher shortcuts test), edgetoedge (Uposatha edge-to-edge check: PASS/FAIL, red run on a failure), or tray (the notification player: Pause / Play on the shade, DEBUG apk, red run on a failure)'
         required: false
         type: string
         default: 'screens'
@@ -81,6 +81,13 @@ jobs:
       - name: ffmpeg for the video
         if: inputs.mode == 'edgetoedge' && inputs.video
         run: sudo apt-get install -y -qq ffmpeg > /dev/null
+
+      # tools/emu-tray.js talks to the app's WebView over DevTools with the WebSocket that comes with Node 22+.
+      - name: Node for the notification player test
+        if: inputs.mode == 'tray'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
 
       - name: Profile
         run: |

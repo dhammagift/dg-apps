@@ -6,6 +6,8 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const OUT = process.argv[2] || 'shots';
+// Which voice engine reads: neural/Google (the page's own audio, default) or native (the OS text-to-speech through DgTtsPlugin).
+const ENGINE = process.argv[3] || 'audio';
 const res = [];
 const say = (s) => { console.log(s); res.push(s); };
 const sh = (c) => execSync(c, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -41,9 +43,13 @@ async function target() {
       silence: (typeof silenceAudio !== 'undefined') ? a(silenceAudio) : null,
       speaking: !!ts.speaking, paused: !!ts.paused, playBtnOn: Array.prototype.map.call(document.querySelectorAll('.play-main-button'), function (b) { return b.classList.contains('on'); }) });
   })()`);
-  const audible = (o) => [o.googleAudio, o.sharedGoogleAudio].some((x) => x && x.startsWith('playing@'));
+  const audible = (o) => ENGINE === 'native' ? (o.speaking && !o.paused) : [o.googleAudio, o.sharedGoogleAudio].some((x) => x && x.startsWith('playing@'));
 
   // 1. read aloud
+  if (ENGINE === 'native') {
+    say('engine: native (OS voices): ' + await ev(`(function(){ localStorage.setItem('tts_native_trn_enabled','true'); localStorage.setItem('tts_native_pali_enabled','true'); return 'set'; })()`));
+    await ev('location.reload()'); await sleep(8000);
+  }
   say('start: ' + await ev(`(function(){ var l = document.querySelector('.voice-link'); if (!l) return 'no .voice-link'; l.click(); return 'clicked'; })()`));
   let s;
   for (let i = 0; i < 30; i++) { await sleep(2000); s = await state(); const o = JSON.parse(s); if (audible(o) && o.mediaSession === 'playing') break; }

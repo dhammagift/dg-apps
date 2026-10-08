@@ -44,6 +44,11 @@ on:
         required: false
         type: boolean
         default: false
+      tray_engine:
+        description: 'mode=tray: audio (neural / Google voices, the page plays the audio) or native (the OS voices through the app)'
+        required: false
+        type: string
+        default: 'audio'
       mode:
         description: 'screens, shortcuts (Dhamma.Gift launcher shortcuts test), edgetoedge (Uposatha edge-to-edge check: PASS/FAIL, red run on a failure), or tray (the notification player: Pause / Play on the shade, DEBUG apk, red run on a failure)'
         required: false
@@ -103,6 +108,7 @@ jobs:
       - name: Emulator and screenshots
         env:
           VIDEO: ${{ inputs.video && '1' || '0' }}
+          TRAY_ENGINE: ${{ inputs.tray_engine }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ inputs.api_level }}

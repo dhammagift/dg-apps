@@ -33,7 +33,7 @@
       + '#dg-pali button{flex:1 1 0;min-width:0;height:40px;padding:0;border:0;border-radius:9px;background:var(--dg-surface,#fff);color:var(--dg-text,#1b2430);'
       + 'font:inherit;box-shadow:0 1px 0 var(--dg-border,#c7cdd4);-webkit-tap-highlight-color:transparent}'
       + '#dg-pali button:active{background:var(--dg-accent-bg,#d9efe8)}'
-      + '#dg-pali .paste{flex:0 0 44px;color:var(--dg-accent,#139b7b);font-size:17px}'
+      + '#dg-pali .paste{flex:0 0 44px;color:var(--dg-accent,#139b7b);display:flex;align-items:center;justify-content:center}'
       + '#dg-pali .more{flex:0 0 40px;font-size:17px}';
     document.head.appendChild(st);
   }
@@ -63,12 +63,17 @@
     bar.id = 'dg-pali';
     var r1 = document.createElement('div');
     r1.className = 'r';
-    var paste = btn('\u{1F4CB}', 'paste', isRu() ? 'Вставить' : 'Paste');
+    var paste = btn('', 'paste', isRu() ? 'Вставить' : 'Paste');
+    // Font Awesome "paste" (FA 4.7, glyph f0ea; SVG font outline, y up).
+    paste.innerHTML = '<svg viewBox="0 -1536 1792 1792" width="20" height="20" aria-hidden="true"><path transform="scale(1,-1)" fill="currentColor" d="M768 -128h896v640h-416q-40 0 -68 28t-28 68v416h-384v-1152zM1024 1312v64q0 13 -9.5 22.5t-22.5 9.5h-704q-13 0 -22.5 -9.5t-9.5 -22.5v-64q0 -13 9.5 -22.5t22.5 -9.5h704q13 0 22.5 9.5t9.5 22.5zM1280 640h299l-299 299v-299zM1792 512v-672q0 -40 -28 -68t-68 -28 h-960q-40 0 -68 28t-28 68v160h-544q-40 0 -68 28t-28 68v1344q0 40 28 68t68 28h1088q40 0 68 -28t28 -68v-328q21 -13 36 -28l408 -408q28 -28 48 -76t20 -88z"/></svg>';
     paste.addEventListener('click', function () {
-      // Only now, on this tap: the clipboard is not read any other time.
+      // Only now, on this tap: the clipboard is not read any other time. The WebView has no navigator.clipboard.readText, so the app's
+      // own plugin reads it (DgClipboard; Android itself says "pasted from clipboard"), the browser API is the fallback.
+      var native = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DgClipboard;
       var cb = navigator.clipboard;
-      if (!cb || typeof cb.readText !== 'function') return;
-      cb.readText().then(function (t) { if (t) insert(t.replace(/\s+/g, ' ').trim()); }, function () { /* refused: nothing to paste */ });
+      var read = native && typeof native.read === 'function' ? native.read().then(function (r) { return r && r.text; })
+        : cb && typeof cb.readText === 'function' ? cb.readText() : Promise.resolve('');
+      read.then(function (t) { if (t) insert(String(t).replace(/\s+/g, ' ').trim()); }, function () { /* refused: nothing to paste */ });
     });
     r1.appendChild(paste);
     MAIN.forEach(function (ch) { var b = btn(ch); b.addEventListener('click', function () { insert(ch); }); r1.appendChild(b); });
@@ -105,6 +110,9 @@
     field = el;
     if (!baseH || window.innerHeight > baseH) baseH = window.innerHeight;
     if (!bar) build();
+    // With the app's keyboard report (imeSeen) the row is shown only while the keyboard is up; the first focus is announced
+    // by the report itself a moment later.
+    if (imeSeen && !imeCss) { bar.style.display = 'none'; return; }
     bar.style.display = '';
     place();
   }
@@ -113,9 +121,16 @@
     if (bar) bar.style.display = 'none';
   }
 
+  var imeSeen = false;
   window.__dgIme = function (h) {
+    var was = imeCss;
     imeCss = h || 0;
     if (!imeCss) baseH = window.innerHeight;
+    imeSeen = true;
+    // The keyboard went down (Back, or the field was left): the row goes with it, though the field keeps its focus.
+    if (!imeCss && was) { if (bar) bar.style.display = 'none'; return; }
+    // The keyboard came up again over a field that still has the focus: no focusin comes, so the row returns here.
+    if (imeCss && !was) { if (document.activeElement && typable(document.activeElement)) show(document.activeElement); }
     place();
   };
 

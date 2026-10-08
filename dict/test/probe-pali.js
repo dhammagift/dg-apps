@@ -36,7 +36,6 @@ const check = (l, ok, d) => { if (!ok) failed++; console.log((ok ? 'ok   ' : 'FA
     s = await st();
     const z = await page.evaluate(() => parseFloat(document.documentElement.style.zoom) || 1);
     check(`${tag}: overlay keyboard 300px: lifted by it`, s && Math.abs(s.bottomGap - 300) < 3, 'gap ' + (s && s.bottomGap) + ' zoom ' + z);
-    await page.evaluate(() => window.__dgIme(0));
     await page.locator('#dg-pali button', { hasText: 'ā' }).first().click();
     await page.locator('#dg-pali button', { hasText: 'ṁ' }).first().click();
     const v = await input.inputValue();
@@ -49,6 +48,13 @@ const check = (l, ok, d) => { if (!ok) failed++; console.log((ok ? 'ok   ' : 'FA
     s = await st();
     check(`${tag}: "…" opens the second row`, s && s.buttons.includes('ś') && s.buttons.includes('ṃ'), JSON.stringify(s && s.buttons));
     await page.screenshot({ path: path.join(OUT, `bar-${tag}.png`) });
+    await page.evaluate(() => window.__dgIme(0));
+    s = await st();
+    check(`${tag}: the keyboard goes down: the row goes with it`, s && !s.shown, JSON.stringify(s));
+    await page.evaluate(() => window.__dgIme(300));
+    s = await st();
+    check(`${tag}: the keyboard comes back over the focused field: the row returns`, s && s.shown, JSON.stringify(s));
+    check(`${tag}: Paste is an icon, not an emoji`, await page.evaluate(() => !!document.querySelector('#dg-pali .paste svg path') && !document.querySelector('#dg-pali .paste').textContent.trim()), '');
     await page.evaluate(() => { localStorage.setItem('dgPaliBar', 'off'); window.dispatchEvent(new Event('dg:pali-bar')); });
     s = await st();
     check(`${tag}: the menu switch hides it`, s && !s.shown, JSON.stringify(s));

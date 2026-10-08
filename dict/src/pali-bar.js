@@ -64,8 +64,8 @@
     var r1 = document.createElement('div');
     r1.className = 'r';
     var paste = btn('', 'paste', isRu() ? 'Вставить' : 'Paste');
-    // Font Awesome "paste" (FA 4.7, glyph f0ea; SVG font outline, y up).
-    paste.innerHTML = '<svg viewBox="0 -1536 1792 1792" width="20" height="20" aria-hidden="true"><path transform="scale(1,-1)" fill="currentColor" d="M768 -128h896v640h-416q-40 0 -68 28t-28 68v416h-384v-1152zM1024 1312v64q0 13 -9.5 22.5t-22.5 9.5h-704q-13 0 -22.5 -9.5t-9.5 -22.5v-64q0 -13 9.5 -22.5t22.5 -9.5h704q13 0 22.5 9.5t9.5 22.5zM1280 640h299l-299 299v-299zM1792 512v-672q0 -40 -28 -68t-68 -28 h-960q-40 0 -68 28t-28 68v160h-544q-40 0 -68 28t-28 68v1344q0 40 28 68t68 28h1088q40 0 68 -28t28 -68v-328q21 -13 36 -28l408 -408q28 -28 48 -76t20 -88z"/></svg>';
+    // Font Awesome 7 Free "paste" (solid, CC BY 4.0), the same set the site uses.
+    paste.innerHTML = '<svg viewBox="0 0 512 512" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M64 48l224 0c8.8 0 16 7.2 16 16l0 48 48 0 0-48c0-35.3-28.7-64-64-64L64 0C28.7 0 0 28.7 0 64L0 384c0 35.3 28.7 64 64 64l112 0 0-48-112 0c-8.8 0-16-7.2-16-16L48 64c0-8.8 7.2-16 16-16zm176 72c0-13.3-10.7-24-24-24L104 96c-13.3 0-24 10.7-24 24s10.7 24 24 24l105.6 0c8.8-8.6 19-15.8 30.2-21.1 .1-.9 .2-1.9 .2-2.9zM448 464l-160 0c-8.8 0-16-7.2-16-16l0-224c0-8.8 7.2-16 16-16l101.5 0c4.2 0 8.3 1.7 11.3 4.7l58.5 58.5c3 3 4.7 7.1 4.7 11.3L464 448c0 8.8-7.2 16-16 16zM224 224l0 224c0 35.3 28.7 64 64 64l160 0c35.3 0 64-28.7 64-64l0-165.5c0-17-6.7-33.3-18.7-45.3l-58.5-58.5c-12-12-28.3-18.7-45.3-18.7L288 160c-35.3 0-64 28.7-64 64z"/></svg>';
     paste.addEventListener('click', function () {
       // Only now, on this tap: the clipboard is not read any other time. The WebView has no navigator.clipboard.readText, so the app's
       // own plugin reads it (DgClipboard; Android itself says "pasted from clipboard"), the browser API is the fallback.

@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       app:
-        description: 'dg (Dhamma.Gift -> beta), dict or uposatha (-> alpha), as build-app.yml does'
+        description: 'dg, dict or uposatha (all -> alpha, closed testing), as build-app.yml does'
         required: false
         type: choice
         options: [dg, dict, uposatha]
@@ -33,7 +33,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           case "${{ inputs.app }}" in
-            dg)       echo "prefix=dg-app-full-aab-release" >> "$GITHUB_OUTPUT"; echo "pkg=gift.dhamma.twa" >> "$GITHUB_OUTPUT"; echo "track=beta" >> "$GITHUB_OUTPUT" ;;
+            dg)       echo "prefix=dg-app-full-aab-release" >> "$GITHUB_OUTPUT"; echo "pkg=gift.dhamma.twa" >> "$GITHUB_OUTPUT"; echo "track=alpha" >> "$GITHUB_OUTPUT" ;;
             dict)     echo "prefix=dg-dict-aab-release" >> "$GITHUB_OUTPUT"; echo "pkg=gift.dhamma.pali" >> "$GITHUB_OUTPUT"; echo "track=alpha" >> "$GITHUB_OUTPUT" ;;
             uposatha) echo "prefix=dg-uposatha-aab-release" >> "$GITHUB_OUTPUT"; echo "pkg=gift.dhamma.uposatha" >> "$GITHUB_OUTPUT"; echo "track=alpha" >> "$GITHUB_OUTPUT" ;;
           esac

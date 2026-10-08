@@ -61,7 +61,7 @@ on:
         required: false
         type: string
       release:
-        description: 'Which store gets this build, one app at a time (owner, 2026-09-29: the same shape for all three apps, and never ship an app nobody asked for). dg = Dhamma.Gift to Play (open testing, beta; production still needs a promote in the console); dg-ios = Dhamma.Gift to TestFlight; dg-both = Dhamma.Gift to both, in one run; dict / dict-ios = the dictionary to Play (closed testing, alpha) / TestFlight; uposatha / uposatha-ios = Uposatha to Play (closed testing, alpha) / TestFlight. none (default) = build only, nothing uploaded. A dict/uposatha choice skips the Dhamma.Gift build (and its database) entirely. A tag always releases everything.'
+        description: 'Which store gets this build, one app at a time (owner, 2026-09-29: the same shape for all three apps, and never ship an app nobody asked for). dg = Dhamma.Gift to Play (closed testing, alpha; production still needs a promote in the console); dg-ios = Dhamma.Gift to TestFlight; dg-both = Dhamma.Gift to both, in one run; dict / dict-ios = the dictionary to Play (closed testing, alpha) / TestFlight; uposatha / uposatha-ios = Uposatha to Play (closed testing, alpha) / TestFlight. none (default) = build only, nothing uploaded. A dict/uposatha choice skips the Dhamma.Gift build (and its database) entirely. A tag always releases everything.'
         required: false
         type: choice
         default: none
@@ -787,8 +787,10 @@ jobs:
   # Same shape as ios-release below, and dormant for the same reason: no secret, no upload, and a
   # job summary that says so, instead of a green tick that reads like a release happened.
   #
-  # A testing track, never production: Dhamma.Gift goes to open testing (beta), the dictionary and
-  # Uposatha to closed testing (alpha) — the owner moved them up from internal (2026-10-04). Production
+  # A testing track, never production: all three apps go to CLOSED testing (alpha). Dhamma.Gift used to go to open testing (beta);
+  # the owner stopped that on 2026-10-08 (builds reached open testers with races and regressions nobody had caught): from now on
+  # nothing is shipped to open testing from here, the owner tests with his own closed group. The dictionary and Uposatha moved up from
+  # internal on 2026-10-04. Production
   # still costs a deliberate promote in the console, so an automated upload can never be the thing that
   # ships to readers by accident; that promote stays a human decision.
   #
@@ -836,6 +838,43 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.mobile shortcuts
+      # The notification player (Pause / Play on the shade) on the debug APK, with both kinds of voice: the page's own audio and the
+      # OS speech (tools/emu-tray.js). Added 2026-10-08 after "Play in the notification does nothing" (an audio-focus race between the
+      # plugin and the WebView) reached testers: a red test keeps the build out of the store.
+      - name: Debug APK for the notification player test
+        uses: actions/download-artifact@v4
+        with:
+          name: dg-app-full-apk-${{ github.run_number }}
+          path: apk-debug
+      - name: Node for the notification player test
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+      - name: Emulator, notification player
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            TRAY_ENGINE=audio bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-audio gift.dhamma.mobile tray
+            TRAY_ENGINE=native bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-native gift.dhamma.mobile tray
+      - name: Verdict, notification player
+        if: always()
+        run: |
+          for e in audio native; do { echo "### Notification player, $e voices"; echo '```'; cat shots-tray-$e/tray-result.txt 2>/dev/null | grep -E "^(PASS|FAIL)" || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-tray-${{ github.run_number }}
+          path: |
+            shots-tray-audio
+            shots-tray-native
+          retention-days: 14
+
       - name: Verdict
         if: always()
         run: |
@@ -848,7 +887,7 @@ jobs:
           retention-days: 14
 
   android-release:
-    name: Android release (Play open testing, beta)
+    name: Android release (Play closed testing, alpha)
     needs: [build, android-tests]
     if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'dg' || inputs.release == 'dg-both')) || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -890,7 +929,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: gift.dhamma.twa
           releaseFiles: aab/app-release.aab
-          track: beta
+          track: alpha
           status: completed
 
       - name: Say what went to Play
@@ -899,7 +938,7 @@ jobs:
           {
             echo "### Android release: uploaded"
             echo ""
-            echo "versionCode ${{ github.run_number }} is on the **open testing (beta)** track of \`gift.dhamma.twa\`."
+            echo "versionCode ${{ github.run_number }} is on the **closed testing (alpha)** track of \`gift.dhamma.twa\`."
             echo "Testers get it within minutes. Production needs a promote in the Play Console."
           } >> "$GITHUB_STEP_SUMMARY"
 

@@ -102,17 +102,21 @@
   })();
 
   var checking = false;
-  function updateSite() {
+  // force: a person asked (the version row in the menu) - no waiting for SITE_CHECK_EVERY. Resolves {state: 'offline' | 'busy' | 'failed' | 'new' | 'current'}.
+  function updateSite(force) {
     var DS = Cap.Plugins && Cap.Plugins.DgSite;
+    var res = { state: 'current' };
     // Called once the page has settled: the files it started with are good.
     try { localStorage.setItem('dgSiteBoots', '0'); localStorage.setItem('dgSiteFresh', '0'); } catch (e) { /* no storage */ }
-    if (!DS || checking || navigator.onLine === false || !window.crypto || !crypto.subtle) return;
+    if (!DS || !window.crypto || !crypto.subtle) return Promise.resolve({ state: 'failed' });
+    if (checking) return Promise.resolve({ state: 'busy' });
+    if (navigator.onLine === false) return Promise.resolve({ state: 'offline' });
     // A first start has no time stamp and always checks; after that, not sooner than SITE_CHECK_EVERY.
-    if (Date.now() - (parseInt(store('dgSiteCheckedAt'), 10) || 0) < SITE_CHECK_EVERY) return;
+    if (!force && Date.now() - (parseInt(store('dgSiteCheckedAt'), 10) || 0) < SITE_CHECK_EVERY) return Promise.resolve(res);
     checking = true;
     var hashes = {};
     try { hashes = JSON.parse(store('dgSiteHashes')) || {}; } catch (e) { hashes = {}; }
-    fetch('/site-manifest.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (manifest) {
+    return fetch('/site-manifest.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (manifest) {
       var ok = SITE_CONFIG.updatable || function () { return true; };
       var queue = manifest.files.filter(ok), seen = {}, changes = [], changed = 0, fetched = 0, failed = 0;
       manifest.files.forEach(function (f) { seen[f] = 1; });
@@ -161,10 +165,12 @@
           if (changed) { localStorage.setItem('dgSiteFresh', '1'); localStorage.setItem('dgSiteBoots', '0'); }
         } catch (e) { /* no storage: it is checked again next time */ }
         console.log('[dg-site] checked ' + fetched + ' files, ' + changed + ' updated' + (failed ? ', ' + failed + ' failed: nothing applied' : ''));
+        if (failed) res.state = 'failed'; else if (changed) res.state = 'new';
         if (changed && !failed) showUpdateBar();
       });
-    }).catch(function (e) { console.log('[dg-site] update failed:', (e && e.message) || e); }).then(function () { checking = false; });
+    }).catch(function (e) { res.state = 'failed'; console.log('[dg-site] update failed:', (e && e.message) || e); }).then(function () { checking = false; return res; });
   }
+  window.__dgCheckSiteUpdate = function () { return updateSite(true); };
 
   // Back in the app after a while: the same check, which the time stamp keeps to once in six hours.
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') updateSite(); });

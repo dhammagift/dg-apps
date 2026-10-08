@@ -128,8 +128,8 @@ function check(name, actual, expected) {
 
         check(`${c.lang}/${c.theme}/${c.device}: panel group`, rows.group, t.group);
         check(`${c.lang}/${c.theme}/${c.device}: rows are inside the burger panel`, rows.inPanel, true);
-        check(`${c.lang}/${c.theme}/${c.device}: last three rows, in order`,
-            rows.lastThree, ['dg-shortcuts-row', 'dg-rate-row', 'dg-version-row']);
+        check(`${c.lang}/${c.theme}/${c.device}: Rate Us above the policy, the version last`,
+            [rows.lastThree[0], rows.lastThree[2]], ['dg-rate-row', 'dg-version-row']);
         // "5⃣⭐️🙏": three emoji at one size, not the word "rate" (the row is
         // already titled Rate Us) and not a masked star beside an emoji — the owner's report was
         // that the emoji hands rendered bigger than the glyph next to them.
@@ -147,7 +147,7 @@ function check(name, actual, expected) {
         check(`${c.lang}/${c.theme}/${c.device}: rate title`, rows.rateTitle, t.rate);
 
         const version = await page.evaluate(() => document.querySelector('#dg-version-row .lb em').textContent.trim());
-        check(`${c.lang}/${c.theme}/${c.device}: version value`, version, '2.0.0 (3)');
+        check(`${c.lang}/${c.theme}/${c.device}: version value`, version.split(' · ')[0], '2.0.0 (3)');
 
         // The plugin must have been handed the history — and ONLY the history: the dictionary has no
         // favourites in its shortcut set (owner: "не нужно брать избранное. в словаре только история

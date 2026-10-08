@@ -62,6 +62,12 @@
       pali: 'Pāli letters above the keyboard',
       paliNote: 'A row with ā ī ū ṁ ṅ ñ ṭ ḍ ṇ ḷ and Paste while you type.',
       version: 'App version',
+      verCheck: 'Tap to check for updates',
+      verBusy: 'Checking…',
+      verCurrent: 'Everything is up to date',
+      verNew: 'Updated - use the Update button below',
+      verOffline: 'No connection',
+      verFailed: 'Could not check, try again later',
       rate: 'Rate Us',
       privacy: 'Privacy Policy',
       rateNote: 'Open the store page and leave a review.'
@@ -72,6 +78,12 @@
       pali: 'Палийские буквы над клавиатурой',
       paliNote: 'Ряд с ā ī ū ṁ ṅ ñ ṭ ḍ ṇ ḷ и кнопкой «Вставить» при наборе.',
       version: 'Версия приложения',
+      verCheck: 'Нажмите, чтобы проверить обновления',
+      verBusy: 'Проверяю…',
+      verCurrent: 'Всё актуально',
+      verNew: 'Обновлено - нажмите «Обновить» внизу',
+      verOffline: 'Нет соединения',
+      verFailed: 'Не удалось проверить, попробуйте позже',
       rate: 'Оценить приложение',
       privacy: 'Политика конфиденциальности',
       rateNote: 'Открыть страницу в магазине и оставить отзыв.'
@@ -285,7 +297,20 @@
 
     // Filled from the value MainActivity prepends to this script (versionName + versionCode), so
     // the row never depends on the site knowing anything about the app. Last row on purpose.
-    var ver = row('dg-version-row', t.version, window.__DG_APP_VERSION__ || '');
+    var verText = window.__DG_APP_VERSION__ || '';
+    var ver = row('dg-version-row', t.version, verText ? verText + ' · ' + t.verCheck : t.verCheck);
+    ver.style.cursor = 'pointer';
+    ver.addEventListener('click', function () {
+      var check = window.__dgCheckSiteUpdate;
+      var em = ver.querySelector('em');
+      if (!check || ver.__busy) return;
+      ver.__busy = true;
+      var say = function (m) { em.textContent = (verText ? verText + ' · ' : '') + m; };
+      say(t.verBusy);
+      check().then(function (r) {
+        say({ new: t.verNew, current: t.verCurrent, offline: t.verOffline }[r.state] || t.verFailed);
+      }, function () { say(t.verFailed); }).then(function () { ver.__busy = false; });
+    });
     out.push(ver);
 
     return out;

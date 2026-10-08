@@ -159,6 +159,7 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
                 }
             }
             tts.setSpeechRate(call.getDouble("rate", 1.0).floatValue());
+            requestFocus();
             if (tts.speak(call.getString("text", ""), TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.SUCCESS) {
                 call.resolve();
             } else {
@@ -247,7 +248,10 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
             if ("none".equals(state)) { teardown(); return; }
             boolean playing = "playing".equals(state);
             ensureSession();
-            if (playing) requestFocus(); else abandonFocus();
+            // No audio focus request here: a voice played by the page's own <audio> (the neuro voices) already holds the WebView's
+            // focus, and a second GAIN from this plugin is a permanent loss for it - Chromium paused the audio it had just resumed,
+            // so Play in the notification did nothing. Native speech takes its own focus in speak(); a pause lets go of it.
+            if (!playing) abandonFocus();
             session.setActive(true);
             session.setMetadata(metadata());
             session.setPlaybackState(new PlaybackStateCompat.Builder()
@@ -379,6 +383,8 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
 
     // Ducking, not pausing: a TTS reading is speech, and the system handles the mixing. Transient
     // loss (a call, a notification) is left to Android's own behaviour rather than second-guessed.
+    private boolean focusHeld;
+
     private void requestFocus() {
         AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
         if (am == null) return;
@@ -395,9 +401,12 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
         } else {
             am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
         }
+        focusHeld = true;
     }
 
     private void abandonFocus() {
+        if (!focusHeld) return;
+        focusHeld = false;
         AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
         if (am == null) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

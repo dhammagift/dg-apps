@@ -146,7 +146,8 @@
         fetched++;
         // 'no-cache', not 'no-store': the WebView keeps what it fetched and asks the site with the file's ETag, so a file
         // that has not changed comes back as a 304 with no body — a check costs a few KB, not the whole page again.
-        return fetch(SITE + SITE_CONFIG.urlFor(path), { cache: 'no-cache' }).then(function (res) {
+        var from = SITE_CONFIG.urlFor(path);
+        return fetch(/^https?:\/\//.test(from) ? from : SITE + from, { cache: 'no-cache' }).then(function (res) {
           if (!res.ok) { if (res.status !== 404) failed++; return null; }   // 404: the site no longer has it, and that is fine
           return res.arrayBuffer();
         }).then(function (buf) {

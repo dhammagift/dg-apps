@@ -404,7 +404,11 @@
   var SITE_CONFIG = {
     site: 'https://dict.dhamma.gift',
     // A directory's page is /ru/index.html in the bundle and /ru/ on the site.
-    urlFor: function (path) { return /\/index\.html$/.test(path) ? path.slice(0, -'index.html'.length) : path; }
+    // Find on the page (and its icons) is Dhamma.Gift's own file: the app keeps the bundle's copy and refreshes it from dhamma.gift.
+    urlFor: function (path) {
+      if (/^\/assets\/(js\/dg-page-find|svg\/)/.test(path)) return 'https://dhamma.gift' + path;
+      return /\/index\.html$/.test(path) ? path.slice(0, -'index.html'.length) : path;
+    }
   };
   // @site-updater (inlined from src/site-updater.js by dict/build.js)
 

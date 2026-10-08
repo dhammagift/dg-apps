@@ -73,8 +73,11 @@ async function snapshot({ site, out, prefix = '', visits, interact, skip, extras
         await ctx.close();
     }
     // Extras: fetched directly, not through a page.
-    for (const extra of extras) {
-        const res = await fetch(site + prefix + extra).catch(() => null);
+    // An extra is a path on the site, or { url, as }: a file from ANOTHER place (the app takes Dhamma.Gift's find-on-page from
+    // dhamma.gift itself, whatever its version is today) saved under the path `as` in the bundle.
+    for (const extra0 of extras) {
+        const extra = typeof extra0 === 'string' ? extra0 : extra0.as;
+        const res = await fetch(typeof extra0 === 'string' ? site + prefix + extra : extra0.url).catch(() => null);
         if (!res || !res.ok) { skipped.push('extra ' + (res ? res.status : 'failed') + ' ' + extra); continue; }
         const body = Buffer.from(await res.arrayBuffer());
         if (body.length) got.set(extra, body);

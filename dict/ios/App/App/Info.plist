@@ -68,8 +68,8 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<!-- ONE static shortcut, matching android/app/src/main/res/xml/shortcuts.xml exactly: Favorites &
-	     History is the only entry that belongs to both the "switch off" (programmed) and "switch on"
+	<!-- ONE static shortcut, matching android/app/src/main/res/xml/shortcuts.xml exactly: Dhamma.Gift
+	     (the main site; the compass was dropped from the dictionary) is the only entry that belongs to both the "switch off" (programmed) and "switch on"
 	     (recent words) sets DgShortcutsPlugin.set() pushes dynamically, and the only one a reader sees
 	     on a freshly installed app before it has ever run — a dynamic shortcut cannot exist before
 	     then. Without this, a fresh install's long-press menu was empty (dg-apps#39: "нет шорткатов.
@@ -81,17 +81,17 @@
 			<key>UIApplicationShortcutItemType</key>
 			<string>route</string>
 			<key>UIApplicationShortcutItemIconType</key>
-			<string>UIApplicationShortcutIconTypeFavorite</string>
+			<string>UIApplicationShortcutIconTypeHome</string>
 			<key>UIApplicationShortcutItemTitle</key>
-			<string>Favorites &amp; History</string>
+			<string>Dhamma.Gift</string>
 			<key>UIApplicationShortcutItemUserInfo</key>
 			<dict>
 				<key>route</key>
 				<!-- Absolute, matching android/app/src/main/res/xml/shortcuts.xml exactly: dict.dhamma.gift
-				     has no favorites/history page of its own, the shared one lives on the main site
+				     is not the main site, which lives on dhamma.gift
 				     (server.allowNavigation already lists dhamma.gift), and wireIosShortcutTaps'
 				     go() already branches on an absolute http(s) route. -->
-				<string>https://dhamma.gift/4as</string>
+				<string>https://dhamma.gift/</string>
 			</dict>
 		</dict>
 	</array>

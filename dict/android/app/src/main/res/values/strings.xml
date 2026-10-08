@@ -19,6 +19,6 @@
          on one phone and both open dhamma.gift/4as, so the prefix is the only thing telling them
          apart. The other three entries are dynamic now and their labels live in src/dict-bridge.js,
          next to the routes they open. -->
-    <string name="shortcut_fav_short">DG Favorites &amp; History</string>
-    <string name="shortcut_fav_long">DG Favorites &amp; History</string>
+    <string name="shortcut_dg_short">Dhamma.Gift</string>
+    <string name="shortcut_dg_long">Dhamma.Gift</string>
 </resources>

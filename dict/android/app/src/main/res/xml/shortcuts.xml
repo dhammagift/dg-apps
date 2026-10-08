@@ -17,7 +17,7 @@
        switch ON  -> three recent words from the dictionary's own history;
        either way -> plus this one, which is the errand a reader returns to.
 
-     Four entries in the menu, one of them declared and always present. Favorites & History is that
+     Four entries in the menu, one of them declared and always present. Dhamma.Gift is that
      one because it is the only one that belongs to BOTH sets, and because it is the only entry a
      reader sees on a freshly installed app, before it has ever run — a dynamic shortcut cannot
      exist before the app has run.
@@ -29,16 +29,16 @@
      external tool anyway). -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
-        android:shortcutId="favorites"
+        android:shortcutId="dhamma-gift"
         android:enabled="true"
-        android:icon="@drawable/shortcut_1"
-        android:shortcutShortLabel="@string/shortcut_fav_short"
-        android:shortcutLongLabel="@string/shortcut_fav_long">
+        android:icon="@drawable/shortcut_dg"
+        android:shortcutShortLabel="@string/shortcut_dg_short"
+        android:shortcutLongLabel="@string/shortcut_dg_long">
         <intent
             android:action="android.intent.action.MAIN"
             android:targetPackage="gift.dhamma.pali"
             android:targetClass="gift.dhamma.pali.MainActivity">
-            <extra android:name="route" android:value="https://dhamma.gift/4as" />
+            <extra android:name="route" android:value="https://dhamma.gift/" />
         </intent>
     </shortcut>
 </shortcuts>

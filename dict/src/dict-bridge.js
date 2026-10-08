@@ -102,7 +102,7 @@
   // res/xml/shortcuts.xml, and three statics there cost exactly the slots the history needs: the
   // launcher counts DECLARED shortcuts against its four-entry menu even when they are disabled at
   // runtime, which is why Dhamma.Gift shows three "recently read" entries and this app showed
-  // two. One static (Favorites & History) plus these three as dynamic is four either way.
+  // two. One static (Dhamma.Gift) plus these three as dynamic is four either way.
   // Each carries the drawable it had while it was static (res/drawable-*/shortcut_N.png, the same
   // files the TWA used — see the plugin's iconFor): a dynamic shortcut must be handed an icon, and
   // without this every entry got the app's own mark, which is the owner's report that the

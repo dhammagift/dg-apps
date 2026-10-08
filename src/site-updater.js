@@ -52,15 +52,22 @@
     var ru = typeof isRu === 'function' ? isRu() : /^ru/i.test(document.documentElement.lang || '');
     var t = ru ? { head: 'Доступна новая версия', sub: 'Страница обновится за секунду', go: 'Обновить', busy: 'Обновляю…', later: 'Позже' }
                : { head: 'New version available', sub: 'The page reloads in a second', go: 'Update', busy: 'Updating…', later: 'Later' };
-    var bg = (getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g) || [255, 255, 255]).map(Number);
-    var dark = (0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]) < 128 && (bg[3] === undefined || bg[3] > 0.5);
     var bar = document.createElement('div');
     bar.id = 'dg-upd';
     bar.setAttribute('role', 'status');
     bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(14px + max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)));z-index:2147482000;'
-      + 'display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:16px;border:1px solid ' + (dark ? '#34414f' : '#d9e1e8') + ';'
-      + 'background:' + (dark ? '#1d2630' : '#fff') + ';color:' + (dark ? '#e8eef4' : '#1b2430') + ';font:500 15px/1.25 system-ui,sans-serif;'
-      + 'box-shadow:0 8px 28px ' + (dark ? 'rgba(0,0,0,.55)' : 'rgba(15,30,50,.22)');
+      + 'display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:16px;border:1px solid;font:500 15px/1.25 system-ui,sans-serif';
+    // Colours follow the page's theme, also when it is switched while the bar is up (dark = a solid dark body background).
+    function paint() {
+      var bg = (getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g) || [255, 255, 255]).map(Number);
+      var dark = (0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]) < 128 && (bg[3] === undefined || bg[3] > 0.5);
+      bar.style.borderColor = dark ? '#34414f' : '#d9e1e8';
+      bar.style.background = dark ? '#1d2630' : '#fff';
+      bar.style.color = dark ? '#e8eef4' : '#1b2430';
+      bar.style.boxShadow = '0 8px 28px ' + (dark ? 'rgba(0,0,0,.55)' : 'rgba(15,30,50,.22)');
+    }
+    paint();
+    new MutationObserver(paint).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     var text = document.createElement('div');
     text.style.cssText = 'flex:1;min-width:0';
     text.innerHTML = '<div></div><div style="font-weight:400;font-size:12.5px;opacity:.7;margin-top:2px"></div>';

@@ -66,15 +66,12 @@
   // launch splash (the animated system splash) already covers a cold start, and the page's copy
   // right after it made every launch show two. Nothing to signal from here any more.
 
-  // ---- the bundled page: no service worker, kept up to date -------------------------------------
+  // ---- the bundled page: no service worker, and no updates from the site ----------------------------
+  // The page ships with the app (owner, 2026-10-08): it works without a network and changes only with a new version from the store.
   var SITE_CONFIG = {
-    site: 'https://dhamma.gift',   // where the page comes from: the production site (owner, 2026-09-30)
-    // The page's file in the bundle is /uposatha-calendar.html; on the site it is /uposatha-calendar.
-    urlFor: function (path) { return path === '/uposatha-calendar.html' ? '/uposatha-calendar' : path; },
-    // The code (html, css, js) is what the build took from the repository; only the texts (json) follow the site.
-    updatable: function (path) { return /\.json$/.test(path); }
+    site: 'https://dhamma.gift'   // where the site's own pages (help, docs) are when the page asks for them
   };
-  // @site-updater (inlined from src/site-updater.js by uposatha/build.js)
+  // @site-updater (inlined from src/site-no-sw.js by uposatha/build.js: the service worker stays out of the app)
 
   // ---- an app, not a page ----------------------------------------------------------------------
   //
@@ -914,7 +911,6 @@
     // UposathaCore is loaded by the page: give it until the page has finished loading.
     function afterLoad() {
       pushShortcuts();
-      setTimeout(updateSite, 6000);
       applyTopInset();
       // ?drawer=1: the proof opens the burger menu itself (Android: android-screens mode=edgetoedge).
       // A tap cannot be aimed at a WebView element from adb, and a check that guesses coordinates

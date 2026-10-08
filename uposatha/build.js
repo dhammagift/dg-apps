@@ -8,7 +8,7 @@
 //
 // Shared code is pasted in by marker, one source each:
 //   "// @rate-prompt"     in uposatha-bridge.js: the rating sheet, from ../src/native-bridge.js
-//   "// @site-updater"    in uposatha-bridge.js: the bundled page kept current, from ../src/site-updater.js
+//   "// @site-updater"    in uposatha-bridge.js: no service worker in the app, from ../src/site-no-sw.js (Uposatha never updates its page from the site: it ships with the app)
 //   "// @launch-screens"  in index.html: the "no connection"
 //                         screen, from ../src/launch-screens.js
 const fs = require('fs');
@@ -24,7 +24,7 @@ function bridgeSource() {
     const block = main.split(/^.*@rate-prompt-begin.*\n/m)[1].split(/^.*@rate-prompt-end.*\n/m)[0];
     return fs.readFileSync(path.join(SRC, 'uposatha-bridge.js'), 'utf8')
         .replace(/^.*\/\/ @rate-prompt .*\n/m, () => block)
-        .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'site-updater.js'), 'utf8'))
+        .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'site-no-sw.js'), 'utf8'))
         .replace(/^.*\/\/ @launch-screens .*\n/m, () => launchScreens());
 }
 

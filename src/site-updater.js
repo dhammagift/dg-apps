@@ -5,17 +5,6 @@
 //   SITE_CONFIG = { site: 'https://dict.dhamma.gift', urlFor: function (path) { return path; }, updatable: optional (path) => bool }
 //
 // Uses the bridge's Cap (window.Capacitor) and store() (localStorage read).
-  // ---- no service worker ---------------------------------------------------------------------
-  //
-  // The site's page registers its own service worker (/sw.js, its caching for the website). In the app the
-  // files come from the APK and DgSite, and a second layer of caching on top of them would decide what the
-  // reader sees behind our back: registrations are swallowed here.
-  if (navigator.serviceWorker && typeof navigator.serviceWorker.register === 'function') {
-    navigator.serviceWorker.register = function () {
-      return Promise.resolve({ scope: '/', update: function () { return Promise.resolve(); }, unregister: function () { return Promise.resolve(true); } });
-    };
-  }
-
   // ---- keeping the bundled page up to date --------------------------------------------------
   //
   // The APK holds the page as it was when it was built. When the phone is online, and at most every 6

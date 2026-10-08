@@ -6,23 +6,37 @@ import Capacitor
 // its own updater and site fallback) and the Home Screen quick actions ("recent words"). The same shape as
 // Uposatha's DgApp.swift (uposatha/ios/App/App/DgApp.swift) and Android's DgSitePlugin/DgShortcutsPlugin.
 
-// The root: the page sits inside the safe area (under the status bar and above the home indicator) on the page's
-// own colour, so nothing of it is hidden by the Dynamic Island or the home bar.
+// The page's own background (white by day, #111111 at night): what shows behind the first paint and at the overscroll edges.
+// A dynamic colour, so the system's appearance switch re-tints it the way the page re-tints itself.
+private let dgPageBackground = UIColor { traits in
+    traits.userInterfaceStyle == .dark
+        ? UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 1)
+        : UIColor.white
+}
+
+// The root: the page runs EDGE TO EDGE, as in Uposatha (uposatha/ios/App/App/DgApp.swift) and on Android - the WKWebView spans
+// the whole screen under the transparent status bar and the home indicator, and the page keeps clear of them itself
+// (viewport-fit=cover, env(safe-area-inset-*): src/dict-edge.js). It used to sit inside the safe area, and what was above
+// and below it was this view's colour, not the page's.
 final class DgRootViewController: UIViewController {
     private let bridgeController = DgBridgeViewController()
 
+    // The status bar's icon colour is the page's decision: dict-edge.js calls SystemBars.setStyle on a theme change, which lands
+    // on the bridge controller's preferredStatusBarStyle; UIKit asks the window's root (this one), so the query is forwarded.
+    override var childForStatusBarStyle: UIViewController? { bridgeController }
+    override var childForStatusBarHidden: UIViewController? { bridgeController }
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = dgPageBackground
         addChild(bridgeController)
         bridgeController.view.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bridgeController.view)
-        let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            bridgeController.view.topAnchor.constraint(equalTo: guide.topAnchor),
-            bridgeController.view.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
-            bridgeController.view.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
-            bridgeController.view.trailingAnchor.constraint(equalTo: guide.trailingAnchor)
+            bridgeController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            bridgeController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            bridgeController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bridgeController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
         bridgeController.didMove(toParent: self)
     }
@@ -62,17 +76,44 @@ class DgBridgeViewController: CAPBridgeViewController {
         return configuration
     }
 
+    // The keyboard's height for the page (the Pali letters row, src/pali-bar.js, waits for it): how far the keyboard reaches into the
+    // web view, in points (= css px). willChangeFrame also fires when the suggestion strip comes or goes, so the row follows the
+    // keyboard's real top edge; the strip is part of the keyboard's frame.
+    private func watchKeyboard() {
+        let center = NotificationCenter.default
+        center.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] note in
+            guard let self = self, let webView = self.webView, let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            let frame = webView.convert(webView.bounds, to: nil)
+            let overlap = max(0, frame.maxY - end.minY)
+            self.reportKeyboard(overlap)
+        }
+        center.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.reportKeyboard(0)
+        }
+    }
+
+    private func reportKeyboard(_ points: CGFloat) {
+        webView?.evaluateJavaScript("window.__dgIme && window.__dgIme(\(Int(points.rounded())))", completionHandler: nil)
+    }
+
     override func capacitorDidLoad() {
         webView?.allowsBackForwardNavigationGestures = true
         webView?.scrollView.showsVerticalScrollIndicator = false
         webView?.scrollView.showsHorizontalScrollIndicator = false
 
-        // The bridge (www/dict-bridge.js, the same file Android injects) runs before the page's own scripts.
+        // The bridge (www/dict-bridge.js, the same file Android injects) runs before the page's own scripts. The app's version
+        // goes in front of it, as on Android (MainActivity), for the version row of the menu.
         if let url = Bundle.main.url(forResource: "dict-bridge", withExtension: "js", subdirectory: "public"),
            let source = try? String(contentsOf: url, encoding: .utf8) {
+            let info = Bundle.main.infoDictionary
+            let version = "\(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? ""))"
+            let quoted = (try? JSONSerialization.data(withJSONObject: [version]))
+                .flatMap { String(data: $0, encoding: .utf8) }
+                .map { String($0.dropFirst().dropLast()) } ?? "\"\""
             webView?.configuration.userContentController.addUserScript(
-                WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+                WKUserScript(source: "window.__DG_APP_VERSION__=\(quoted);\n" + source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
+        watchKeyboard()
 
         bridge?.registerPluginInstance(DgShortcutsPlugin())
         bridge?.registerPluginInstance(DgSitePlugin())

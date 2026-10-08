@@ -4,8 +4,7 @@
 // fixed timings.
 //
 // Unlike Uposatha, the dictionary's theme is NOT tied to the system's light/dark setting: it is a stored
-// preference (localStorage.theme) applied once at load, flipped live by the in-page control (#theme-toggle ->
-// body.classList.toggle('dark-mode'), static/home.js). So this tour flips it itself, mid-session, rather than
+// preference (localStorage.theme: dark / light / auto) flipped live by the in-page control (dgSetTheme(), static/extra.js). So this tour flips it itself, mid-session, rather than
 // asking the driver to change the simulator's appearance (which the page would never notice) — and each stage
 // name says which theme it is, since the driver applies no theme bookkeeping of its own.
 //
@@ -75,6 +74,9 @@
         if (box) { box.focus(); box.value = 'dham'; box.dispatchEvent(new Event('input', { bubbles: true })); }
         return stage('search', function () { return count('.ui-autocomplete .ui-menu-item') > 0; });
       })
+      // 2b. The same moment once the keyboard has reported its height: the Pali letters row above it (src/pali-bar.js,
+      // fed by DgBridgeViewController's keyboard notifications). Not part of the store listing's set; it is here to be looked at.
+      .then(function () { return stage('letters', function () { var b = document.getElementById('dg-pali'); return b && b.classList.contains('on'); }); })
       // 3. A real entry: several dictionaries at once (DPD and Sanskrit are expanded by default).
       .then(function () {
         search('dhamma');
@@ -88,8 +90,7 @@
       // Close it, then switch to dark — live, no reload (the reason this app needed its own mechanism).
       .then(function () {
         if (typeof window.closePanels === 'function') window.closePanels();
-        var tt = document.getElementById('theme-toggle');
-        if (tt) { tt.checked = true; tt.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (typeof window.dgSetTheme === 'function') window.dgSetTheme('dark');
         return waitFor(function () { return !$('.panel[data-open="true"]') && document.body.classList.contains('dark-mode'); }, 8000);
       })
       // 5. The declension (grammar) table, in dark.

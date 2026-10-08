@@ -11,7 +11,7 @@ OUT=".tmp/ios-tour"
 DEVICE="iPhone 17 Pro Max"
 BUNDLE="gift.dhamma.pali"
 # No OS-level dark flip here: the dictionary's theme is a stored preference switched by an in-page control
-# (#theme-toggle -> body.classList.toggle('dark-mode')), evaluated once at load and never reacting to
+# (dgSetTheme(), the Dark | Light | Auto control), evaluated once at load and never reacting to
 # prefers-color-scheme — tour.js flips it itself, mid-session, and each stage name already says which
 # theme it is (declension-dark, canon-dark, ...), so the driver needs no theme bookkeeping of its own.
 
@@ -33,6 +33,8 @@ UDID=$(printf '%s\n' "$DEVICES" | grep -F "$DEVICE (" | tail -1 | sed -E 's/.*\(
 [ -n "$UDID" ] || { echo "drive: no available simulator named '$DEVICE'" >&2; printf '%s\n' "$DEVICES" >&2; exit 1; }
 echo "drive: device $DEVICE = $UDID"
 
+# A software keyboard (the Pali letters row sits on top of it), not the host's hardware one.
+defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false 2>/dev/null || true
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b
 xcrun simctl ui "$UDID" appearance light

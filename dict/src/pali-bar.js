@@ -10,6 +10,7 @@
   var FLAG = 'dgPaliBar';
   var MAIN = ['ā', 'ī', 'ū', 'ṁ', 'ṅ', 'ñ', 'ṭ', 'ḍ', 'ṇ', 'ḷ'];
   var MORE = ['ṃ', 'ś', 'ṣ', 'ṛ', 'ṝ', 'ḹ', 'ḥ'];
+  var LONG_L = /[ḷḹ]/;   // a sans-serif l with a dot under it reads as "!": these two are set in a serif face
 
   function enabled() { try { return localStorage.getItem(FLAG) !== 'off'; } catch (e) { return true; } }
   function isRu() { return document.documentElement.lang === 'ru'; }
@@ -36,6 +37,7 @@
       + 'font:inherit;box-shadow:0 1px 0 var(--dg-border,#c7cdd4);-webkit-tap-highlight-color:transparent}'
       + '#dg-pali button:active{background:var(--dg-accent-bg,#d9efe8)}'
       + '#dg-pali .paste{flex:0 0 44px;color:var(--dg-accent,#139b7b);display:flex;align-items:center;justify-content:center}'
+      + '#dg-pali .ser{font-family:Georgia,"Times New Roman",serif;font-size:21px}'
       + '#dg-pali .more{flex:0 0 40px;font-size:17px}';
     document.head.appendChild(st);
   }
@@ -78,13 +80,13 @@
       read.then(function (t) { if (t) insert(String(t).replace(/\s+/g, ' ').trim()); }, function () { /* refused: nothing to paste */ });
     });
     r1.appendChild(paste);
-    MAIN.forEach(function (ch) { var b = btn(ch); b.addEventListener('click', function () { insert(ch); }); r1.appendChild(b); });
+    MAIN.forEach(function (ch) { var b = btn(ch, LONG_L.test(ch) ? 'ser' : ''); b.addEventListener('click', function () { insert(ch); }); r1.appendChild(b); });
     var mb = btn('…', 'more', isRu() ? 'Ещё буквы' : 'More letters');
     r1.appendChild(mb);
     more = document.createElement('div');
     more.className = 'r';
     more.style.display = 'none';
-    MORE.forEach(function (ch) { var b = btn(ch); b.addEventListener('click', function () { insert(ch); }); more.appendChild(b); });
+    MORE.forEach(function (ch) { var b = btn(ch, LONG_L.test(ch) ? 'ser' : ''); b.addEventListener('click', function () { insert(ch); }); more.appendChild(b); });
     mb.addEventListener('click', function () { more.style.display = more.style.display === 'none' ? 'flex' : 'none'; place(); });
     bar.appendChild(r1);
     bar.appendChild(more);

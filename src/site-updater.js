@@ -118,7 +118,7 @@
     try { hashes = JSON.parse(store('dgSiteHashes')) || {}; } catch (e) { hashes = {}; }
     return fetch('/site-manifest.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (manifest) {
       var ok = SITE_CONFIG.updatable || function () { return true; };
-      var queue = manifest.files.filter(ok), seen = {}, changes = [], changed = 0, fetched = 0, failed = 0;
+      var queue = manifest.files.filter(ok), seen = {}, changes = [], changed = 0, shown = 0, fetched = 0, failed = 0;
       manifest.files.forEach(function (f) { seen[f] = 1; });
       function next() {
         var path = queue.shift();
@@ -140,7 +140,7 @@
               referencedPaths(new TextDecoder().decode(buf), path).forEach(function (p) { if (!seen[p] && ok(p)) { seen[p] = 1; queue.push(p); } });
             }
             if (sha === had) return null;
-            changes.push({ path: path, data: bytesToBase64(new Uint8Array(buf)), sha: sha });
+            changes.push({ path: path, data: bytesToBase64(new Uint8Array(buf)), sha: sha, known: !!had });
             return null;
           });
         }).catch(function () { failed++; }).then(next);   // a file that would not come: the check is not complete (below)
@@ -150,7 +150,7 @@
       function store1() {
         var c = changes.shift();
         if (!c) return Promise.resolve();
-        return DS.put({ path: c.path, data: c.data }).then(function () { hashes[c.path] = c.sha; changed++; }, function () { failed++; }).then(store1);
+        return DS.put({ path: c.path, data: c.data }).then(function () { hashes[c.path] = c.sha; changed++; if (c.known) shown++; }, function () { failed++; }).then(store1);
       }
       return next().then(function () {
         // All or nothing: a half-fetched update would leave a page next to the old files it was written against, and a
@@ -165,8 +165,10 @@
           if (changed) { localStorage.setItem('dgSiteFresh', '1'); localStorage.setItem('dgSiteBoots', '0'); }
         } catch (e) { /* no storage: it is checked again next time */ }
         console.log('[dg-site] checked ' + fetched + ' files, ' + changed + ' updated' + (failed ? ', ' + failed + ' failed: nothing applied' : ''));
-        if (failed) res.state = 'failed'; else if (changed) res.state = 'new';
-        if (changed && !failed) showUpdateBar();
+        if (failed) res.state = 'failed'; else if (shown) res.state = 'new';
+        // A file the bundle never had (the page names it, the snapshot did not carry it: the manifest, the icons) is saved quietly; the
+        // bar is for files that CHANGED since the bundle - a first check used to announce an update on every fresh install.
+        if (shown && !failed) showUpdateBar();
       });
     }).catch(function (e) { res.state = 'failed'; console.log('[dg-site] update failed:', (e && e.message) || e); }).then(function () { checking = false; return res; });
   }

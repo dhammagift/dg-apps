@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Dhamma.Gift shortcut as an adaptive icon: a light diamond on a dark ground, which the launcher cuts to its own shape and
+     fills edge to edge. A plain bitmap was put by the launcher into a white badge with margins all round, and the disc inside
+     it looked off-centre. Android 7 (24-25) has no adaptive icons: the drawable-*dpi/shortcut_dg.png discs are for it. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background><color android:color="#1C1D21"/></background>
+    <foreground android:drawable="@drawable/shortcut_dg_fg"/>
+</adaptive-icon>

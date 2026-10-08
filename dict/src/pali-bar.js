@@ -20,7 +20,7 @@
     return el.tagName === 'INPUT' && /^(text|search|)$/i.test(el.getAttribute('type') || '');
   }
 
-  var bar, field, more, imeCss = 0, baseH = 0;
+  var bar, field, more, imeCss = 0, baseH = 0;   // (imeSeen / native: below)
 
   function css() {
     if (document.getElementById('dg-pali-css')) return;
@@ -28,7 +28,9 @@
     st.id = 'dg-pali-css';
     st.textContent = ''
       + '#dg-pali{position:fixed;left:0;right:0;z-index:2147482500;background:var(--dg-surface-hover,#eef1f4);border-top:1px solid var(--dg-border,#d3d9df);'
-      + 'padding:6px 6px calc(6px + 0px);font:500 19px/1 Lato,system-ui,sans-serif;-webkit-user-select:none;user-select:none;touch-action:manipulation}'
+      + 'padding:6px 6px calc(6px + 0px);font:500 19px/1 Lato,system-ui,sans-serif;-webkit-user-select:none;user-select:none;touch-action:manipulation;'
+      + 'transform:translateY(24px);opacity:0;pointer-events:none;transition:transform .22s cubic-bezier(.2,.8,.2,1),opacity .18s ease-out}'
+      + '#dg-pali.on{transform:none;opacity:1;pointer-events:auto}'
       + '#dg-pali .r{display:flex;gap:4px}#dg-pali .r+.r{margin-top:5px}'
       + '#dg-pali button{flex:1 1 0;min-width:0;height:40px;padding:0;border:0;border-radius:9px;background:var(--dg-surface,#fff);color:var(--dg-text,#1b2430);'
       + 'font:inherit;box-shadow:0 1px 0 var(--dg-border,#c7cdd4);-webkit-tap-highlight-color:transparent}'
@@ -105,33 +107,41 @@
     bar.style.bottom = lift() + 'px';
   }
 
+  // In the app the row waits for the keyboard's own report: shown before it, the row would sit at the bottom of the screen for a moment and
+  // then jump up. Once any report has come (or in the app from the start) the row is there only while the keyboard is.
+  var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  var imeSeen = false;
+  function wanted() {
+    if (!enabled() || !field) return false;
+    return (native || imeSeen) ? imeCss > 0 : true;
+  }
+  // Slides up from below (and back down) with the keyboard, never drawn in a wrong place: it is built invisible and only .on shows it.
+  function render() {
+    var on = wanted();
+    if (on && !bar) build();
+    if (!bar) return;
+    place();
+    bar.classList.toggle('on', on);
+  }
+
   function show(el) {
     if (!enabled() || !typable(el)) return;
     field = el;
     if (!baseH || window.innerHeight > baseH) baseH = window.innerHeight;
-    if (!bar) build();
-    // With the app's keyboard report (imeSeen) the row is shown only while the keyboard is up; the first focus is announced
-    // by the report itself a moment later.
-    if (imeSeen && !imeCss) { bar.style.display = 'none'; return; }
-    bar.style.display = '';
-    place();
+    render();
   }
   function hide() {
     field = null;
-    if (bar) bar.style.display = 'none';
+    render();
   }
 
-  var imeSeen = false;
   window.__dgIme = function (h) {
-    var was = imeCss;
     imeCss = h || 0;
     if (!imeCss) baseH = window.innerHeight;
     imeSeen = true;
-    // The keyboard went down (Back, or the field was left): the row goes with it, though the field keeps its focus.
-    if (!imeCss && was) { if (bar) bar.style.display = 'none'; return; }
-    // The keyboard came up again over a field that still has the focus: no focusin comes, so the row returns here.
-    if (imeCss && !was) { if (document.activeElement && typable(document.activeElement)) show(document.activeElement); }
-    place();
+    // The keyboard came up over a field that already has the focus (no focusin then), or went down while it keeps it.
+    if (imeCss && !field && document.activeElement && typable(document.activeElement)) field = document.activeElement;
+    render();
   };
 
   // Capture phase: a page's own handler may stop the event before it bubbles up here.
@@ -146,5 +156,5 @@
   function already() { if (document.activeElement && typable(document.activeElement)) show(document.activeElement); }
   if (document.body) already(); else document.addEventListener('DOMContentLoaded', already);
   // The menu switch.
-  window.addEventListener('dg:pali-bar', function () { if (!enabled()) hide(); });
+  window.addEventListener('dg:pali-bar', function () { render(); });
 })();

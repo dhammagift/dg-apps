@@ -27,7 +27,7 @@ const check = (l, ok, d) => { if (!ok) failed++; console.log((ok ? 'ok   ' : 'FA
     await input.click();
     await input.fill('');
     await page.waitForTimeout(300);
-    const st = () => page.evaluate(() => { const b = document.getElementById('dg-pali'); if (!b) return null; const r = b.getBoundingClientRect(); const cs = getComputedStyle(b); return { shown: cs.display !== 'none', bottomGap: Math.round(innerHeight - r.bottom), buttons: [...b.querySelectorAll('button')].map((x) => x.textContent) }; });
+    const st = () => page.evaluate(() => { const b = document.getElementById('dg-pali'); if (!b) return null; const r = b.getBoundingClientRect(); const cs = getComputedStyle(b); return { shown: b.classList.contains('on'), bottomGap: Math.round(innerHeight - r.bottom), buttons: [...b.querySelectorAll('button')].map((x) => x.textContent) }; });
     let s = await st();
     check(`${tag}: row shows with the field's focus`, s && s.shown, JSON.stringify(s));
     check(`${tag}: all Pāli letters are there`, s && ['ā', 'ī', 'ū', 'ṁ', 'ṅ', 'ñ', 'ṭ', 'ḍ', 'ṇ', 'ḷ'].every((c) => s.buttons.includes(c)), JSON.stringify(s && s.buttons));
@@ -58,6 +58,31 @@ const check = (l, ok, d) => { if (!ok) failed++; console.log((ok ? 'ok   ' : 'FA
     await page.evaluate(() => { localStorage.setItem('dgPaliBar', 'off'); window.dispatchEvent(new Event('dg:pali-bar')); });
     s = await st();
     check(`${tag}: the menu switch hides it`, s && !s.shown, JSON.stringify(s));
+    await ctx.close();
+  }
+  // In the app (Capacitor): nothing is drawn until the keyboard reports, then the row slides in; it goes with the keyboard.
+  {
+    const ctx = await browser.newContext({ ...devices['Pixel 7'] });
+    await ctx.addInitScript(() => { window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', Plugins: {} }; });
+    const page = await ctx.newPage();
+    await page.goto(SITE + '/', { waitUntil: 'load' });
+    await page.waitForTimeout(3500);
+    await page.evaluate(BAR);
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.locator('input[type=search], input[type=text]').first().click();
+    await page.waitForTimeout(400);
+    const on = () => page.evaluate(() => { const b = document.getElementById('dg-pali'); return !!b && b.classList.contains('on'); });
+    const visible = () => page.evaluate(() => { const b = document.getElementById('dg-pali'); return !!b && getComputedStyle(b).opacity !== '0'; });
+    check('app: no row before the keyboard has reported (no flash at the bottom)', !(await on()) && !(await visible()), 'on ' + (await on()));
+    await page.evaluate(() => window.__dgIme(300));
+    await page.waitForTimeout(500);
+    check('app: the row slides in once the keyboard is up', await on() && await visible(), '');
+    await page.evaluate(() => window.__dgIme(0));
+    await page.waitForTimeout(500);
+    check('app: the row goes with the keyboard', !(await on()), '');
+    await page.evaluate(() => window.__dgIme(300));
+    await page.waitForTimeout(500);
+    check('app: and comes back with it', await on(), '');
     await ctx.close();
   }
   await browser.close();

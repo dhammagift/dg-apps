@@ -33,22 +33,23 @@ async function target() {
   const ev = (expression) => new Promise((r) => { const i = ++id; waiting[i] = r; ws.send(JSON.stringify({ id: i, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } })); })
     .then((d) => (d.result && d.result.result ? d.result.result.value : d.error));
   const state = () => ev(`(function(){
-    var a = Array.prototype.slice.call(document.querySelectorAll('audio')).concat(window.sharedGoogleAudio ? [window.sharedGoogleAudio] : []);
-    var speech = a.filter(function (x) { return !/silence/.test(x.src) && !/^data:/.test(x.src) && x.src; });
+    function a(x) { return x ? (x.paused ? 'paused@' : 'playing@') + Math.round(x.currentTime * 10) / 10 : null; }
+    var ts = (typeof ttsState !== 'undefined') ? ttsState : {};
+    var shared = window.sharedGoogleAudio;
     return JSON.stringify({ mediaSession: navigator.mediaSession && navigator.mediaSession.playbackState,
-      speechAudio: speech.map(function (x) { return (x.paused ? 'paused@' : 'playing@') + Math.round(x.currentTime * 10) / 10; }),
-      silence: a.filter(function (x) { return /silence/.test(x.src); }).map(function (x) { return x.paused ? 'paused' : 'playing'; }),
-      playBtnOn: Array.prototype.map.call(document.querySelectorAll('.play-main-button'), function (b) { return b.classList.contains('on'); }),
-      hasPlayer: !!document.querySelector('.play-main-button'), url: location.pathname });
+      googleAudio: a(ts.googleAudio), sharedGoogleAudio: shared && shared.src && !/^data:/.test(shared.src) ? a(shared) : null,
+      silence: (typeof silenceAudio !== 'undefined') ? a(silenceAudio) : null,
+      speaking: !!ts.speaking, paused: !!ts.paused, playBtnOn: Array.prototype.map.call(document.querySelectorAll('.play-main-button'), function (b) { return b.classList.contains('on'); }) });
   })()`);
+  const audible = (o) => [o.googleAudio, o.sharedGoogleAudio].some((x) => x && x.startsWith('playing@'));
 
   // 1. read aloud
   say('start: ' + await ev(`(function(){ var l = document.querySelector('.voice-link'); if (!l) return 'no .voice-link'; l.click(); return 'clicked'; })()`));
   let s;
-  for (let i = 0; i < 30; i++) { await sleep(2000); s = await state(); const o = JSON.parse(s); if (o.speechAudio.some((x) => x.startsWith('playing@')) && o.mediaSession === 'playing') break; }
+  for (let i = 0; i < 30; i++) { await sleep(2000); s = await state(); const o = JSON.parse(s); if (audible(o) && o.mediaSession === 'playing') break; }
   say('reading: ' + s);
   const playing0 = JSON.parse(s);
-  const reading = playing0.mediaSession === 'playing' && playing0.speechAudio.some((x) => x.startsWith('playing@'));
+  const reading = playing0.mediaSession === 'playing' && audible(playing0);
   say(reading ? 'PASS the page is reading aloud' : 'FAIL the page did not start reading');
 
   // 2. taps on the notification shade
@@ -59,12 +60,16 @@ async function target() {
   }
   function tap(xml, names, tag) {
     fs.writeFileSync(`${OUT}/shade-${tag}.xml`, xml);
-    const re = /<node[^>]*?(?:text|content-desc)="([^"]*)"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*>/g;
-    let m, found = null; const seen = [];
-    while ((m = re.exec(xml))) { seen.push(m[1]); if (!found && names.test(m[1])) found = m; }
-    if (!found) { say('shade (' + tag + ') has no ' + names + '; labels seen: ' + seen.filter(Boolean).slice(0, 25).join(' | ')); return false; }
-    const x = Math.round((+found[2] + +found[4]) / 2), y = Math.round((+found[3] + +found[5]) / 2);
-    sh(`adb shell input tap ${x} ${y}`); say(`tapped "${found[1]}" at ${x},${y}`); return true;
+    let found = null; const seen = [];
+    for (const m of xml.matchAll(/<node[^>]*>/g)) {
+      const at = Object.fromEntries([...m[0].matchAll(/([\w-]+)="([^"]*)"/g)].map((k) => [k[1], k[2]]));
+      const label = at['content-desc'] || at.text || '';
+      if (label) seen.push(label);
+      if (!found && at.bounds && names.test(label) && at.clickable === 'true') found = { label, b: at.bounds.match(/\d+/g).map(Number) };
+    }
+    if (!found) { say('shade (' + tag + ') has no ' + names + '; labels seen: ' + seen.slice(0, 30).join(' | ')); return false; }
+    const x = Math.round((found.b[0] + found.b[2]) / 2), y = Math.round((found.b[1] + found.b[3]) / 2);
+    sh(`adb shell input tap ${x} ${y}`); say(`tapped "${found.label}" at ${x},${y}`); return true;
   }
   const collapse = () => { try { sh('adb shell cmd statusbar collapse'); } catch (e) { /* ignore */ } };
 
@@ -73,15 +78,17 @@ async function target() {
   await sleep(2000); collapse();
   s = await state(); say('after Pause: ' + s);
   const o1 = JSON.parse(s);
-  const paused = o1.mediaSession === 'paused' && !o1.speechAudio.some((x) => x.startsWith('playing@'));
+  const paused = o1.mediaSession === 'paused' && !audible(o1);
   say(pausedTap && paused ? 'PASS Pause in the notification pauses the reading' : 'FAIL Pause in the notification did not pause the reading');
 
+  try { fs.writeFileSync(`${OUT}/focus-after-pause.txt`, sh('adb shell dumpsys audio | grep -iA25 "Audio Focus stack"')); } catch (e) { /* ignore */ }
   xml = shade('2-play');                    // right away, as the owner does it
   const playTap = tap(xml, /^play$/i, '2-play');
   await sleep(3000); collapse();
   s = await state(); say('after Play: ' + s);
+  try { fs.writeFileSync(`${OUT}/focus-after-play.txt`, sh('adb shell dumpsys audio | grep -iA25 "Audio Focus stack"')); fs.writeFileSync(`${OUT}/media-session.txt`, sh('adb shell dumpsys media_session | head -120')); } catch (e) { /* ignore */ }
   const o2 = JSON.parse(s);
-  const resumed = o2.mediaSession === 'playing' && o2.speechAudio.some((x) => x.startsWith('playing@'));
+  const resumed = o2.mediaSession === 'playing' && audible(o2);
   say(playTap && resumed ? 'PASS Play in the notification resumes the reading' : 'FAIL Play in the notification did not resume the reading');
 
   fs.writeFileSync(`${OUT}/tray-result.txt`, res.join('\n') + '\n');

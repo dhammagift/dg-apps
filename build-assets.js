@@ -82,6 +82,7 @@ const ASSETS = [
     { url: '/assets/js/bootstrap.bundle.5.3.1.min.js', sources: [l('js/bootstrap.bundle.5.3.1.min.js')] },
     { url: '/assets/js/openFdg.js', sources: [l('js/openFdg.js')] },
     { url: '/assets/js/smoothScroll.js', sources: [f('public/overrides/js/smoothScroll.js')] },
+    { url: '/assets/js/theme-reveal.js', sources: [f('public/overrides/js/theme-reveal.js')] },
     { url: '/assets/js/langswitch.js', sources: [f('public/overrides/js/langswitch.js')] },
     { url: '/assets/js/themeswitch.js', sources: [l('js/themeswitch.js')] },
     { url: '/assets/js/openDicts.js', sources: [l('js/openDicts.js')] },

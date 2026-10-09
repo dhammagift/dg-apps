@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The Favorites & History shortcut as an adaptive icon: a light compass (Font Awesome) on the dark ground of the Dhamma.Gift
+<!-- The Favorites & History shortcut as an adaptive icon: a teal compass (Font Awesome) on the blue ground of the Dhamma.Gift
      logo, which the launcher cuts to its own shape and fills edge to edge (a plain bitmap got a white badge with margins and the
-     glyph looked small). Android 7 (24-25) has no adaptive icons: the drawable-*dpi/shortcut_0.png discs are for it. -->
+     glyph looked small). Android 7 (24-25) has no adaptive icons: the drawable-*dpi/shortcut_0.png rounded squares are for it. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background><color android:color="#1C1D21"/></background>
+    <background><color android:color="#2E3E50"/></background>
     <foreground android:drawable="@drawable/shortcut_0_fg"/>
 </adaptive-icon>

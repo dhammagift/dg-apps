@@ -1294,6 +1294,36 @@
                     console.error('[dg-version] clipboard write failed', e);
                 });
             });
+            addCheckButton(text);
+        }
+
+        // The dictionary's version row has this button: the site files are refreshed by the page that owns the updater (the home page; settings is a
+        // sheet over it), so the button asks that window. No updater there (a browser, or settings opened alone): no button.
+        function addCheckButton(text) {
+            var top = window.top || window;
+            var check = top.__dgSiteCheckSay;
+            if (!check || document.getElementById('dgAppVersionCheck')) return;
+            var ru = isRu();
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn';
+            btn.id = 'dgAppVersionCheck';
+            btn.innerHTML = '<svg viewBox="0 0 512 512" width="12" height="12" aria-hidden="true" style="flex:none;margin-right:6px"><path fill="currentColor" d="M65.9 228.5c13.3-93 93.4-164.5 190.1-164.5 53 0 101 21.5 135.8 56.2 .2 .2 .4 .4 .6 .6l7.6 7.2-47.9 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l128 0c17.7 0 32-14.3 32-32l0-128c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 53.4-11.3-10.7C390.5 28.6 326.5 0 256 0 127 0 20.3 95.4 2.6 219.5 .1 237 12.2 253.2 29.7 255.7s33.7-9.7 36.2-27.1zm443.5 64c2.5-17.5-9.7-33.7-27.1-36.2s-33.7 9.7-36.2 27.1c-13.3 93-93.4 164.5-190.1 164.5-53 0-101-21.5-135.8-56.2-.2-.2-.4-.4-.6-.6l-7.6-7.2 47.9 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 320c-8.5 0-16.7 3.4-22.7 9.5S-.1 343.7 0 352.3l1 127c.1 17.7 14.6 31.9 32.3 31.7S65.2 496.4 65 478.7l-.4-51.5 10.7 10.1c46.3 46.1 110.2 74.7 180.7 74.7 129 0 235.7-95.4 253.4-219.5z"/></svg>';
+            btn.appendChild(document.createTextNode(ru ? 'проверить' : 'check'));
+            btn.style.cssText = 'display:inline-flex;align-items:center';
+            var ctl = document.createElement('div');
+            ctl.className = 'row-control';
+            ctl.appendChild(btn);
+            row.appendChild(ctl);
+            var busy = false;
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();   // the row itself copies the version
+                if (busy) return;
+                busy = true;
+                var icon = btn.firstChild;
+                var spin = icon.animate ? icon.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: 800, iterations: Infinity }) : null;
+                check(function (m) { if (desc) desc.textContent = text + ' · ' + m; }).then(function () { busy = false; if (spin) spin.cancel(); });
+            });
         }
 
         function fromBuildFile() {

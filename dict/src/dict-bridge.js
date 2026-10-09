@@ -311,16 +311,13 @@
     vbtn.appendChild(document.createTextNode(t.verBtn));
     ver.appendChild(vbtn);
     ver.addEventListener('click', function () {
-      var check = window.__dgCheckSiteUpdate;
+      var check = window.__dgSiteCheckSay;
       var em = ver.querySelector('em');
       if (!check || ver.__busy) return;
       ver.__busy = true;
       var say = function (m) { em.textContent = (verText ? verText + ' · ' : '') + m; };
-      say(t.verBusy);
       var spin = vbtn.firstChild.animate ? vbtn.firstChild.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: 800, iterations: Infinity }) : null;
-      check().then(function (r) {
-        say({ new: t.verNew, current: t.verCurrent, offline: t.verOffline }[r.state] || t.verFailed);
-      }, function () { say(t.verFailed); }).then(function () { ver.__busy = false; if (spin) spin.cancel(); });
+      check(say).then(function () { ver.__busy = false; if (spin) spin.cancel(); });
     });
     out.push(ver);
 

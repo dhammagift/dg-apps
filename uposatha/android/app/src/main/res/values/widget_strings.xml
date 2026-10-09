@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_label">Uposatha</string>
+    <string name="widget_description">Next Uposatha, kala and the moon on the home screen</string>
+    <string name="widget_cd">Uposatha widget</string>
+</resources>

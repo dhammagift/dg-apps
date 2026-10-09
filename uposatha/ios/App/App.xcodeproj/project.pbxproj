@@ -7,6 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E7B1D0F1000000090072D4E8 /* UposathaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000010072D4E8 /* UposathaWidget.swift */; };
+		E7B1D0F10000000A0072D4E8 /* WidgetModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000020072D4E8 /* WidgetModel.swift */; };
+		E7B1D0F10000000B0072D4E8 /* WidgetStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000030072D4E8 /* WidgetStrings.swift */; };
+		E7B1D0F10000000C0072D4E8 /* WidgetTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000040072D4E8 /* WidgetTheme.swift */; };
+		E7B1D0F10000000D0072D4E8 /* MoonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000050072D4E8 /* MoonView.swift */; };
+		E7B1D0F10000000E0072D4E8 /* WidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000060072D4E8 /* WidgetViews.swift */; };
+		E7B1D0F10000000F0072D4E8 /* WidgetLockViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000070072D4E8 /* WidgetLockViews.swift */; };
+		E7B1D0F1000000100072D4E8 /* SwitchLayerIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000080072D4E8 /* SwitchLayerIntent.swift */; };
+		E7B1D0F1000000120072D4E8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000110072D4E8 /* Assets.xcassets */; };
+		E7B1D0F1000000140072D4E8 /* widget-sample.json in Resources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000130072D4E8 /* widget-sample.json */; };
+		E7B1D0F1000000180072D4E8 /* UposathaWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000170072D4E8 /* UposathaWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D6A0C0DE2FEA00050072D4E8 /* DgSelfTestPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A0C0DE2FEA00040072D4E8 /* DgSelfTestPlugin.swift */; };
 		D6A0C0DE2FEA00020072D4E8 /* DgApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A0C0DE2FEA00010072D4E8 /* DgApp.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
@@ -20,7 +31,44 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		E7B1D0F1000000220072D4E8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E7B1D0F10000001A0072D4E8;
+			remoteInfo = UposathaWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E7B1D0F1000000210072D4E8 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				E7B1D0F1000000180072D4E8 /* UposathaWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		E7B1D0F1000000010072D4E8 /* UposathaWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UposathaWidget.swift; sourceTree = "<group>"; };
+		E7B1D0F1000000020072D4E8 /* WidgetModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetModel.swift; sourceTree = "<group>"; };
+		E7B1D0F1000000030072D4E8 /* WidgetStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetStrings.swift; sourceTree = "<group>"; };
+		E7B1D0F1000000040072D4E8 /* WidgetTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetTheme.swift; sourceTree = "<group>"; };
+		E7B1D0F1000000050072D4E8 /* MoonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoonView.swift; sourceTree = "<group>"; };
+		E7B1D0F1000000060072D4E8 /* WidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetViews.swift; sourceTree = "<group>"; };
+		E7B1D0F1000000070072D4E8 /* WidgetLockViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetLockViews.swift; sourceTree = "<group>"; };
+		E7B1D0F1000000080072D4E8 /* SwitchLayerIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchLayerIntent.swift; sourceTree = "<group>"; };
+		E7B1D0F1000000110072D4E8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E7B1D0F1000000130072D4E8 /* widget-sample.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "widget-sample.json"; sourceTree = "<group>"; };
+		E7B1D0F1000000150072D4E8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E7B1D0F1000000160072D4E8 /* UposathaWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = UposathaWidget.entitlements; sourceTree = "<group>"; };
+		E7B1D0F1000000170072D4E8 /* UposathaWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UposathaWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D6A0C0DE2FEA00040072D4E8 /* DgSelfTestPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgSelfTestPlugin.swift; sourceTree = "<group>"; };
 		D6A0C0DE2FEA00010072D4E8 /* DgApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgApp.swift; sourceTree = "<group>"; };
 		D6A0C0DE2FEA00030072D4E8 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
@@ -46,6 +94,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E7B1D0F10000001F0072D4E8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -54,6 +109,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				E7B1D0F1000000190072D4E8 /* UposathaWidget */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -62,6 +118,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				E7B1D0F1000000170072D4E8 /* UposathaWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -85,6 +142,25 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		E7B1D0F1000000190072D4E8 /* UposathaWidget */ = {
+			isa = PBXGroup;
+			children = (
+				E7B1D0F1000000010072D4E8 /* UposathaWidget.swift */,
+				E7B1D0F1000000020072D4E8 /* WidgetModel.swift */,
+				E7B1D0F1000000030072D4E8 /* WidgetStrings.swift */,
+				E7B1D0F1000000040072D4E8 /* WidgetTheme.swift */,
+				E7B1D0F1000000050072D4E8 /* MoonView.swift */,
+				E7B1D0F1000000060072D4E8 /* WidgetViews.swift */,
+				E7B1D0F1000000070072D4E8 /* WidgetLockViews.swift */,
+				E7B1D0F1000000080072D4E8 /* SwitchLayerIntent.swift */,
+				E7B1D0F1000000110072D4E8 /* Assets.xcassets */,
+				E7B1D0F1000000130072D4E8 /* widget-sample.json */,
+				E7B1D0F1000000150072D4E8 /* Info.plist */,
+				E7B1D0F1000000160072D4E8 /* UposathaWidget.entitlements */,
+			);
+			path = UposathaWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -95,10 +171,12 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				E7B1D0F1000000210072D4E8 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E7B1D0F1000000230072D4E8 /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -107,6 +185,23 @@
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		E7B1D0F10000001A0072D4E8 /* UposathaWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E7B1D0F10000001B0072D4E8 /* Build configuration list for PBXNativeTarget "UposathaWidget" */;
+			buildPhases = (
+				E7B1D0F10000001E0072D4E8 /* Sources */,
+				E7B1D0F10000001F0072D4E8 /* Frameworks */,
+				E7B1D0F1000000200072D4E8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = UposathaWidget;
+			productName = UposathaWidget;
+			productReference = E7B1D0F1000000170072D4E8 /* UposathaWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -120,6 +215,10 @@
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
+						ProvisioningStyle = Automatic;
+					};
+					E7B1D0F10000001A0072D4E8 = {
+						CreatedOnToolsVersion = 15.0;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -141,6 +240,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				E7B1D0F10000001A0072D4E8 /* UposathaWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -159,6 +259,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E7B1D0F1000000200072D4E8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E7B1D0F1000000120072D4E8 /* Assets.xcassets in Resources */,
+				E7B1D0F1000000140072D4E8 /* widget-sample.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -173,7 +282,30 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E7B1D0F10000001E0072D4E8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E7B1D0F1000000090072D4E8 /* UposathaWidget.swift in Sources */,
+				E7B1D0F10000000A0072D4E8 /* WidgetModel.swift in Sources */,
+				E7B1D0F10000000B0072D4E8 /* WidgetStrings.swift in Sources */,
+				E7B1D0F10000000C0072D4E8 /* WidgetTheme.swift in Sources */,
+				E7B1D0F10000000D0072D4E8 /* MoonView.swift in Sources */,
+				E7B1D0F10000000E0072D4E8 /* WidgetViews.swift in Sources */,
+				E7B1D0F10000000F0072D4E8 /* WidgetLockViews.swift in Sources */,
+				E7B1D0F1000000100072D4E8 /* SwitchLayerIntent.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E7B1D0F1000000230072D4E8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E7B1D0F10000001A0072D4E8 /* UposathaWidget */;
+			targetProxy = E7B1D0F1000000220072D4E8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -350,6 +482,51 @@
 			};
 			name = Release;
 		};
+		E7B1D0F10000001C0072D4E8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = UposathaWidget/UposathaWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = UposathaWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = gift.dhamma.uposatha.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E7B1D0F10000001D0072D4E8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = UposathaWidget/UposathaWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = UposathaWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = gift.dhamma.uposatha.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -367,6 +544,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E7B1D0F10000001B0072D4E8 /* Build configuration list for PBXNativeTarget "UposathaWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E7B1D0F10000001C0072D4E8 /* Debug */,
+				E7B1D0F10000001D0072D4E8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

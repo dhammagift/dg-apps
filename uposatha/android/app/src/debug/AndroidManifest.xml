@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug builds only (not in release): shows the widget's pictures without a launcher.
+         Start: adb shell am start -n gift.dhamma.uposatha/.WidgetPreviewActivity ; optional extras: size (s, m, l), theme (light, dark),
+         layer (0, 1, 2), scenario (N), given as: es size m, es theme dark, ei layer 1, ei scenario 2 -->
+    <application android:largeHeap="true">
+        <activity android:name=".WidgetPreviewActivity" android:exported="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+    </application>
+</manifest>

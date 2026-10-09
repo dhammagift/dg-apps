@@ -70,6 +70,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgInsetsPlugin.class);
         // The system share sheet behind the page's navigator.share (the WebView has none).
         registerPlugin(DgSharePlugin.class);
+        // The home-screen widget's data (WidgetProvider draws it, uposatha/widget/WIDGET.md).
+        registerPlugin(DgWidgetPlugin.class);
         // No DgBars any more (dg-apps#41): the page runs edge to edge under transparent system bars
         // (viewport-fit=cover, set by uposatha-bridge.js; capacitor.config.json -> SystemBars passes
         // the insets through to the page).

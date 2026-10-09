@@ -26,6 +26,17 @@
 	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Uposatha uses your place to work out the real sunrise and sunset for the day's parts and the Uposatha times. The place stays on your device.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>gift.dhamma.uposatha</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gift.dhamma.uposatha</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

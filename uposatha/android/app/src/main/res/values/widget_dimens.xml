@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The month layer's grid on the medium and large widget: WidgetRenderer.monthGeo turns these into the picture's geometry
+         and WidgetProvider puts the tap targets (res/layout/widget_grid.xml) at the same place. -->
+    <dimen name="w_m_grid_left">164dp</dimen>
+    <dimen name="w_m_grid_right">16dp</dimen>
+    <dimen name="w_m_grid_top">14dp</dimen>
+    <dimen name="w_m_grid_head">12dp</dimen>
+    <dimen name="w_m_grid_reserve">22dp</dimen>
+    <dimen name="w_l_grid_left">18dp</dimen>
+    <dimen name="w_l_grid_right">18dp</dimen>
+    <dimen name="w_l_grid_top">42dp</dimen>
+    <dimen name="w_l_grid_head">18dp</dimen>
+    <!-- the tallest a row of the large grid gets -->
+    <dimen name="w_l_grid_pitch">33dp</dimen>
+    <!-- The tap area of the dots (bottom of the widget, over the whole width). -->
+    <dimen name="w_dots_h">48dp</dimen>
+    <dimen name="w_dots_h_l">64dp</dimen>
+</resources>

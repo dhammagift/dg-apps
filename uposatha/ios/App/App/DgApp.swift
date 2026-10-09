@@ -1,6 +1,7 @@
 import UIKit
 import WebKit
 import UserNotifications
+import WidgetKit
 import Capacitor
 
 // Everything of the app that is not an npm plugin, in one file: the bridge view controller, the reminders (DgNotify) and
@@ -164,6 +165,7 @@ class DgBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(DgSitePlugin())
         bridge?.registerPluginInstance(DgInsetsPlugin())
         bridge?.registerPluginInstance(DgSharePlugin())
+        bridge?.registerPluginInstance(DgWidgetPlugin())
         #if DEBUG
         // Debug builds only, for the same reason as Dhamma.Gift's DgSelfTestPlugin: the App Store screenshot
         // tour (test/ios-sim/tour.js) needs one native call to say which view is on screen; a release build's
@@ -567,6 +569,28 @@ public class DgShortcutsPlugin: CAPPlugin, CAPBridgedPlugin {
         current?.notifyListeners("shortcut", data: ["route": route])
     }
 
+    // A tap in a home-screen / lock-screen widget (SceneDelegate): gift.dhamma.uposatha://open?tab=home|parts|cal|list[&day=YYYY-MM-DD],
+    // or gift.dhamma.uposatha://route?path=/uposatha-calendar... . It becomes the same route a quick action carries.
+    static func deliver(url: URL) {
+        guard url.scheme == "gift.dhamma.uposatha", let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        let items = parts.queryItems ?? []
+        func query(_ name: String) -> String? { items.first(where: { $0.name == name })?.value }
+        var route: String
+        if let path = query("path"), path.hasPrefix("/uposatha-calendar") {
+            route = path
+        } else {
+            let tab = ["home", "parts", "cal", "list"].contains(query("tab") ?? "") ? (query("tab") ?? "home") : "home"
+            route = "/uposatha-calendar?app=1&tab=\(tab)"
+            if let day = query("day"), day.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil {
+                route += "&day=\(day)"
+            }
+        }
+        // A changing tail, so the page's "same route as now: do nothing" check never swallows a tap that is meant to switch tabs.
+        route += (route.contains("?") ? "&" : "?") + "w=\(Int(Date().timeIntervalSince1970))"
+        pendingRoute = route
+        current?.notifyListeners("shortcut", data: ["route": route])
+    }
+
     @objc func launchRoute(_ call: CAPPluginCall) {
         let route = Self.pendingRoute
         Self.pendingRoute = nil
@@ -590,5 +614,38 @@ public class DgShortcutsPlugin: CAPPlugin, CAPBridgedPlugin {
             UIApplication.shared.shortcutItems = shortcuts
             call.resolve(["count": shortcuts.count])
         }
+    }
+}
+
+// MARK: - Widget
+
+// The home-screen / lock-screen widget (the UposathaWidget extension) lays out the data the page builds (window.__upoWidgetData,
+// uposatha/widget/WIDGET.md): the page hands it over after each paint,
+//
+//     Capacitor.Plugins.DgWidget.put({ json: "<the object as a string>" })
+//
+// and it is kept in the App Group the extension reads (UserDefaults key "data"). The widget calculates nothing itself.
+@objc(DgWidgetPlugin)
+public class DgWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "DgWidgetPlugin"
+    public let jsName = "DgWidget"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "put", returnType: CAPPluginReturnPromise)
+    ]
+
+    static let appGroup = "group.gift.dhamma.uposatha"
+
+    @objc func put(_ call: CAPPluginCall) {
+        guard let json = call.getString("json"), !json.isEmpty else {
+            call.reject("json is required")
+            return
+        }
+        guard let defaults = UserDefaults(suiteName: Self.appGroup) else {
+            call.reject("the App Group is not available")
+            return
+        }
+        defaults.set(json, forKey: "data")
+        WidgetCenter.shared.reloadAllTimelines()
+        call.resolve()
     }
 }

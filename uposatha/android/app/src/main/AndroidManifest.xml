@@ -35,6 +35,21 @@
             </intent-filter>
         </receiver>
 
+        <!-- The home-screen widget (WidgetProvider): three layers, three sizes, drawn from the data DgWidgetPlugin keeps. Not exported: the
+             system sends its own broadcasts to it; the taps are PendingIntents of this app. The extra actions re-plan the redraws after a
+             reboot, an update of the app, or a change of the clock or the zone (the counter runs on the clock). The reminders'
+             receiver above is separate and untouched. -->
+        <receiver android:name=".WidgetProvider" android:label="@string/widget_label" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
+        </receiver>
+
         <!-- DgSound: the sound the reader picked for the reminders. The file is copied into the app's
              own files/sounds/ and handed to the system UI (which plays a notification channel's
              sound) as a content:// URI of this provider. -->

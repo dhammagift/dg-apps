@@ -2,12 +2,35 @@
 # Screens of the built Dhamma.Gift APK on an Android emulator (workflow android-screens.yml), so a
 # change can be looked at on a real Android WebView before it reaches the owner or a store
 # (owner, 2026-09-29: "сними себе сам ... проверь, пришли скриншоты").
-# Usage: tools/emu-screens.sh <apk> <out-dir> [package] [screens|shortcuts|edgetoedge|tray]
+# Usage: tools/emu-screens.sh <apk> <out-dir> [package] [screens|shortcuts|edgetoedge|tray|widget]
 set -u
 APK=$1; OUT=$2; PKG=${3:-gift.dhamma.mobile}
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$OUT"
 adb install -r "$APK" || exit 1
+# Widget (Uposatha): the home-screen widget's renderer, looked at on a real Android. A launcher cannot be driven reliably
+# from adb, so the debug build carries WidgetPreviewActivity, which draws every layer in every size, light and dark, with the
+# very class the widget uses (WidgetRenderer) from a sample of the page's data. Needs the DEBUG apk.
+if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = widget ]; then
+  res="$OUT/widget-result.txt"; : > "$res"
+  for theme in light dark; do
+    adb shell cmd uimode night "$([ "$theme" = dark ] && echo yes || echo no)" > /dev/null 2>&1
+    adb shell am force-stop "$PKG"
+    adb shell am start -n "$PKG/.WidgetPreviewActivity" > "$OUT/start-$theme.txt" 2>&1
+    sleep 8
+    if ! adb shell dumpsys activity activities | grep -q "WidgetPreviewActivity"; then echo "FAIL preview activity did not start ($theme)" >> "$res"; fi
+    for i in 1 2 3 4 5 6 7 8; do
+      adb exec-out screencap -p > "$OUT/widget-$theme-$i.png" 2>/dev/null
+      adb shell input swipe 540 1900 540 500 400; sleep 1.5
+    done
+    adb logcat -d -s AndroidRuntime:E > "$OUT/crash-$theme.txt" 2>/dev/null
+    if [ -s "$OUT/crash-$theme.txt" ] && grep -q "FATAL" "$OUT/crash-$theme.txt"; then echo "FAIL crash while drawing ($theme)" >> "$res"; else echo "PASS drawn without a crash ($theme)" >> "$res"; fi
+  done
+  adb shell cmd uimode night no > /dev/null 2>&1
+  cat "$res"
+  grep -q "^FAIL" "$res" && exit 1
+  exit 0
+fi
 # Edge to edge (dg-apps#41): the Uposatha app must run UNDER the transparent system bars instead of
 # showing the painted strips the DgBars plugin used to draw. Only a real device answers whether it
 # does — the WebView's own env(safe-area-inset-*), the status bar's transparency and the window

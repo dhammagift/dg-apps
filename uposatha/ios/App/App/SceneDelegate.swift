@@ -13,6 +13,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         // The app was started by a quick action: its route waits until the page asks for it.
         if let item = connectionOptions.shortcutItem { DgShortcutsPlugin.deliver(item) }
+        // ... or by a tap in a widget (a gift.dhamma.uposatha:// link).
+        if let url = connectionOptions.urlContexts.first?.url { DgShortcutsPlugin.deliver(url: url) }
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
     }
@@ -23,6 +25,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        if let url = URLContexts.first?.url { DgShortcutsPlugin.deliver(url: url) }
         SceneDelegateProxy.shared.scene(scene, openURLContexts: URLContexts)
     }
 

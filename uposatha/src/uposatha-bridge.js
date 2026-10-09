@@ -924,6 +924,28 @@
     else window.addEventListener('load', afterLoad, { once: true });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') pushShortcuts(); });
     if (!IOS) maybeAskForRating();   // (iOS: when the App Store listing exists and has its address)
+    wireWidget();
+  }
+
+  // ---- the home-screen widget ----------------------------------------------------------------------
+  // The widget calculates nothing: the page (window.__upoWidgetData, uposatha-calendar.js) says what it shows, and after each paint
+  // (the page fires upo:painted) the app hands that to the native side (DgWidget.put), which keeps it where the widget can read it and
+  // redraws the widgets. Same data on Android (SharedPreferences) and iOS (App Group). The contract is uposatha/widget/WIDGET.md.
+  function wireWidget() {
+    var W = Cap.Plugins && Cap.Plugins.DgWidget, timer = 0, last = '';
+    if (!W || typeof W.put !== 'function') return;
+    function push() {
+      var data;
+      try { data = window.__upoWidgetData && window.__upoWidgetData(); } catch (e) { console.log('[dg-widget] data failed:', e && e.message); return; }
+      if (!data) return;
+      var json = JSON.stringify(data);
+      if (json === last) return;   // nothing changed since the last hand-over: no redraw
+      last = json;
+      W.put({ json: json }).catch(function (e) { last = ''; console.log('[dg-widget] put failed:', (e && e.message) || e); });
+    }
+    document.addEventListener('upo:painted', function () { clearTimeout(timer); timer = setTimeout(push, 1500); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') push(); });
+    // A tap in the widget opens the app on a tab (deep link ?tab=home|parts|cal, see the widget's click intents); the page reads it itself.
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);

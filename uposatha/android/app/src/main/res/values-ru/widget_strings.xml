@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_label">Uposatha</string>
+    <string name="widget_description">Ближайшая упосатха, kala и луна на главном экране</string>
+    <string name="widget_cd">Виджет Uposatha</string>
+</resources>

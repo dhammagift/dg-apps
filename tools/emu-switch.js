@@ -44,7 +44,6 @@ async function target() {
   const openDn22 = () => ev(`(function(){ var i = document.getElementById('paliauto'); if (!i) return 'no #paliauto';
     i.value = 'dn22'; i.dispatchEvent(new Event('input', { bubbles: true }));
     var b = document.getElementById('searchbtn'); if (!b) return 'no #searchbtn'; b.click(); return 'submitted'; })()`);
-  const isDn = (x) => x && /^dn22/i.test(x);
 
   for (const scenario of ['playing', 'paused']) {
     say('=== ' + scenario + ': sn12.2 -> dn22 in the search box');
@@ -64,12 +63,13 @@ async function target() {
     fs.writeFileSync(`${OUT}/switch-${scenario}-after.json`, JSON.stringify(s));
     check(/dn22/i.test(s.slugOnPage || '') || /dn22/i.test(s.url), 'dn22 is on the page (' + s.url + ', slug ' + s.slugOnPage + ')');
     check(!(s.googleAudio && s.googleAudio.startsWith('playing@')), 'the old sutta is not playing any more');
-    check(!s.listLen || isDn(s.current), 'the playlist was dropped or belongs to dn22 (list ' + s.listLen + ', current ' + s.current + ')');
+    check(!s.listLen || /dn22/i.test(s.ttsSlug || ''), 'the playlist was dropped or belongs to dn22 (list ' + s.listLen + ', slug ' + s.ttsSlug + ')');
     // Play: the main button, then what it reads
     say('play: ' + await ev(`(function(){ var b = document.querySelector('.play-main-button'); if (!b) return 'no button'; b.click(); return 'clicked'; })()`));
     for (let i = 0; i < 15; i++) { await sleep(2000); s = await state(); if (s.googleAudio && s.googleAudio.startsWith('playing@')) break; }
     say('after Play: ' + JSON.stringify(s));
-    check(isDn(s.current) && /dn22/i.test(s.ttsSlug || ''), 'Play reads dn22 (current ' + s.current + ', slug ' + s.ttsSlug + ')');
+    // segment ids are bare ('0.1'), so the sutta is told by the player's slug and by the list length (dn22 has far more segments than sn12.2: 393 vs 79)
+    check(/dn22/i.test(s.ttsSlug || '') && s.listLen > 200, 'Play reads dn22 (slug ' + s.ttsSlug + ', ' + s.listLen + ' segments)');
     await ev(`typeof stopPlayback === 'function' && stopPlayback()`);
   }
   fs.writeFileSync(`${OUT}/switch-result.txt`, res.join('\n') + '\n');

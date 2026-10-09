@@ -57,6 +57,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgProgressPlugin.class);
         registerPlugin(DgDownloadPlugin.class);
         registerPlugin(DgTtsPlugin.class);
+        // Files of the site downloaded after the build (scripts, styles, icons), served in front of the bundled ones.
+        registerPlugin(DgSitePlugin.class);
         // Native Google sign-in (dg-apps#43): the account sheet, not a browser page with a second button.
         registerPlugin(DgGoogleSignInPlugin.class);
         // OS-level search: the offline library's metadata into Android's own AppSearch, so a sutta
@@ -91,6 +93,11 @@ public class MainActivity extends BridgeActivity {
             // same place opens through the root's _nativeRoute handoff. The main frame only: Capacitor's
             // listeners hear every failed image too, and one of those must not reload the page.
             getBridge().setWebViewClient(new BridgeWebViewClient(getBridge()) {
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    WebResourceResponse downloaded = DgSitePlugin.serve(MainActivity.this, request);
+                    return downloaded != null ? downloaded : super.shouldInterceptRequest(view, request);
+                }
                 @Override
                 public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                     if (request.isForMainFrame() && reopenThroughRoot(view, request.getUrl())) return;

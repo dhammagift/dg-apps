@@ -134,6 +134,8 @@ class DgBridgeViewController: CAPBridgeViewController {
         // Native sign-in (DgSignInPlugin.swift): Apple's own sheet, and Google's in the system sign-in
         // sheet — instead of a browser page that never came back on iOS (dg-apps#43).
         bridge?.registerPluginInstance(DgSignInPlugin())
+        // Files of the site downloaded after the build, answered in front of the bundled ones (DgSitePlugin.swift).
+        bridge?.registerPluginInstance(DgSitePlugin())
 
         #if DEBUG
         // Debug builds only, and deliberately so: this plugin lets the page write a file into the
@@ -164,6 +166,7 @@ final class DgSchemeRouter: NSObject, WKURLSchemeHandler {
     }
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        if !isSql(urlSchemeTask), DgSiteStore.answer(urlSchemeTask) { return }
         (isSql(urlSchemeTask) ? sql : inner).webView(webView, start: urlSchemeTask)
     }
 

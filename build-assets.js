@@ -26,6 +26,15 @@ const fs = require('fs');
 const path = require('path');
 const { NODEJS_ROOT, LEGACY_ASSETS, WWW, SRC, requireNodeRoot, f, l } = require('./paths');
 
+// Every file this script copies is hashed right after the copy: writeSiteManifest() calls a file "verbatim" (the site serves the very
+// same bytes, so the app may take a newer copy from the site) only if it is still what the copy made.
+const copiedHash = new Map();
+const copyFileSyncPlain = fs.copyFileSync;
+fs.copyFileSync = function (src, dest, ...rest) {
+    copyFileSyncPlain.call(fs, src, dest, ...rest);
+    try { copiedHash.set(path.resolve(dest), require('crypto').createHash('sha256').update(fs.readFileSync(dest)).digest('hex')); } catch (e) { /* not recorded: not verbatim */ }
+};
+
 // The legacy repo's ROOT (paths.js exposes its assets/ dir; /read/** and /memorize/** live beside
 // it, not inside it).
 const LEGACY_ROOT = path.dirname(LEGACY_ASSETS);
@@ -623,7 +632,20 @@ const SITE_ONLY_PATHS = (() => {
 function copyNative(name, to) {
     const head = (ONLINE_ORIGIN ? `window.DG_ONLINE_ORIGIN = ${JSON.stringify(ONLINE_ORIGIN)};\n` : '') +
         `window.DG_SITE_ONLY_PATHS = ${JSON.stringify(SITE_ONLY_PATHS)};\n`;
-    fs.writeFileSync(to, head + fs.readFileSync(path.join(SRC, name), 'utf8'));
+    const body = fs.readFileSync(path.join(SRC, name), 'utf8')
+        .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(SRC, 'site-updater.js'), 'utf8'));
+    fs.writeFileSync(to, head + `window.__DG_APP_VERSION__ = ${JSON.stringify(appStamp())};\n` + body);
+}
+
+// What identifies THIS build to the page: files an older build downloaded must not shadow this build's own (site-updater.js,
+// versionGuard). CI gives the real build number; a local build gets a time stamp, so two local builds never share one.
+let stampCache = null;
+function appStamp() {
+    if (stampCache) return stampCache;
+    const gradle = path.join(__dirname, 'android', 'app', 'build.gradle');
+    const text = fs.existsSync(gradle) ? fs.readFileSync(gradle, 'utf8') : '';
+    const version = (text.match(/versionName\s+"([^"]+)"/) || [])[1] || '0';
+    return (stampCache = version + '.' + (process.env.DG_VERSION_CODE || 'local' + Date.now()));
 }
 
 // The app's own web files. Everything else the page needs (the whole offline data layer, the
@@ -995,6 +1017,32 @@ function writeAppVersion() {
     return version + ' (' + build + ')';
 }
 
+// www/site-manifest.json: what the app may refresh from dhamma.gift without a new build (native-bridge.js, siteFiles). Scripts, styles,
+// icons and fonts under /read, /reader and /assets that are byte-for-byte copies of the site's files. NOT: pages (html: the build
+// adds the app's own scripts and viewport to them), generated files (the script bundles, mode table, snapshots), the app's own
+// files, the offline layer. `ids` are the ids of the bundled home page: the updater applies nothing while the site's page has an
+// id this one lacks (a script could be reaching for it).
+function writeSiteManifest() {
+    const crypto = require('crypto');
+    const files = [], hashes = {};
+    (function walk(dir) {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const abs = path.join(dir, e.name);
+            if (e.isDirectory()) { walk(abs); continue; }
+            const rel = '/' + path.relative(WWW, abs).split(path.sep).join('/');
+            if (!/^\/(read|reader|assets)\//.test(rel) || !/\.(js|css|svg|png|webp|woff2?)$/.test(rel)) continue;
+            const sha = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
+            if (copiedHash.get(abs) !== sha) continue;
+            files.push(rel); hashes[rel] = sha;
+        }
+    })(WWW);
+    files.sort();
+    const html = fs.readFileSync(path.join(WWW, 'index.html'), 'utf8');
+    const ids = [...new Set([...html.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]))].sort();
+    fs.writeFileSync(path.join(WWW, 'site-manifest.json'), JSON.stringify({ build: appStamp(), files, hashes, ids }) + '\n');
+    return files.length;
+}
+
 function main() {
     requireNodeRoot();
     const args = parseArgs();
@@ -1031,6 +1079,7 @@ function main() {
     verifyReferencedAssets();
     verifyTocSnapshot();
     const appVersion = writeAppVersion();
+    console.log(`  site-manifest.json: ${writeSiteManifest()} files the app may refresh from the site`);
     console.log(`Assets: ${ok} copied, ${missing} missing. +${memoCount} memo files, +${rootCount} root files, +${rootTreeCount} root trees, ${dirLinks} pages with directory links resolved, ${bridged} pages given native-bridge.js, +${treeCount} legacy trees, +${looseCount} loose legacy files, +${svgCount} svg icons, +${nativeCount} native file(s), +${offlineCount} offline-layer entries from dg-node/public/offline, reader/images/, 2 generated bundles, mode-table.json (langs=${args.langs.join(',')}).`);
     console.log(`  app version: ${appVersion || 'unknown'}\n  dg-node: ${NODEJS_ROOT}\n  legacy assets: ${LEGACY_ASSETS}`);
     if (missing > 0) process.exitCode = 1;

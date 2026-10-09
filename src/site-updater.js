@@ -2,7 +2,8 @@
 // BUNDLED in the APK working and current. Pasted into each bridge by its build.js at the marker
 // "// @site-updater"; the bridge defines SITE_CONFIG first and calls updateSite() when the page has loaded.
 //
-//   SITE_CONFIG = { site: 'https://dict.dhamma.gift', urlFor: function (path) { return path; }, updatable: optional (path) => bool }
+//   SITE_CONFIG = { site: 'https://dict.dhamma.gift', urlFor: function (path) { return path; }, updatable: optional (path) => bool,
+//                   gate: optional (manifest) => Promise<bool> (false: this check applies nothing), silent: optional bool (no "new version" bar) }
 //
 // Uses the bridge's Cap (window.Capacitor) and store() (localStorage read).
   // ---- keeping the bundled page up to date --------------------------------------------------
@@ -136,7 +137,12 @@
     checking = true;
     var hashes = {};
     try { hashes = JSON.parse(store('dgSiteHashes')) || {}; } catch (e) { hashes = {}; }
-    return fetch('/site-manifest.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (manifest) {
+    var chain = fetch('/site-manifest.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (manifest) {
+      // The app may refuse an update that its own pages cannot take (Dhamma.Gift: the site's page has elements the bundled page lacks).
+      if (SITE_CONFIG.gate) return Promise.resolve(SITE_CONFIG.gate(manifest)).then(function (open) { return open ? run(manifest) : null; });
+      return run(manifest);
+    });
+    function run(manifest) {
       var ok = SITE_CONFIG.updatable || function () { return true; };
       var queue = manifest.files.filter(ok), seen = {}, changes = [], changed = 0, shown = 0, fetched = 0, failed = 0;
       manifest.files.forEach(function (f) { seen[f] = 1; });
@@ -189,9 +195,10 @@
         if (failed) res.state = 'failed'; else if (shown) res.state = 'new';
         // A file the bundle never had (the page names it, the snapshot did not carry it: the manifest, the icons) is saved quietly; the
         // bar is for files that CHANGED since the bundle - a first check used to announce an update on every fresh install.
-        if (shown && !failed) showUpdateBar();
+        if (shown && !failed && !SITE_CONFIG.silent) showUpdateBar();
       });
-    }).catch(function (e) { res.state = 'failed'; console.log('[dg-site] update failed:', (e && e.message) || e); }).then(function () { checking = false; return res; });
+    }
+    return chain.catch(function (e) { res.state = 'failed'; console.log('[dg-site] update failed:', (e && e.message) || e); }).then(function () { checking = false; return res; });
   }
   window.__dgCheckSiteUpdate = function () { return updateSite(true); };
 

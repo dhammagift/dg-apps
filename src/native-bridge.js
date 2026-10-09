@@ -1716,3 +1716,44 @@
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') run(true); });
   window.addEventListener('focus', function () { run(true); });
 })();
+
+// ---------------------------------------------------------------------------------------------
+// The site's own files, kept current without a new build (owner, 2026-10-09: "эти новые сборки меня утомили").
+// The bundle holds copies of the site's scripts, styles and icons; www/site-manifest.json (build-assets.js) lists the ones that
+// are VERBATIM copies. Online, at most every 6 hours, those are fetched from dhamma.gift and the changed ones go to the DgSite
+// plugin, which serves them in front of the bundled copies from the next page load. Pages (html), this app's own files, the
+// offline layer and the generated json are never part of it. Same machinery as the dictionary app (src/site-updater.js).
+// ---------------------------------------------------------------------------------------------
+(function siteFiles() {
+    var Cap = window.Capacitor;
+    if (!Cap || !Cap.getPlatform || Cap.getPlatform() === 'web') return;
+    if (location.pathname !== '/' && location.pathname !== '/index.html') return;   // once per start: the page that runs the reader
+    function store(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+    function ids(html) {
+        var found = {}, m, re = /\sid="([^"]+)"/g;
+        while ((m = re.exec(html))) found[m[1]] = 1;
+        return found;
+    }
+    var SITE_CONFIG = {
+        site: 'https://dhamma.gift',
+        urlFor: function (path) { return path; },
+        silent: true,   // a script is picked up at the next start; no "new version" bar
+        // The site's scripts were written against the site's page. If its home page has an element the bundled page does not,
+        // a new script may reach for it: leave the bundled files until a new build.
+        gate: function (manifest) {
+            if (!manifest.ids) return false;
+            return fetch('https://dhamma.gift/', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+                if (!html) return false;
+                var site = ids(html), mine = {};
+                manifest.ids.forEach(function (i) { mine[i] = 1; });
+                for (var i in site) if (!mine[i]) { console.log('[dg-site] the site page has #' + i + ', the bundled one does not: no update'); return false; }
+                return true;
+            }).catch(function () { return false; });
+        }
+    };
+    // @site-updater (inlined from src/site-updater.js by build-assets.js)
+
+    function afterLoad() { setTimeout(function () { updateSite(); }, 8000); }
+    if (document.readyState === 'complete') afterLoad();
+    else window.addEventListener('load', afterLoad, { once: true });
+})();

@@ -295,7 +295,8 @@ if [ "${4:-}" = tray ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
   adb shell cat /proc/net/unix | grep -o 'webview_devtools_remote_[0-9]*' | head -3 > "$OUT/sockets.txt"
   adb exec-out screencap -p > "$OUT/tray-start.png"
-  node "$REPO/tools/emu-tray.js" "$OUT" "${TRAY_ENGINE:-audio}"; code=$?
+  if [ "${TRAY_ENGINE:-audio}" = switch ]; then node "$REPO/tools/emu-switch.js" "$OUT"; code=$?   # another sutta opened in place while reading
+  else node "$REPO/tools/emu-tray.js" "$OUT" "${TRAY_ENGINE:-audio}"; code=$?; fi
   adb logcat -d -s Capacitor/Console:* Capacitor:* DgTts:* > "$OUT/logcat.txt" 2>/dev/null || true
   adb logcat -d | grep -iE "DgTts|MEDIA_|mediasession|NotificationService.*dg|gift.dhamma.mobile.*(Exception|FATAL)" | head -60 > "$OUT/logcat-tray.txt" || true
   exit $code

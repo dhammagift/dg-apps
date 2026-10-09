@@ -45,7 +45,7 @@ on:
         type: boolean
         default: false
       tray_engine:
-        description: 'mode=tray: audio (neural / Google voices, the page plays the audio) or native (the OS voices through the app)'
+        description: 'mode=tray: audio (neural / Google voices, the page plays the audio), native (the OS voices through the app), or switch (another sutta opened in place while the player reads)'
         required: false
         type: string
         default: 'audio'

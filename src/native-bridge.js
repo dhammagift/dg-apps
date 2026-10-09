@@ -1757,7 +1757,7 @@
 (function siteFiles() {
     var Cap = window.Capacitor;
     if (!Cap || !Cap.getPlatform || Cap.getPlatform() === 'web') return;
-    if (location.pathname !== '/' && location.pathname !== '/index.html') return;   // once per start: the page that runs the reader
+    if (window.top !== window || /^\/settings\b/.test(location.pathname)) return;   // once per start, in the top page (any route it was opened on); settings is a sheet over it
     function store(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
     function ids(html) {
         var found = {}, m, re = /\sid="([^"]+)"/g;

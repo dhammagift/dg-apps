@@ -1737,7 +1737,6 @@
     var SITE_CONFIG = {
         site: 'https://dhamma.gift',
         urlFor: function (path) { return path; },
-        silent: true,   // a script is picked up at the next start; no "new version" bar
         // The site's scripts were written against the site's page. If its home page has an element the bundled page does not,
         // a new script may reach for it: leave the bundled files until a new build.
         gate: function (manifest) {

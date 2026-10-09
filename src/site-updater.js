@@ -115,7 +115,7 @@
     var n = document.createElement('div');
     n.setAttribute('role', 'status');
     n.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(14px + max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)));z-index:2147482000;'
-      + 'padding:12px 16px;border-radius:16px;font:500 15px/1.25 system-ui,sans-serif;color:#fff;box-shadow:0 8px 28px rgba(15,30,50,.3);background:' + (bad ? '#b4472f' : '#139b7b');
+      + 'padding:12px 16px;border-radius:16px;font:500 15px/1.25 system-ui,sans-serif;box-shadow:0 8px 28px rgba(15,30,50,.3);color:' + (bad ? '#2b1d00' : '#fff') + ';background:' + (bad ? '#f2b33d' : '#139b7b');   // warning amber, not danger red
     n.innerHTML = '<div></div><div style="font-weight:400;font-size:12.5px;opacity:.9;margin-top:2px"></div>';
     n.firstChild.textContent = (bad ? '⚠ ' : '✓ ') + head;
     n.lastChild.textContent = sub;

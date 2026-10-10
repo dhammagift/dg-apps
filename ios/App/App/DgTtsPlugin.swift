@@ -12,10 +12,15 @@ import Capacitor
 //   cancel()                                 -> stops; no event, like Web Speech after onend=null
 //   getVoices()                              -> { voices: [{ name, lang, localService }] }
 //
-// AVSpeechSynthesizer has no per-utterance id, so the id being spoken is kept here and every delegate
-// callback is reported against it: the web side keys its pending utterances by id, and without this
-// the player's "end" never arrives and its close button never closes (the exact Android bug this
-// mirrors).
+// AVSpeechSynthesizer has no per-utterance id, so each utterance's id is kept here, keyed by the utterance
+// itself, and every delegate callback is reported against its own utterance's id: the web side keys its
+// pending utterances by id, and without this the player's "end" never arrives and its close button never
+// closes (the exact Android bug this mirrors). One id for the whole plugin let a late didCancel of the
+// phrase just stopped wipe the id of the phrase spoken right after it (the player skips with cancel +
+// speak 50 ms later), and that phrase then ended with no "end".
+//
+// The audio session is activated by the first speak(), not at plugin load: activating it at load stopped
+// the reader's music or podcast every time the app opened.
 @objc(DgTtsPlugin)
 public class DgTtsPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelegate {
     public let identifier = "DgTtsPlugin"
@@ -27,19 +32,30 @@ public class DgTtsPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
     ]
 
     private let synth = AVSpeechSynthesizer()
-    private var currentId: String?
+    // Main thread only: speak() hops there, and the delegate callbacks are handled there.
+    private var ids: [ObjectIdentifier: String] = [:]
 
     override public func load() {
         synth.delegate = self
-        // The app declares the audio background mode (Info.plist) so the reader keeps reading with
-        // the screen locked; that only works if the session is playback and active.
-        // ponytail: no mixWithOthers/duckOthers tuning until someone wants to read over music.
+        // The app declares the audio background mode (Info.plist) so the reader keeps reading with the screen locked;
+        // that needs the playback category. Only the category here: choosing it interrupts nobody. ACTIVATING it is what
+        // stops other apps' sound, and that waits for the first phrase this plugin speaks (holdAudio).
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .spokenAudio)
-            try session.setActive(true)
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         } catch {
             CAPLog.print("DgTts: audio session not configured: \(error.localizedDescription)")
+        }
+    }
+
+    // Every phrase, not once: a phone call or another app may have taken the session since the last one.
+    // ponytail: never deactivated - letting go between phrases would hand the sound back to other apps for the player's
+    // 50 ms gaps, and WKWebView's own audio (the online voices) shares this session. Add a release on a long idle if
+    // readers ask for their music back after listening.
+    private func holdAudio() {
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            CAPLog.print("DgTts: audio session not activated: \(error.localizedDescription)")
         }
     }
 
@@ -70,15 +86,20 @@ public class DgTtsPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
         let maxRate = Float(AVSpeechUtteranceMaximumSpeechRate)
         utterance.rate = min(max(AVSpeechUtteranceDefaultSpeechRate * rate, 0.0), maxRate)
 
-        currentId = call.getString("id") ?? ""
-        synth.speak(utterance)
-        call.resolve()
+        let id = call.getString("id") ?? ""
+        DispatchQueue.main.async {
+            self.holdAudio()
+            self.ids[ObjectIdentifier(utterance)] = id
+            self.synth.speak(utterance)
+            call.resolve()
+        }
     }
 
     @objc func cancel(_ call: CAPPluginCall) {
-        synth.stopSpeaking(at: .immediate)
-        currentId = nil
-        call.resolve()
+        DispatchQueue.main.async {
+            self.synth.stopSpeaking(at: .immediate)
+            call.resolve()
+        }
     }
 
     @objc func getVoices(_ call: CAPPluginCall) {
@@ -98,21 +119,20 @@ public class DgTtsPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelega
         AVSpeechSynthesisVoice.speechVoices().first { $0.name == name || $0.identifier == name }
     }
 
-    private func emit(_ type: String, error: String? = nil) {
-        var data: [String: Any] = ["id": currentId ?? "", "type": type]
-        if let error = error { data["error"] = error }
-        notifyListeners("tts", data: data)
-    }
-
     public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        emit("end")
-        currentId = nil
+        // The utterance is captured, so it stays alive (and its identifier unique) until the main thread has run this.
+        DispatchQueue.main.async {
+            guard let id = self.ids.removeValue(forKey: ObjectIdentifier(utterance)) else { return }
+            self.notifyListeners("tts", data: ["id": id, "type": "end"])
+        }
     }
 
     public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         // No event on purpose: a cancel is the caller's own doing, and Web Speech callers null their
-        // handlers before cancelling (Android's plugin behaves the same way).
-        currentId = nil
+        // handlers before cancelling (Android's plugin behaves the same way). Only THIS utterance's id goes.
+        DispatchQueue.main.async {
+            self.ids.removeValue(forKey: ObjectIdentifier(utterance))
+        }
     }
 
     // No teardown hook: Capacitor 8's iOS CAPPlugin has no handleOnDestroy (Android's has one), and

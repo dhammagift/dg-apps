@@ -57,7 +57,7 @@
                 .catch(function (err) {
                     if (!pending[id]) return;
                     delete pending[id];
-                    fire(u, u.onerror, { utterance: u, error: (err && err.message) || String(err) });
+                    fire(u, 'error', { utterance: u, error: (err && err.message) || String(err) });   // the type, not the handler: the player's language fallback starts from here
                 });
         },
         cancel: function () { pending = {}; P.cancel(); },

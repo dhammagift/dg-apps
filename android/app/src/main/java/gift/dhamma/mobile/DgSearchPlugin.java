@@ -108,54 +108,41 @@ public class DgSearchPlugin extends Plugin {
         });
     }
 
-    // ponytail: spike-only seed (docs/OS_SEARCH.md). Six real texts so the device check can answer
-    // "does the phone's own search show our index at all" before any dg.db plumbing exists. Delete
-    // this and the six rows go with it (clear()), once the launcher question is answered.
-    private static final boolean SPIKE_SEED = true;
+    // The spike (docs/OS_SEARCH.md) put six test texts (mn1, mn5, mn10, dn22, sn56.11, an3.1, category "spike") into the
+    // phone's search index on every start; it is gone (owner, 2026-10-10). Phones that ran it still hold the six rows, so the
+    // index is emptied once - schema and documents - and the session closed. Done = a flag in this app's preferences.
+    private static final String SPIKE_CLEARED = "spikeCleared";
 
     @Override
     public void load() {
         // Nothing in here may take the app down. This runs while the bridge is still coming up, and
         // an exception thrown from it aborts that: the app closed before the page ever appeared
-        // (reported on a device, 2026-09). A failed seed is a log line, never a crash.
+        // (reported on a device, 2026-09). A failed cleanup is a log line, never a crash.
         try {
-            seedSpike();
+            clearSpikeOnce();
         } catch (Throwable t) {
-            android.util.Log.w("DgSearch", "spike seed skipped: " + t);
+            android.util.Log.w("DgSearch", "spike cleanup skipped: " + t);
         }
     }
 
-    private void seedSpike() {
-        if (!SPIKE_SEED || !supported()) return;
-        String[][] seed = {
-                {"mn1", "Mūlapariyāyasutta"},
-                {"mn5", "Anaṅgaṇasutta"},
-                {"mn10", "Satipaṭṭhānasutta"},
-                {"dn22", "Mahāsatipaṭṭhānasutta"},
-                {"sn56.11", "Dhammacakkappavattanasutta"},
-                {"an3.1", "Bālasutta"},
-        };
-        JSArray items = new JSArray();
-        for (String[] row : seed) {
-            JSObject item = new JSObject();
-            item.put("id", row[0]);
-            item.put("title", row[1]);
-            item.put("titleFolded", fold(row[1]));
-            item.put("category", "spike");
-            item.put("snippet", row[1] + " — " + row[0]);
-            item.put("url", "https://dhamma.gift/" + row[0]);
-            items.put(item);
-        }
-        indexItems(items, new IndexResult() {
-            @Override
-            public void done(int count) {
-                android.util.Log.i("DgSearch", "spike seed indexed: " + count);
-            }
-
-            @Override
-            public void fail(String message) {
-                android.util.Log.w("DgSearch", "spike seed failed: " + message);
-            }
+    private void clearSpikeOnce() {
+        if (!supported()) return;
+        final android.content.SharedPreferences prefs = getContext().getSharedPreferences("DgSearch", android.content.Context.MODE_PRIVATE);
+        if (prefs.getBoolean(SPIKE_CLEARED, false)) return;
+        withSession(message -> android.util.Log.w("DgSearch", "spike cleanup failed: " + message), session -> {
+            // An empty schema with force: every type of this database goes, and its documents with it.
+            session.setSchema(new SetSchemaRequest.Builder().setForceOverride(true).build(), getExecutor(), getExecutor(), result -> {
+                try {
+                    if (result.isSuccess()) {
+                        prefs.edit().putBoolean(SPIKE_CLEARED, true).apply();
+                        android.util.Log.i("DgSearch", "spike rows removed from the phone's search index");
+                    } else {
+                        android.util.Log.w("DgSearch", "spike cleanup failed: " + result.getErrorMessage());
+                    }
+                } finally {
+                    session.close();
+                }
+            });
         });
     }
 

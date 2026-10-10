@@ -73,6 +73,9 @@ public class MainActivity extends BridgeActivity {
                 android.util.Log.w("DgSearch", "plugin not registered: " + t);
             }
         }
+        // Recreated after the system let the process go (savedInstanceState): getIntent() is the ORIGINAL launch - a share, a
+        // search, a link - and handling it again repeated that old search instead of reopening where the reader was.
+        if (savedInstanceState != null) handledIntent = getIntent();
         SplashScreen splash = SplashScreen.installSplashScreen(this);
         final long shownAt = SystemClock.uptimeMillis();
         splash.setKeepOnScreenCondition(() -> {
@@ -186,6 +189,9 @@ public class MainActivity extends BridgeActivity {
     // request — initSearchApp() already reads a "q" query param on the home path directly.
     private void handleIntent(Intent intent) {
         if (intent == null) return;
+        // Opened from Recents: Android hands back the intent that CREATED the task (a share, the text-selection menu, a
+        // link), and acting on it again opened that old search or text instead of the app's own start.
+        if ((intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return;
         String url = null;
         if (Intent.ACTION_SEARCH.equals(intent.getAction())) {
             // The system's own search ("Search in apps", the panels res/xml/searchable.xml puts us

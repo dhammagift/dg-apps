@@ -238,7 +238,7 @@ function initScript({ firstRunDaysAgo, shown, shownDaysAgo, tapped, lang }) {
                 };
             });
             check('dictionary: the sheet appears on day 61', !!d, true);
-            check('dictionary: same copy', d && [d.title, d.ghost], ['Как вам Dhamma.Gift?', 'Позже']);
+            check('dictionary: same copy', d && [d.title, d.ghost], ['Как вам приложение?', 'Позже']);
             check('dictionary: its own store listing', d && d.href, 'https://play.google.com/store/apps/details?id=gift.dhamma.pali');
             if (SHOTS && d) await page.screenshot({ path: path.join(SHOTS, 'rate-prompt-real-dict-ru-dark.png') });
             await page.evaluate(() => window.__backCb({ canGoBack: false }));

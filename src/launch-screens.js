@@ -289,6 +289,18 @@
             });
         }
         function dismiss() { if (el.parentNode) el.parentNode.removeChild(el); }
+        // An error page with nothing under the window (the dictionary's and the calendar's error.html): taking the window away -
+        // Close, a tap beside it, or Back in a bridge that removes it - must not leave a blank screen, so it goes home.
+        var bare = !!document.body && ![].some.call(document.body.children, function (c) {
+            return !/^(SCRIPT|STYLE|LINK|TEMPLATE|NOSCRIPT)$/.test(c.tagName) && !c.classList.contains('dgls') && c.getBoundingClientRect().height > 0;
+        });
+        if (bare && window.MutationObserver) {
+            new MutationObserver(function (list, mo) {
+                if (el.isConnected) return;
+                mo.disconnect();
+                location.replace('/');
+            }).observe(document.body, { childList: true });
+        }
         btn.addEventListener('click', again);
         close.addEventListener('click', dismiss);
         el.addEventListener('click', function (e) { if (e.target === el) dismiss(); });

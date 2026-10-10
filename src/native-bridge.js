@@ -63,13 +63,29 @@
             if (!sent) queue = batch.concat(queue);
             save();
         }
+        // Where it broke, without what the reader searched for (the privacy policy: queries are not stored): the SPA puts
+        // the search word in the PATH (/kacchapa, /dn22:2.2/kacchapa), so only a text id or a page of the app's own is kept.
+        function pageForReport() {
+            var p = location.pathname;
+            if (/\.html?$/.test(p)) return p;
+            var seg = p.split('/').filter(Boolean), out = [];
+            if (seg[0] === 'ru') out.push(seg.shift());
+            if (seg.length) {
+                var first = seg.shift();
+                out.push(/^(toc|settings|memo|login|assets|read|reader|offline|api)$/.test(first) || /^[a-z]+(?:-[a-z]+)*\d[\w.:-]*$/i.test(first) ? first : '<search>');
+                if (seg.length) out.push('…');
+            }
+            return '/' + out.join('/');
+        }
+        // URLs inside a message keep their path but not their query (?q=…, ?langs=…).
+        function scrub(text) { return text.replace(/(\/[^\s'"()<>?]*)\?[^\s'"()<>]+/g, '$1?…'); }
         function report(kind, msg, where) {
-            msg = String(msg || '').slice(0, 800);
+            msg = scrub(String(msg || '')).slice(0, 800);
             var key = kind + '|' + msg;
             if (seen[key] || seenCount >= 30) return; // one page load never sends more than 30 distinct reports
             seen[key] = true;
             seenCount++;
-            queue.push({ kind: kind, msg: msg, where: where || '', page: location.pathname + location.search,
+            queue.push({ kind: kind, msg: msg, where: scrub(where || ''), page: pageForReport(),
                 app: version, ua: navigator.userAgent, t: Date.now() });
             if (!timer) timer = setTimeout(flush, 5000);
         }
@@ -349,6 +365,9 @@
         // point Android's App Links pass through; src/deep-link.js owns the mapping and covers
         // iOS, where the same link arrives as a Universal Link instead.
         if (typeof window.dgLegacyRoute === 'function') route = window.dgLegacyRoute(route);
+        // One leading slash: "//x/y" (https://dhamma.gift//x/y, dhammagift://route//x) is another ORIGIN to replaceState, which
+        // throws, and the throw stopped this whole file (Back, links, sign-in) until the next page load.
+        route = route.replace(/^[\/\\]+/, '/');
         // Two of the four App Shortcuts (Dictionary, Memo — same set as dg-twa's and the site
         // manifest's) name pages this app does not contain: /dict and /memo are rendered by the
         // server, /login and /docs were never bundled. Rewriting the URL for them would land the
@@ -375,7 +394,11 @@
             location.replace(page[3] ? '/settings/index.html' : '/' + (page[1] || '') + page[2] + '/index.html');
             return;
         }
-        history.replaceState(null, '', route);
+        try {
+            history.replaceState(null, '', route);
+        } catch (e) {
+            console.log('[dg-route] not a route of this page: ' + route);
+        }
         // Past the one moment a redelivered event could land on THIS same reload (see HANDLED_KEY
         // above) — safe now to let the next distinct tap of the same shortcut through.
         try { sessionStorage.removeItem(HANDLED_KEY); } catch (e) { /* private mode */ }
@@ -1431,10 +1454,19 @@
         return (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform()) === 'ios' ? 'App Store' : 'Google Play';
     }
 
+    // The app's own name. Dict and Uposatha paste this block into their bridges and may set RATE_APP_NAME there; without
+    // one the title names no app rather than the wrong one (the dictionary asked "How is Dhamma.Gift for you?").
+    // dgOfflineReady is set by Dhamma.Gift's platform.js only.
+    function rateAppName() {
+        if (typeof RATE_APP_NAME === 'string' && RATE_APP_NAME) return RATE_APP_NAME;
+        return window.dgOfflineReady ? 'Dhamma.Gift' : '';
+    }
+
     function ratePromptCopy(ru) {
+        var name = rateAppName();
         return {
             eyebrow: ru ? 'Оценить приложение' : 'Rate this app',
-            title: ru ? 'Как вам Dhamma.Gift?' : 'How is Dhamma.Gift for you?',
+            title: name ? (ru ? 'Как вам ' + name + '?' : 'How is ' + name + ' for you?') : (ru ? 'Как вам приложение?' : 'How do you like the app?'),
             body: ru
                 ? 'Нам важно ваше мнение: по обратной связи мы понимаем, что вам нравится, а что улучшить. Рейтинг и комментарии помогают приложению.'
                 : 'Your opinion matters to us: feedback tells us what you like and what to improve. Ratings and comments help the app.',

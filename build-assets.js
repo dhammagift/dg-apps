@@ -1026,11 +1026,14 @@ function writeAppVersion() {
 // www/site-manifest.json: what the app may refresh from dhamma.gift without a new build (native-bridge.js, siteFiles). Scripts, styles,
 // icons and fonts under /read, /reader and /assets that are byte-for-byte copies of the site's files. NOT: pages (html: the build
 // adds the app's own scripts and viewport to them), generated files (the script bundles, mode table, snapshots), the app's own
-// files, the offline layer. `ids` are the ids of the bundled home page: the updater applies nothing while the site's page has an
-// id this one lacks (a script could be reaching for it).
+// files, the offline layer, and the sources of the generated bundles (a new settings.js under the bundle built from the old one
+// would be two versions of one file in one page). `ids` are the ids of the bundled home page: the updater applies nothing while
+// the site's page has an id this one lacks (a script could be reaching for it). `commit`/`commitTime` are the dg-node commit
+// this bundle was built from: the updater takes nothing from a site whose signed list is not newer than that.
 function writeSiteManifest() {
     const crypto = require('crypto');
     const files = [], hashes = {};
+    const bundled = new Set(['/assets/js/settings.js', '/assets/js/dg-text-router.js', '/assets/js/randPlaceholder.js']);   // buildScriptBundles' sources
     (function walk(dir) {
         for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
             const abs = path.join(dir, e.name);
@@ -1038,14 +1041,19 @@ function writeSiteManifest() {
             const rel = '/' + path.relative(WWW, abs).split(path.sep).join('/');
             if (!/^\/(read|reader|assets)\//.test(rel) || !/\.(js|css|svg|png|webp|woff2?)$/.test(rel)) continue;
             const sha = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
-            if (copiedHash.get(abs) !== sha) continue;
+            if (copiedHash.get(abs) !== sha || bundled.has(rel)) continue;
             files.push(rel); hashes[rel] = sha;
         }
     })(WWW);
     files.sort();
     const html = fs.readFileSync(path.join(WWW, 'index.html'), 'utf8');
     const ids = [...new Set([...html.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]))].sort();
-    fs.writeFileSync(path.join(WWW, 'site-manifest.json'), JSON.stringify({ build: appStamp(), files, hashes, ids }) + '\n');
+    let commit = '', commitTime = 0;
+    try {
+        [commit, commitTime] = require('child_process').execFileSync('git', ['-C', NODEJS_ROOT, 'log', '-1', '--format=%H %ct'], { encoding: 'utf8' }).trim().split(' ');
+        commitTime = Number(commitTime) || 0;
+    } catch (e) { console.warn('  site-manifest.json: no git commit for ' + NODEJS_ROOT + ' (the build time stands in)'); }
+    fs.writeFileSync(path.join(WWW, 'site-manifest.json'), JSON.stringify({ build: appStamp(), commit, commitTime, built: new Date().toISOString(), files, hashes, ids }) + '\n');
     return files.length;
 }
 

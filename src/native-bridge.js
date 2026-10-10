@@ -1750,9 +1750,10 @@
 // ---------------------------------------------------------------------------------------------
 // The site's own files, kept current without a new build (owner, 2026-10-09: "эти новые сборки меня утомили").
 // The bundle holds copies of the site's scripts, styles and icons; www/site-manifest.json (build-assets.js) lists the ones that
-// are VERBATIM copies. Online, at most every 6 hours, those are fetched from dhamma.gift and the changed ones go to the DgSite
-// plugin, which serves them in front of the bundled copies from the next page load. Pages (html), this app's own files, the
-// offline layer and the generated json are never part of it. Same machinery as the dictionary app (src/site-updater.js).
+// are VERBATIM copies. Online, at most every 6 hours, the site's signed file list is read and, when the site's build is newer
+// than this bundle, the changed files go to the DgSite plugin, which serves them in front of the bundled copies from the next
+// start of the app. Pages (html), this app's own files, the offline layer, the generated files and the sources of the generated
+// bundles are never part of it. Same machinery as the dictionary app (src/site-updater.js).
 // ---------------------------------------------------------------------------------------------
 (function siteFiles() {
     var Cap = window.Capacitor;
@@ -1764,14 +1765,15 @@
         while ((m = re.exec(html))) found[m[1]] = 1;
         return found;
     }
+    // The site this build talks to (a test APK: https://test.dhamma.gift), never a fixed one: a test build took the live site's files.
     var SITE_CONFIG = {
-        site: 'https://dhamma.gift',
+        site: window.DG_ONLINE_ORIGIN || 'https://dhamma.gift',
         urlFor: function (path) { return path; },
         // The site's scripts were written against the site's page. If its home page has an element the bundled page does not,
         // a new script may reach for it: leave the bundled files until a new build.
         gate: function (manifest) {
             if (!manifest.ids) return false;
-            return fetch('https://dhamma.gift/', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+            return fetch(SITE_CONFIG.site + '/', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
                 if (!html) return false;
                 var site = ids(html), mine = {};
                 manifest.ids.forEach(function (i) { mine[i] = 1; });

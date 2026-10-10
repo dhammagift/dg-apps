@@ -3,19 +3,51 @@ import WebKit
 import Capacitor
 
 // Files of the site downloaded after the app was built (scripts, styles, icons: www/site-manifest.json lists what may be),
-// answered in front of the bundled ones. The page's updater (native-bridge.js) hands them over:
-//     DgSite.put({ path, data })   DgSite.list()   DgSite.clear()
-// Same as the dictionary's (dict/ios/App/App/DgApp.swift), without its proxy: only a downloaded file is answered here,
+// answered in front of the bundled ones. The page's updater (src/site-updater.js) hands them over:
+//     DgSite.put({ path, data })   into the next round (site-next/)
+//     DgSite.commit()              the round is complete: it serves from the next start of the app
+//     DgSite.discard()             the round is dropped (a write failed)
+//     DgSite.apply()               a committed round serves now (the "Update" bar, right before it reloads the page)
+//     DgSite.list()   DgSite.clear() (both rounds)
+// A round moves into site/ when the plugin loads (capacitorDidLoad, before the page), so a running page never gets new files
+// next to the old ones it started with. Same as Android's DgSitePlugin.java. Only a downloaded file is answered here,
 // everything else goes to Capacitor's asset handler (DgSchemeRouter).
 enum DgSiteStore {
-    static var root: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("site", isDirectory: true)
+    private static var base: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    }
+    static var root: URL { base.appendingPathComponent("site", isDirectory: true) }
+    static var next: URL { base.appendingPathComponent("site-next", isDirectory: true) }
+    static var ready: URL { next.appendingPathComponent(".ready") }
+
+    static func file(for path: String, in dir: URL? = nil) -> URL? {
+        guard path.hasPrefix("/"), !path.contains(".."), path.count < 300 else { return nil }
+        return (dir ?? root).appendingPathComponent(String(path.dropFirst()))
     }
 
-    static func file(for path: String) -> URL? {
-        guard path.hasPrefix("/"), !path.contains(".."), path.count < 300 else { return nil }
-        return root.appendingPathComponent(String(path.dropFirst()))
+    /// A committed round takes over; an uncommitted one (the app stopped half-way through a check) is dropped.
+    static func promote() {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: next.path) else { return }
+        if fm.fileExists(atPath: ready.path), let walker = fm.enumerator(at: next, includingPropertiesForKeys: nil) {
+            // Listed first, moved after: the directory is not changed under its own enumerator.
+            let basePath = next.resolvingSymlinksInPath().path
+            let files = ((walker.allObjects as? [URL]) ?? []).filter { url -> Bool in
+                var isDir: ObjCBool = false
+                return fm.fileExists(atPath: url.path, isDirectory: &isDir) && !isDir.boolValue && url.lastPathComponent != ".ready"
+            }
+            for url in files {
+                let full = url.resolvingSymlinksInPath().path
+                guard full.hasPrefix(basePath + "/"), let dest = file(for: String(full.dropFirst(basePath.count))) else { continue }
+                try? fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+                if fm.fileExists(atPath: dest.path) {
+                    _ = try? fm.replaceItemAt(dest, withItemAt: url)
+                } else {
+                    try? fm.moveItem(at: url, to: dest)
+                }
+            }
+        }
+        try? fm.removeItem(at: next)
     }
 
     private static let types = [
@@ -46,15 +78,22 @@ public class DgSitePlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "DgSite"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "put", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "commit", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "discard", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "apply", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "list", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise)
     ]
 
     private static let maxBytes = 8 * 1024 * 1024
 
+    override public func load() {
+        DgSiteStore.promote()
+    }
+
     @objc func put(_ call: CAPPluginCall) {
         guard let path = call.getString("path"), let text = call.getString("data"),
-              let file = DgSiteStore.file(for: path), let bytes = Data(base64Encoded: text) else {
+              let file = DgSiteStore.file(for: path, in: DgSiteStore.next), let bytes = Data(base64Encoded: text) else {
             return call.reject("bad path or no data")
         }
         if bytes.isEmpty || bytes.count > Self.maxBytes { return call.reject("size out of range") }
@@ -78,7 +117,28 @@ public class DgSitePlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve(["files": files])
     }
 
+    @objc func commit(_ call: CAPPluginCall) {
+        do {
+            try FileManager.default.createDirectory(at: DgSiteStore.next, withIntermediateDirectories: true)
+            try Data("1".utf8).write(to: DgSiteStore.ready, options: .atomic)
+            call.resolve()
+        } catch {
+            call.reject("DgSite.commit failed: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func discard(_ call: CAPPluginCall) {
+        try? FileManager.default.removeItem(at: DgSiteStore.next)
+        call.resolve()
+    }
+
+    @objc func apply(_ call: CAPPluginCall) {
+        DgSiteStore.promote()
+        call.resolve()
+    }
+
     @objc func clear(_ call: CAPPluginCall) {
+        try? FileManager.default.removeItem(at: DgSiteStore.next)
         try? FileManager.default.removeItem(at: DgSiteStore.root)
         call.resolve()
     }

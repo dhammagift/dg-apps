@@ -26,12 +26,17 @@ import java.util.Map;
  * The page's updater (native-bridge.js, updateSite) fetches the files of the site that are verbatim copies in the bundle
  * (scripts, styles, icons: the list is www/site-manifest.json) and hands the ones that changed over:
  *
- *     Capacitor.Plugins.DgSite.put({ path: "/read/js/voice.js", data: "<base64>" })
+ *     Capacitor.Plugins.DgSite.put({ path: "/read/js/voice.js", data: "<base64>" })   (into the next round, files/site-next/)
+ *     Capacitor.Plugins.DgSite.commit()    the round is complete: it serves from the next start of the app
+ *     Capacitor.Plugins.DgSite.discard()   the round is dropped (a write failed)
+ *     Capacitor.Plugins.DgSite.apply()     a committed round serves now (the "Update" bar, right before it reloads the page)
  *     Capacitor.Plugins.DgSite.list()   ->  { files: [ ... ] }
- *     Capacitor.Plugins.DgSite.clear()
+ *     Capacitor.Plugins.DgSite.clear()     everything downloaded, both rounds, gone
  *
- * They are written under files/site/ and answered by {@link #serve} (MainActivity's WebViewClient) for the next request.
- * Nothing else is served from here: a path that was not downloaded goes to Capacitor and the bundle, as it always did.
+ * A round is kept in files/site-next/ and moved into files/site/ when the plugin loads (the app starts, before the page), so a
+ * running page never gets new files next to the old ones it started with. files/site/ is answered by {@link #serve}
+ * (MainActivity's WebViewClient). Nothing else is served from here: a path that was not downloaded goes to Capacitor and the
+ * bundle, as it always did.
  *
  * Same idea as the dictionary's plugin (dict/android/.../DgSitePlugin.java), without its proxy to the site.
  */
@@ -44,11 +49,52 @@ public class DgSitePlugin extends Plugin {
         return new File(context.getFilesDir(), "site");
     }
 
-    /** A request path inside files/site/, or null when it would leave it. */
+    static File next(Context context) {
+        return new File(context.getFilesDir(), "site-next");
+    }
+
+    private static final String READY = ".ready";
+
+    @Override
+    public void load() {
+        promote(getContext());
+    }
+
+    /** A committed round takes over; an uncommitted one (the app stopped half-way through a check) is dropped. */
+    private static synchronized void promote(Context context) {
+        File next = next(context);
+        if (!next.isDirectory()) return;
+        if (new File(next, READY).isFile()) moveTree(next, root(context));
+        deleteTree(next);
+    }
+
+    private static void moveTree(File from, File to) {
+        File[] entries = from.listFiles();
+        if (entries == null) return;
+        for (File f : entries) {
+            if (f.getName().equals(READY) || f.getName().endsWith(".part")) continue;
+            File dest = new File(to, f.getName());
+            if (f.isDirectory()) { moveTree(f, dest); continue; }
+            File dir = dest.getParentFile();
+            if (dir != null && !dir.isDirectory()) {
+                //noinspection ResultOfMethodCallIgnored
+                dir.mkdirs();
+            }
+            // renameTo replaces an existing file on Android (POSIX rename): a request in flight sees the old file or the new one.
+            //noinspection ResultOfMethodCallIgnored
+            f.renameTo(dest);
+        }
+    }
+
+    /** A request path inside files/site/ (or another round's directory), or null when it would leave it. */
     static File resolve(Context context, String path) {
+        return resolve(root(context), path);
+    }
+
+    static File resolve(File rootDir, String path) {
         if (path == null || !path.startsWith("/") || path.length() > 300 || path.indexOf('\0') >= 0) return null;
         try {
-            File base = root(context).getCanonicalFile();
+            File base = rootDir.getCanonicalFile();
             File file = new File(base, path).getCanonicalFile();
             return file.getPath().startsWith(base.getPath() + File.separator) ? file : null;
         } catch (Exception e) {
@@ -60,7 +106,7 @@ public class DgSitePlugin extends Plugin {
     public void put(PluginCall call) {
         String path = call.getString("path");
         String data = call.getString("data");
-        File file = resolve(getContext(), path);
+        File file = resolve(next(getContext()), path);
         if (file == null || data == null) {
             call.reject("bad path or no data");
             return;
@@ -103,7 +149,32 @@ public class DgSitePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void commit(PluginCall call) {
+        try {
+            File next = next(getContext());
+            if (!next.isDirectory() && !next.mkdirs()) throw new java.io.IOException("no directory");
+            try (FileOutputStream out = new FileOutputStream(new File(next, READY))) { out.write('1'); }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("DgSite.commit failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void discard(PluginCall call) {
+        deleteTree(next(getContext()));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void apply(PluginCall call) {
+        promote(getContext());
+        call.resolve();
+    }
+
+    @PluginMethod
     public void clear(PluginCall call) {
+        deleteTree(next(getContext()));
         deleteTree(root(getContext()));
         call.resolve();
     }

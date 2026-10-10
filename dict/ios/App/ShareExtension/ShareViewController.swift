@@ -15,6 +15,10 @@ class ShareViewController: UIViewController {
     private var webView: WKWebView!
     private let status = UILabel()
 
+    // The sheet speaks the phone's language, ru or en, as the dictionary's own pages do (the Uposatha widget decides the same way).
+    private static let ru = (Locale.preferredLanguages.first ?? "en").lowercased().hasPrefix("ru")
+    private static func t(_ english: String, _ russian: String) -> String { Self.ru ? russian : english }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
@@ -22,10 +26,10 @@ class ShareViewController: UIViewController {
         webView = WKWebView(frame: .zero)
 
         let done = UIButton(type: .system)
-        done.setTitle("Done", for: .normal)
+        done.setTitle(Self.t("Done", "Готово"), for: .normal)
         done.addTarget(self, action: #selector(finish), for: .touchUpInside)
 
-        status.text = "Searching…"
+        status.text = Self.t("Searching…", "Ищу…")
         status.textAlignment = .center
         status.textColor = .secondaryLabel
 
@@ -57,7 +61,7 @@ class ShareViewController: UIViewController {
             guard let self = self else { return }
             let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let payload = trimmed, !payload.isEmpty else {
-                self.status.text = "Nothing to search for: the share carried no text or link."
+                self.status.text = Self.t("Nothing to search for: the share carried no text or link.", "Искать нечего: в том, чем поделились, нет ни текста, ни ссылки.")
                 return
             }
             self.search(for: payload)
@@ -109,9 +113,12 @@ class ShareViewController: UIViewController {
         // actually share — this is enough, and the ceiling is named rather than silently dropping
         // the tail.
         let capped = payload.count > 4000 ? String(payload.prefix(4000)) : payload
-        guard let encoded = capped.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://dict.dhamma.gift/?q=" + encoded) else {
-            status.text = "That text could not be turned into a search."
+        // .urlQueryAllowed leaves & + = as they are, and the site reads them as the query's own syntax ("kāma & rāga" was
+        // looked up as "kāma", "+" became a space): those three are encoded too.
+        let value = CharacterSet.urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&+="))
+        guard let encoded = capped.addingPercentEncoding(withAllowedCharacters: value),
+              let url = URL(string: "https://dict.dhamma.gift/?q=" + encoded + (Self.ru ? "&lang=ru" : "")) else {
+            status.text = Self.t("That text could not be turned into a search.", "Этот текст не получилось превратить в поиск.")
             return
         }
         webView.load(URLRequest(url: url))
@@ -123,16 +130,22 @@ class ShareViewController: UIViewController {
 }
 
 extension ShareViewController: WKNavigationDelegate {
+    // A link to another site would take the sheet away from the dictionary with no way back: the sheet stays on it.
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        let host = navigationAction.request.url?.host ?? ""
+        decisionHandler(navigationAction.navigationType == .linkActivated && host != "dict.dhamma.gift" ? .cancel : .allow)
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         status.isHidden = true
         webView.isHidden = false
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        status.text = "The page could not be loaded: \(error.localizedDescription)"
+        status.text = Self.t("The page could not be loaded: ", "Страница не загрузилась: ") + error.localizedDescription
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        status.text = "The page could not be loaded: \(error.localizedDescription)"
+        status.text = Self.t("The page could not be loaded: ", "Страница не загрузилась: ") + error.localizedDescription
     }
 }

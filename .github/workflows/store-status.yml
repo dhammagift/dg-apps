@@ -1,0 +1,43 @@
+name: Store status
+
+# Read-only: where every DG app and extension stands in Google Play, App Store Connect, GitHub and
+# the extension stores, as one status.json (artifact "store-status"). The owner's private page on the
+# site (dg-node: /apps, Google login + e-mail list) reads the newest one and can start this run.
+# Nothing in any store is changed (the Play "edit" is opened only to read tracks and is discarded).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */3 * * *'
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: store-status
+  cancel-in-progress: false
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Read the stores
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          pip install --quiet google-api-python-client google-auth 'pyjwt[crypto]'
+          python3 .github/scripts/store_status.py status.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: store-status
+          path: status.json
+          retention-days: 7

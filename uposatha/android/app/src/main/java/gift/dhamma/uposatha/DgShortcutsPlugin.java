@@ -100,6 +100,24 @@ public class DgShortcutsPlugin extends Plugin {
         }
 
         try {
+            // A day shortcut pinned to the home screen whose day is no longer in the list is disabled with the page's words (the
+            // launcher greys it out and says why), not left to read "Today" for ever; a day that comes back is enabled first, as
+            // a disabled shortcut cannot be updated. The ids are the days' own (dg-apps U14).
+            String stalePrefix = call.getString("stalePrefix", "");
+            if (!stalePrefix.isEmpty()) {
+                List<String> live = new ArrayList<>();
+                for (ShortcutInfoCompat s : shortcuts) live.add(s.getId());
+                List<String> stale = new ArrayList<>();
+                for (ShortcutInfoCompat s : ShortcutManagerCompat.getShortcuts(context, ShortcutManagerCompat.FLAG_MATCH_PINNED)) {
+                    if (s.getId().startsWith(stalePrefix) && !live.contains(s.getId())) stale.add(s.getId());
+                }
+                try {
+                    if (!live.isEmpty()) ShortcutManagerCompat.enableShortcuts(context, shortcuts);
+                    if (!stale.isEmpty()) ShortcutManagerCompat.disableShortcuts(context, stale, call.getString("staleMessage", ""));
+                } catch (Exception e) {
+                    // Stale entries stay as they were; the menu itself is still set below.
+                }
+            }
             ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts);
             // No enable/disable of static shortcuts here any more. The plugin used to hide the three
             // programmed ones while "recent words" were on, exactly as Dhamma.Gift does — and

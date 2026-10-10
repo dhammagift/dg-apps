@@ -230,10 +230,12 @@
         var nums = sutta && r.names ? r.names.map(C.dayNo) : [];
         kind = nums.length ? (lang === 'ru' ? nums.join('/') + '-й день' : 'Day ' + nums.join('/')) : C.nameOf(names, r, sutta);
       } catch (e) { /* the date alone will do */ }
+      // The id is the day's (dg-apps U14): one pinned to the home screen stays that day (and its moon); when the day has gone
+      // DgShortcuts disables it instead of turning it into the next one, as an id by place in the list (dg-uposatha-0) did.
       out.push({
-        id: 'dg-uposatha-' + out.length,
+        id: 'dg-uposatha-' + r.ymd,
         label: kind ? when + ' · ' + kind : when,
-        route: '/uposatha-calendar?app=1&tab=list',
+        route: '/uposatha-calendar?app=1&tab=cal&day=' + r.ymd,
         icon: moonName('shortcut_moon', rowMoon(r, sutta)),
         rank: 10 + out.length
       });
@@ -254,15 +256,20 @@
     if (!plugin || typeof plugin.set !== 'function') return;
     var items = [];
     try { items = nextUposathas(); } catch (e) { console.log('[dg-uposatha-shortcuts] failed to work out the days:', (e && e.message) || e); }
-    // The Calendar entry is dynamic too (it was the one static shortcut), so that its icon can be the moon of today.
+    // The Calendar entry is dynamic too (it was the one static shortcut), so that its icon in the menu can be the moon of today. The
+    // phase is in its id (dg-apps U14, icons never change after an interaction): the menu shows today's moon, while a Calendar
+    // shortcut pinned to the home screen keeps the moon it was pinned with — a new phase is a new id, the pinned one is left as it is.
+    var moon = moonName('shortcut_moon', moonIndexAt(new Date()));
     items.unshift({
-      id: 'dg-calendar',
+      id: 'dg-calendar-' + moon.slice(-1),
       label: isRu() ? 'Календарь' : 'Calendar',
       route: '/uposatha-calendar?app=1&tab=cal',
-      icon: moonName('shortcut_moon', moonIndexAt(new Date())),
+      icon: moon,
       rank: 0
     });
-    Promise.resolve(plugin.set({ items: items })).catch(function (e) {
+    // Pinned day shortcuts whose day has gone are disabled with this (Android; iOS quick actions cannot be pinned).
+    var gone = isRu() ? 'Эта упосатха уже прошла' : 'This Uposatha has passed';
+    Promise.resolve(plugin.set({ items: items, stalePrefix: 'dg-uposatha-', staleMessage: gone })).catch(function (e) {
       console.log('[dg-uposatha-shortcuts] set failed:', (e && e.message) || e);
     });
   }
@@ -281,6 +288,7 @@
   function alarmStream() { return store(STREAM_KEY) === 'alarm'; }
 
   var NATIVE_ID_BASE = 7000;   // the page's ids for its reminders (uposatha-calendar.js: NATIVE_ID_BASE + list index; the test reminder is 7990)
+  var PAGE_IDS = 900;          // how many ids from NATIVE_ID_BASE are the page's list (it hands over up to 200 at once, NATIVE_MAX there)
 
   // Every reminder has an id of its own, made from its minute (owner: "the sound was there, the notification was not").
   // The page numbers its reminders by their place in the list (the next one is always 7000), and re-plans after each
@@ -288,19 +296,28 @@
   // before every re-plan so that the replacement would not arrive silent. Now nothing in the tray is touched: an id
   // is the minute it rings at (and the place within that minute: the meal and a part of the day can share one), so
   // a reminder never lands on another. getPending/cancel are translated back, so the page still cancels by its range.
+  // The minute is taken modulo a million (~694 days): the page plans up to three months ahead, past the ~69 days of the 100000 used before.
   var UNIQUE_BASE = 1000000;
-  function isUnique(id) { return id >= UNIQUE_BASE && id < UNIQUE_BASE + 1000000; }
+  function isUnique(id) { return (id >= UNIQUE_BASE && id < UNIQUE_BASE + 10000000) || id === RENEW_ID; }
+  function isPageId(id) { return id >= NATIVE_ID_BASE && id < NATIVE_ID_BASE + PAGE_IDS; }
   function uniqueId(n) {
-    if (!(n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + 100)) return n.id;   // the test reminders (7990+) keep theirs
+    if (!isPageId(n.id)) return n.id;   // the test reminders (7990+) keep theirs
     var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
-    return UNIQUE_BASE + (Math.floor(at / 60000) % 100000) * 10 + (n.id % 10);
+    return UNIQUE_BASE + (Math.floor(at / 60000) % 1000000) * 10 + (n.id % 10);
+  }
+  // The last word of the list (dg-apps U2): a quiet notice a minute after the last reminder set, that they end there unless the
+  // app is opened. Shown to the page as one of its own (pageView), so the page's cancel-all takes it away with the rest.
+  var RENEW_ID = 7989;
+  function renewText() {
+    return isRu() ? { title: 'Напоминания заканчиваются', body: 'Откройте приложение, чтобы продлить напоминания.' }
+      : { title: 'Reminders are running out', body: 'Open the app to extend the reminders.' };
   }
   var pendingAlias = {};   // the page's id -> ours, from the last getPending the page saw
   function pageView(p) {
     pendingAlias = {};
     var k = 0;
     var list = ((p && p.notifications) || []).map(function (n) {
-      if (!isUnique(n.id) || k >= 100) return n;
+      if (!isUnique(n.id) || k >= PAGE_IDS) return n;
       var alias = NATIVE_ID_BASE + k++;
       pendingAlias[alias] = n.id;
       return Object.assign({}, n, { id: alias });
@@ -395,10 +412,20 @@
     if (!LN || LN.__dgWrapped) return;
     var sound = function () { return plugins.DgSound; };
     var suffixed = function (id) {
-      if (!id || id.indexOf('uposatha-') !== 0 || /-(alarm|dnd)$/.test(id)) return id;
+      if (!id || id.indexOf('uposatha-') !== 0 || /-(alarm|dnd|silent)$/.test(id)) return id;
       // The reader's own sound has both streams made by DgSound at the pick; the built-in ones are made here.
       var own = id.indexOf('uposatha-own-') === 0;
+      // With DgAlarm playing the sound, the own sound's notification is silent, as a built-in one's is (dg-apps U9: it rang twice).
+      if (own && directAlarm()) return id + '-silent';
       return id + (alarmStream() ? '-alarm' : '') + (dndGranted && !own ? '-dnd' : '');
+    };
+    // The silent channel of the own sound: made here, as an install from before it has only the two that DgSound made at the pick.
+    var silentMade = {};
+    var silentChannel = function (id) {
+      if (silentMade[id] || !sound() || typeof sound().channel !== 'function') return Promise.resolve();
+      silentMade[id] = 1;
+      return Promise.resolve(sound().channel({ id: id, name: (isRu() ? 'Свой звук' : 'Own sound') + (isRu() ? ' (будильник)' : ' (alarm)'), sound: '',
+        importance: 4, vibration: true, stream: 'alarm', bypass: true })).catch(function () { delete silentMade[id]; });
     };
     plugins.LocalNotifications = new Proxy(LN, {
       get: function (target, key) {
@@ -423,6 +450,17 @@
               var moon = at && !isNaN(at) ? { smallIcon: moonName('ic_stat_moon', moonIndexAt(at)) } : {};
               return Object.assign({ largeIcon: 'uposatha_notification' }, moon, n, { id: uniqueId(n), channelId: suffixed(n.channelId) });
             });
+            var last = 0;
+            ((o && o.notifications) || []).forEach(function (n) { if (isPageId(n.id) && n.schedule && n.schedule.at) last = Math.max(last, new Date(n.schedule.at).getTime()); });
+            var ready = [];
+            list.forEach(function (n) { if (/-silent$/.test(n.channelId || '')) ready.push(silentChannel(n.channelId)); });
+            if (last) {
+              var renew = renewText();
+              var quiet = { id: 'dg-renew', name: renew.title, sound: '', importance: 2, visibility: 1, vibration: false, stream: 'notification', bypass: false };
+              ready.push(Promise.resolve(sound() && typeof sound().channel === 'function' ? sound().channel(quiet) : target.createChannel(quiet)).catch(function () {}));
+              list.push({ id: RENEW_ID, title: renew.title, body: renew.body, channelId: 'dg-renew', largeIcon: 'uposatha_notification',
+                schedule: { at: new Date(last + 60000), allowWhileIdle: true }, extra: { url: '/uposatha-calendar' } });
+            }
             // The plugin posts every notification "alert once": one that REPLACES a notification of the same id still in the
             // tray makes no sound. With an id per minute (uniqueId) a reminder never replaces another, so the tray is left alone.
             // The sound itself, on the alarm stream, at the same minute.
@@ -431,7 +469,7 @@
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
               return { id: uniqueId(n), at: at, sound: rawSoundOf(n.channelId) };
             }).filter(function (i) { return i.at > 0 && i.sound; }) : [];
-            return Promise.resolve(items.length ? alarm.schedule({ items: items }) : null).then(function () { return target.schedule(Object.assign({}, o, { notifications: list })); }).then(function (res) {
+            return Promise.all(ready).then(function () { return items.length ? alarm.schedule({ items: items }) : null; }).then(function () { return target.schedule(Object.assign({}, o, { notifications: list })); }).then(function (res) {
               if (list.length) setTimeout(function () { refreshDnd().then(maybeAskDnd); }, 2500);   // the page has settled; is the access there?
               return res;
             });
@@ -456,7 +494,8 @@
   //
   // iOS has no notification channels: a sound is a property of each notification, a file in the app (the .caf made from the same
   // sounds, www/ios-sounds/). DgNotify (DgApp.swift) sets the notifications itself, as Time Sensitive ones, so that they get through
-  // a Focus; the page keeps calling LocalNotifications as it does on Android and this turns its calls into DgNotify's.
+  // a Focus; the page keeps calling LocalNotifications as it does on Android and this turns its calls into DgNotify's. Its getPending
+  // answers with the whole kept list, not only the ~60 set, so the page's cancel-all reaches every one.
   function wrapIosNotifications() {
     var plugins = Cap.Plugins;
     var LN = plugins && plugins.LocalNotifications;
@@ -472,9 +511,12 @@
             lastSchedule = o;
             var items = ((o && o.notifications) || []).map(function (n) {
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
-              return { id: uniqueId(n), title: n.title || '', body: n.body || '', at: at, sound: rawSoundOf(n.channelId) === 'own' ? '' : rawSoundOf(n.channelId) };
+              // first: an Uposatha reminder (the page marks it), set ahead of the meal and parts ones within the ~60
+              return { id: uniqueId(n), title: n.title || '', body: n.body || '', at: at, sound: rawSoundOf(n.channelId) === 'own' ? '' : rawSoundOf(n.channelId), first: !!(n.extra && n.extra.upo) };
             }).filter(function (i) { return i.at > 0; });
-            return N().schedule({ items: items }).then(function () { return { notifications: items.map(function (i) { return { id: i.id }; }) }; });
+            // The whole list is kept natively and the next ~60 of it are set (iOS holds 64), topped up at every start, return
+            // to the front and background refresh; the notice of renewText() follows the last one set (dg-apps U2).
+            return N().schedule({ items: items, renew: renewText() }).then(function () { return { notifications: items.map(function (i) { return { id: i.id }; }) }; });
           };
         }
         if (key === 'cancel') return function (o) { return N().cancel({ ids: nativeIds(((o && o.notifications) || []).map(function (n) { return n.id; })) }); };
@@ -507,7 +549,7 @@
     return Promise.all(Object.keys(lastChannels).map(function (id) { return LN.createChannel(lastChannels[id]); }))
       .then(function () { return LN.getPending(); })
       .then(function (p) {
-        var ours = ((p && p.notifications) || []).filter(function (n) { return n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + 100; }).map(function (n) { return { id: n.id }; });
+        var ours = ((p && p.notifications) || []).filter(function (n) { return isPageId(n.id); }).map(function (n) { return { id: n.id }; });
         return ours.length ? LN.cancel({ notifications: ours }) : null;
       })
       // What is replayed is only what is still ahead: LocalNotifications fires an `at` already in the past at once (its own

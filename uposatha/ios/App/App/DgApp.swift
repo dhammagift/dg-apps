@@ -1,6 +1,7 @@
 import UIKit
 import WebKit
 import UserNotifications
+import BackgroundTasks
 import WidgetKit
 import Capacitor
 
@@ -439,10 +440,13 @@ public class DgSharePlugin: CAPPlugin, CAPBridgedPlugin {
 // The reminders as Time Sensitive notifications (they get through a Focus and the notification summary), each with its sound.
 // The page's calls arrive through the bridge's wrapper of LocalNotifications (src/uposatha-bridge.js, wrapIosNotifications):
 //
-//     Capacitor.Plugins.DgNotify.schedule({ items: [{ id, title, body, at (ms), sound ('gong', '' for the default) }] })
+//     Capacitor.Plugins.DgNotify.schedule({ items: [{ id, title, body, at (ms), sound ('gong', '' for the default) }], renew: { title, body } })
 //
 // Identifiers are "dg-uposatha-<id>": a schedule replaces the reminder with that id, others are left alone. iOS keeps only the
-// 64 soonest pending notifications of an app, so the ones further away are not set (the page sets them again at its next start).
+// 64 soonest pending notifications of an app, and the page hands over up to 200 (dg-apps U2: reminders must keep coming without
+// the app being opened). So the whole list is kept here (UserDefaults) and only the next ones are set; the rest are topped up at
+// every start, every return to the front and in background refresh (BGAppRefreshTask, when iOS grants it). A minute after the
+// last one set comes the quiet "renew" notice (its text from the page): open the app, or the reminders end there.
 @objc(DgNotifyPlugin)
 public class DgNotifyPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "DgNotifyPlugin"
@@ -454,20 +458,33 @@ public class DgNotifyPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private static let prefix = "dg-uposatha-"
-    private static let limit = 60
+    private static let limit = 60   // set at once: the next 59 reminders and the renew notice
+    private static let planKey = "dgNotifyPlan"
+    private static let renewKey = "dgNotifyRenew"
+    private static let renewId = prefix + "renew"
+    // Also in Info.plist (BGTaskSchedulerPermittedIdentifiers).
+    static let refreshTask = "gift.dhamma.uposatha.reminders"
 
     // The sounds ship inside the page bundle (public/ios-sounds/*.caf); a notification finds its sound in the app's
     // Library/Sounds, so they are copied there once.
     override public func load() {
         let fm = FileManager.default
-        guard let source = Bundle.main.url(forResource: "ios-sounds", withExtension: nil, subdirectory: "public"),
-              let library = fm.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
-        let target = library.appendingPathComponent("Sounds", isDirectory: true)
-        try? fm.createDirectory(at: target, withIntermediateDirectories: true)
-        for name in (try? fm.contentsOfDirectory(atPath: source.path)) ?? [] where name.hasSuffix(".caf") {
-            let destination = target.appendingPathComponent(name)
-            try? fm.removeItem(at: destination)
-            try? fm.copyItem(at: source.appendingPathComponent(name), to: destination)
+        if let source = Bundle.main.url(forResource: "ios-sounds", withExtension: nil, subdirectory: "public"),
+           let library = fm.urls(for: .libraryDirectory, in: .userDomainMask).first {
+            let target = library.appendingPathComponent("Sounds", isDirectory: true)
+            try? fm.createDirectory(at: target, withIntermediateDirectories: true)
+            for name in (try? fm.contentsOfDirectory(atPath: source.path)) ?? [] where name.hasSuffix(".caf") {
+                let destination = target.appendingPathComponent(name)
+                try? fm.removeItem(at: destination)
+                try? fm.copyItem(at: source.appendingPathComponent(name), to: destination)
+            }
+        }
+        Self.refill()
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
+            DgNotifyPlugin.refill()
+        }
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            DgNotifyPlugin.scheduleRefresh()
         }
     }
 
@@ -478,63 +495,131 @@ public class DgNotifyPlugin: CAPPlugin, CAPBridgedPlugin {
         return nil
     }
 
-    @objc func schedule(_ call: CAPPluginCall) {
-        let items = call.getArray("items", JSObject.self) ?? []
-        let center = UNUserNotificationCenter.current()
-        var requests: [UNNotificationRequest] = []
-        for item in items {
-            guard let id = Self.number(item["id"]), let at = Self.number(item["at"]), at > 0 else { continue }
-            let date = Date(timeIntervalSince1970: at / 1000)
-            if date <= Date() { continue }
-            let content = UNMutableNotificationContent()
-            content.title = (item["title"] as? String) ?? ""
-            content.body = (item["body"] as? String) ?? ""
-            content.threadIdentifier = "uposatha"
-            if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
-            if let sound = item["sound"] as? String, !sound.isEmpty {
-                content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: sound + ".caf"))
-            } else {
-                content.sound = .default
-            }
-            let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
-            let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
-            requests.append(UNNotificationRequest(identifier: Self.prefix + String(Int(id)), content: content, trigger: trigger))
+    private static func plan() -> [[String: Any]] {
+        (UserDefaults.standard.array(forKey: planKey) as? [[String: Any]]) ?? []
+    }
+
+    private static func save(_ items: [[String: Any]]) {
+        UserDefaults.standard.set(items, forKey: planKey)
+    }
+
+    // An absolute instant (dg-apps U6): with the zone in the components the trigger does not follow a later change of the
+    // phone's zone (without it, a reminder for 17:42 rang at 17:42 of wherever the phone was by then).
+    private static func trigger(at date: Date) -> UNCalendarNotificationTrigger {
+        let calendar = Calendar.current
+        var parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        parts.timeZone = calendar.timeZone
+        return UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
+    }
+
+    private static func request(for item: [String: Any]) -> UNNotificationRequest? {
+        guard let id = number(item["id"]), let at = number(item["at"]) else { return nil }
+        let content = UNMutableNotificationContent()
+        content.title = (item["title"] as? String) ?? ""
+        content.body = (item["body"] as? String) ?? ""
+        content.threadIdentifier = "uposatha"
+        if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
+        if let sound = item["sound"] as? String, !sound.isEmpty {
+            content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: sound + ".caf"))
+        } else {
+            content.sound = .default
         }
+        return UNNotificationRequest(identifier: prefix + String(Int(id)), content: content, trigger: trigger(at: Date(timeIntervalSince1970: at / 1000)))
+    }
+
+    // The next ones of the kept list as notifications, the renew notice after the last of them; what is set from the list
+    // beyond them is taken back. A pending one the list does not hold (set by an older version) is left to the page's cancel.
+    static func refill(_ done: ((Int) -> Void)? = nil) {
+        let now = Date().timeIntervalSince1970 * 1000
+        let items = plan().filter { (number($0["at"]) ?? 0) > now }.sorted { (number($0["at"]) ?? 0) < (number($1["at"]) ?? 0) }
+        save(items)
+        // The Uposatha reminders (first) are set however far ahead they are; the meal and parts ones fill the rest, the soonest first,
+        // and where they stop is where the renew notice goes.
+        let firsts = items.filter { ($0["first"] as? Bool) == true }.prefix(limit - 1)
+        let others = items.filter { ($0["first"] as? Bool) != true }
+        let rest = others.prefix(limit - 1 - firsts.count)
+        let next = (Array(firsts) + Array(rest)).sorted { (number($0["at"]) ?? 0) < (number($1["at"]) ?? 0) }
+        var requests = next.compactMap { request(for: $0) }
+        let end = rest.count < others.count ? rest.last : next.last
+        if let lastAt = end.flatMap({ number($0["at"]) }), let text = UserDefaults.standard.dictionary(forKey: renewKey) as? [String: String] {
+            let content = UNMutableNotificationContent()
+            content.title = text["title"] ?? ""
+            content.body = text["body"] ?? ""
+            content.threadIdentifier = "uposatha"   // no sound: news, not an alarm
+            requests.append(UNNotificationRequest(identifier: renewId, content: content, trigger: trigger(at: Date(timeIntervalSince1970: lastAt / 1000 + 60))))
+        }
+        let planned = Set(items.compactMap { number($0["id"]).map { prefix + String(Int($0)) } })
+        let toSet = requests
+        let wanted = Set(toSet.map { $0.identifier })
+        let renew = renewId
+        let center = UNUserNotificationCenter.current()
         center.getPendingNotificationRequests { pending in
-            // Ours that stay + the new ones, the soonest first, cut to the limit.
-            let replaced = Set(requests.map { $0.identifier })
-            let kept = pending.filter { $0.identifier.hasPrefix(Self.prefix) && !replaced.contains($0.identifier) }
-            func when(_ r: UNNotificationRequest) -> Date {
-                (r.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate() ?? Date.distantFuture
-            }
-            let all = (kept + requests).sorted { when($0) < when($1) }
-            let dropped = all.dropFirst(Self.limit).map { $0.identifier }
-            let keep = Set(all.prefix(Self.limit).map { $0.identifier })
-            if !dropped.isEmpty { center.removePendingNotificationRequests(withIdentifiers: dropped) }
+            let stale = pending.map { $0.identifier }.filter { ($0 == renew || planned.contains($0)) && !wanted.contains($0) }
+            if !stale.isEmpty { center.removePendingNotificationRequests(withIdentifiers: stale) }
             let group = DispatchGroup()
-            for r in requests where keep.contains(r.identifier) {
+            for r in toSet {
                 group.enter()
                 center.add(r) { _ in group.leave() }
             }
-            group.notify(queue: .main) { call.resolve(["count": keep.count]) }
+            group.notify(queue: .main) { done?(toSet.count) }
         }
     }
 
+    // Background refresh: iOS runs it when it sees fit (not at all once the app has been swiped away), never sooner than asked.
+    // Registered by AppDelegate before the launch ends, as BGTaskScheduler requires.
+    static func registerRefresh() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: refreshTask, using: nil) { task in
+            DgNotifyPlugin.scheduleRefresh()
+            task.expirationHandler = { task.setTaskCompleted(success: false) }
+            DgNotifyPlugin.refill { _ in task.setTaskCompleted(success: true) }
+        }
+    }
+
+    static func scheduleRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: refreshTask)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 12 * 3600)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    @objc func schedule(_ call: CAPPluginCall) {
+        let now = Date().timeIntervalSince1970 * 1000
+        var byId: [Int: [String: Any]] = [:]
+        for item in Self.plan() {
+            if let id = Self.number(item["id"]) { byId[Int(id)] = item }
+        }
+        for item in call.getArray("items", JSObject.self) ?? [] {
+            guard let id = Self.number(item["id"]), let at = Self.number(item["at"]), at > now else { continue }
+            byId[Int(id)] = ["id": Int(id), "at": at, "title": (item["title"] as? String) ?? "", "body": (item["body"] as? String) ?? "", "sound": (item["sound"] as? String) ?? "",
+                             "first": (item["first"] as? Bool) ?? false]
+        }
+        Self.save(Array(byId.values))
+        if let renew = call.getObject("renew"), let title = renew["title"] as? String, let body = renew["body"] as? String {
+            UserDefaults.standard.set(["title": title, "body": body], forKey: Self.renewKey)
+        }
+        Self.refill { count in call.resolve(["count": count]) }
+    }
+
     @objc func cancel(_ call: CAPPluginCall) {
-        let ids = (call.getArray("ids") ?? []).compactMap { Self.number($0) }.map { Self.prefix + String(Int($0)) }
+        let numbers = (call.getArray("ids") ?? []).compactMap { Self.number($0) }.map { Int($0) }
+        let gone = Set(numbers)
+        Self.save(Self.plan().filter { !gone.contains(Int(Self.number($0["id"]) ?? -1)) })
+        let ids = numbers.map { Self.prefix + String($0) }
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: ids)
         center.removeDeliveredNotifications(withIdentifiers: ids)
-        call.resolve()
+        Self.refill { _ in call.resolve() }
     }
 
+    // The whole kept list, not only what is set: the page cancels what it sees here before it sets the list again.
     @objc func getPending(_ call: CAPPluginCall) {
+        let now = Date().timeIntervalSince1970 * 1000
+        let kept = Self.plan().filter { (Self.number($0["at"]) ?? 0) > now }.compactMap { Self.number($0["id"]).map { Int($0) } }
         UNUserNotificationCenter.current().getPendingNotificationRequests { pending in
-            let list: [[String: Any]] = pending.compactMap { r in
-                guard r.identifier.hasPrefix(Self.prefix), let id = Int(r.identifier.dropFirst(Self.prefix.count)) else { return nil }
-                return ["id": id]
+            var ids = Set(kept)
+            for r in pending where r.identifier.hasPrefix(Self.prefix) {
+                if let id = Int(r.identifier.dropFirst(Self.prefix.count)) { ids.insert(id) }
             }
-            call.resolve(["notifications": list])
+            call.resolve(["notifications": ids.sorted().map { ["id": $0] }])
         }
     }
 }

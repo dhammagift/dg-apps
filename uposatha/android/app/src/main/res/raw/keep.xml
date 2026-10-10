@@ -1,3 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- shrinkResources: the alarm sounds (raw) and the shortcut icons (drawable) are picked by a name the page sends (getIdentifier), so the shrinker cannot see them used. -->
-<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@raw/*,@drawable/shortcut_*" />
+<!-- shrinkResources: the alarm sounds (raw), the shortcut icons and the notifications' moon icons and picture (drawable) are picked by a name the
+     page bridge sends (getIdentifier here, resolveSmallIcon/resolveLargeIcon in LocalNotifications), so the shrinker cannot see them used. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@raw/*,@drawable/shortcut_*,@drawable/ic_stat_moon_*,@drawable/uposatha_notification" />

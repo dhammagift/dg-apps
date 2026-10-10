@@ -84,6 +84,9 @@ public class DgSoundPlugin extends Plugin {
     static final String PREFS = "dg_sound";
     private static final String CHANNEL_PREFIX = "uposatha-own-";
     static final String ALARM_SUFFIX = "-alarm";
+    // The own sound's silent channel, for the "Alarm" source: DgAlarm plays the sound itself, as for the built-in ones (dg-apps U9:
+    // the "-alarm" channel has the sound too, and the reminder rang twice). Made by the bridge through channel().
+    static final String SILENT_SUFFIX = "-silent";
     private static final long MAX_BYTES = 10L * 1024 * 1024;   // a notification sound, not a track
 
     @PluginMethod
@@ -261,12 +264,13 @@ public class DgSoundPlugin extends Plugin {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return;
-        // One own sound at a time: the previous one's channels (both streams) are dropped.
+        // One own sound at a time: the previous one's channels (both streams, and the silent one) are dropped.
         if (id.startsWith(CHANNEL_PREFIX)) {
-            String base = id.endsWith(ALARM_SUFFIX) ? id.substring(0, id.length() - ALARM_SUFFIX.length()) : id;
+            String base = id.endsWith(ALARM_SUFFIX) ? id.substring(0, id.length() - ALARM_SUFFIX.length())
+                    : id.endsWith(SILENT_SUFFIX) ? id.substring(0, id.length() - SILENT_SUFFIX.length()) : id;
             for (NotificationChannel c : manager.getNotificationChannels()) {
                 String other = c.getId();
-                if (other.startsWith(CHANNEL_PREFIX) && !other.equals(base) && !other.equals(base + ALARM_SUFFIX)) {
+                if (other.startsWith(CHANNEL_PREFIX) && !other.equals(base) && !other.equals(base + ALARM_SUFFIX) && !other.equals(base + SILENT_SUFFIX)) {
                     manager.deleteNotificationChannel(other);
                 }
             }

@@ -196,6 +196,8 @@ public class DgSitePlugin extends Plugin {
         }
         File file = resolve(context, path);
         if (file == null || !file.isFile()) {
+            WebResourceResponse sound = rawSound(context, path);
+            if (sound != null) return sound;
             // A file with an extension that neither was downloaded nor is bundled is the site's (and is asked for
             // there); an address without one is the page's own SPA fallback, Capacitor's.
             String last = path.substring(path.lastIndexOf('/') + 1);
@@ -213,6 +215,22 @@ public class DgSitePlugin extends Plugin {
                 stream = bridge.getLocalServer().getJavaScriptInjectedStream(stream);
             }
             return new WebResourceResponse(typeOf(path), "UTF-8", 200, "OK", headers, stream);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // The page's sounds that are also notification sounds ship once, in res/raw (dg-apps U17: they were in the APK twice):
+    // tools/android-raw-sounds.js takes the copies out of the APK's assets, and the page's requests for them are answered here.
+    private static final java.util.regex.Pattern RAW_SOUND = java.util.regex.Pattern.compile("^/assets/(?:sounds|repeat-timer/sound|audio/parts)/([a-z0-9]+)\\.mp3$");
+
+    private static WebResourceResponse rawSound(Context context, String path) {
+        java.util.regex.Matcher m = RAW_SOUND.matcher(path);
+        if (!m.matches() || hasAsset(context, path)) return null;
+        int res = context.getResources().getIdentifier(m.group(1), "raw", context.getPackageName());
+        if (res == 0) return null;
+        try {
+            return new WebResourceResponse("audio/mpeg", null, 200, "OK", defaultHeaders(), context.getResources().openRawResource(res));
         } catch (Exception e) {
             return null;
         }

@@ -2,5 +2,5 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
     <include layout="@layout/widget_images" />
     <!-- The dots strip: its own tap area over the bottom of the widget (cycles the layer, does not open the app). -->
-    <View android:id="@+id/w_dots" android:layout_width="match_parent" android:layout_height="@dimen/w_dots_h" android:layout_gravity="bottom" />
+    <FrameLayout android:id="@+id/w_dots" android:layout_width="match_parent" android:layout_height="@dimen/w_dots_h" android:layout_gravity="bottom" />
 </FrameLayout>

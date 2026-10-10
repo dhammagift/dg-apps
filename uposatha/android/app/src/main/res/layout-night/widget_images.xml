@@ -4,5 +4,5 @@
         android:scaleType="fitXY" android:contentDescription="@string/widget_cd" android:visibility="gone" />
     <ImageView android:id="@+id/w_img_dark" android:layout_width="match_parent" android:layout_height="match_parent"
         android:scaleType="fitXY" android:contentDescription="@string/widget_cd" android:visibility="visible" />
-    <View android:id="@+id/w_tap" android:layout_width="match_parent" android:layout_height="match_parent" />
+    <FrameLayout android:id="@+id/w_tap" android:layout_width="match_parent" android:layout_height="match_parent" />
 </merge>

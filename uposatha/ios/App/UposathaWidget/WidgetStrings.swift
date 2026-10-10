@@ -47,6 +47,7 @@ enum WidgetStrings {
             "sunset": "закат",
             "to": "до {n}-го дня",
             "toNow": "идёт {n}-й день · до конца",
+            "today": "Сегодня",
             "unit.d": "д",
             "unit.h": "ч",
             "until": "до {time}",
@@ -55,6 +56,8 @@ enum WidgetStrings {
             "uposatha.5": "упосатх",
             "vikala": "Vikala до рассвета {time}",
             "vikalaShort": "vikala до {time}",
+            "waning": "убывающая",
+            "waxing": "растущая",
         ],
         "en": [
             "byClock": "by the clock",
@@ -101,6 +104,7 @@ enum WidgetStrings {
             "sunset": "sunset",
             "to": "to the {n}th day",
             "toNow": "{n}th day · ends in",
+            "today": "Today",
             "unit.d": "d",
             "unit.h": "h",
             "until": "until {time}",
@@ -109,6 +113,8 @@ enum WidgetStrings {
             "uposatha.5": "Uposathas",
             "vikala": "Vikala until dawn {time}",
             "vikalaShort": "vikala until {time}",
+            "waning": "waning",
+            "waxing": "waxing",
         ],
     ]
 

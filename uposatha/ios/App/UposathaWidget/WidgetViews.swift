@@ -296,25 +296,66 @@ struct UpoTexts: View {
     }
 }
 
-// "Next": the three Uposathas after this one (large)
-struct UpoNext: View {
+// The width of a text in a given system font (for table columns)
+func measuredWidth(_ text: String, _ size: CGFloat, _ weight: UIFont.Weight) -> CGFloat {
+    ceil((text as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: size, weight: weight)]).width) + 2
+}
+
+// A list of Uposathas as a TABLE: the moon, the date it begins on, its day and (right-aligned) "in N d", each in a column of its own;
+// the date and day columns are as wide as the widest entry of the list, so the rows line up.
+struct UpoTable: View {
     let snap: WSnap
+    let rows: [WUposatha]
+    var moon: CGFloat = 18
+    var font: CGFloat = 14
+    var withIn: Bool = true
+    var shortDate: Bool = false
 
     var body: some View {
         let l = snap.loc
-        let rows = Array(snap.rest.prefix(3))
+        let dates: [String] = rows.map { shortDate ? l.dayShort($0.start.ymd) : l.dateShort($0.start.ymd) }
+        let days: [String] = rows.map { l.s("dayN", ["n": String($0.lunarDay)]) }
+        let ins: [String] = rows.map { r in
+            r.start.date <= snap.t ? l.s("now") : l.s("inDays", ["n": String(snap.daysUntil(r.start.ymd))])
+        }
+        let dateW = dates.map { measuredWidth($0, font, .semibold) }.max() ?? 0
+        let dayW = days.map { measuredWidth($0, font - 1, .regular) }.max() ?? 0
         VStack(alignment: .leading, spacing: 7) {
-            Text(l.s("next").uppercased()).font(dgFont(11.5, .bold)).foregroundColor(.dgMuted).kerning(0.6)
             ForEach(0..<rows.count, id: \.self) { i in
                 HStack(spacing: 8) {
-                    MoonView(phase: rows[i].listPhase, size: 18, south: snap.south)
-                    Text(l.dateShort(rows[i].start.ymd)).font(dgFont(14, .semibold)).foregroundColor(.dgText)
-                    Text(l.s("dayN", ["n": String(rows[i].lunarDay)])).font(dgFont(13)).foregroundColor(.dgMuted)
-                    Spacer(minLength: 0)
-                    Text(l.s("inDays", ["n": String(snap.daysUntil(rows[i].start.ymd))])).font(dgFont(13)).foregroundColor(.dgMuted)
+                    MoonView(phase: rows[i].listPhase, size: moon, south: snap.south)
+                    Text(dates[i]).font(dgFont(font, .semibold)).foregroundColor(.dgText)
+                        .lineLimit(1).minimumScaleFactor(0.8).frame(width: dateW, alignment: .leading)
+                    Text(days[i]).font(dgFont(font - 1)).foregroundColor(.dgMuted)
+                        .lineLimit(1).minimumScaleFactor(0.8).frame(width: dayW, alignment: .leading)
+                    if withIn {
+                        Spacer(minLength: 0)
+                        Text(ins[i]).font(dgFont(font - 1)).foregroundColor(.dgMuted).lineLimit(1)
+                    }
                 }
             }
         }
+    }
+}
+
+// "Next" (large): as many of the next Uposatha rows (up to six) as the height left allows.
+struct UpoNext: View {
+    let snap: WSnap
+    var maxRows: Int = 6
+
+    // a row is 18 pt, 7 pt between rows
+    private func fit(_ height: CGFloat) -> Int { min(maxRows, max(0, Int((height + 7) / 25))) }
+
+    var body: some View {
+        let l = snap.loc
+        VStack(alignment: .leading, spacing: 7) {
+            Text(l.s("next").uppercased()).font(dgFont(11.5, .bold)).foregroundColor(.dgMuted).kerning(0.6)
+            GeometryReader { geo in
+                UpoTable(snap: snap, rows: Array(snap.rest.prefix(fit(geo.size.height))))
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -536,13 +577,7 @@ struct MonthLayer: View {
         return HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 7) {
                 Caption(text: l.monthTitle(p.m), size: 11.5)
-                ForEach(0..<min(3, upcoming.count), id: \.self) { i in
-                    HStack(spacing: 6) {
-                        MoonView(phase: upcoming[i].listPhase, size: 16, south: snap.south)
-                        Text(l.dayShort(upcoming[i].start.ymd)).font(dgFont(13, .semibold)).foregroundColor(.dgText)
-                        Text(l.s("dayN", ["n": String(upcoming[i].lunarDay)])).font(dgFont(12)).foregroundColor(.dgMuted).lineLimit(1).minimumScaleFactor(0.7)
-                    }
-                }
+                UpoTable(snap: snap, rows: Array(upcoming.prefix(3)), moon: 16, font: 12.5, withIn: false, shortDate: true)
             }
             .frame(width: 128, alignment: .leading)
             MonthGrid(snap: snap, rows: monthRows, cellHeight: 13, font: 11, linked: true)
@@ -560,15 +595,58 @@ struct MonthLayer: View {
                 Spacer(minLength: 8)
                 Text(l.uposathaCount(inMonth)).font(dgFont(12.5)).foregroundColor(.dgMuted)
             }
-            MonthGrid(snap: snap, rows: monthRows, cellHeight: 34, font: 15, linked: true)
-            if let u = upcoming.first {
-                HStack(spacing: 8) {
-                    MoonView(phase: u.listPhase, size: 22, south: snap.south)
-                    Text(l.dateShort(u.start.ymd)).font(dgFont(15, .semibold)).foregroundColor(.dgText)
-                    Text(l.s("dayN", ["n": String(u.lunarDay)]) + " · " + l.s("phase." + u.phaseName))
-                        .font(dgFont(14)).foregroundColor(.dgMuted).lineLimit(1).minimumScaleFactor(0.7)
-                    Spacer(minLength: 0)
-                    Text(l.countText(max(0, u.start.date.timeIntervalSince(snap.t)))).font(dgFont(14)).foregroundColor(.dgMuted)
+            MonthGrid(snap: snap, rows: monthRows, cellHeight: 24, font: 13, linked: true)
+            MonthBottom(snap: snap, rows: Array(upcoming.prefix(4)))
+                .frame(maxHeight: .infinity, alignment: .top)
+        }
+    }
+}
+
+// Under the large month: the Uposathas that are on and next (up to four rows, the same table) and, if the height still allows, today.
+struct MonthBottom: View {
+    let snap: WSnap
+    let rows: [WUposatha]
+
+    var body: some View {
+        GeometryReader { geo in
+            let h = geo.size.height
+            let n = min(rows.count, max(0, Int((h + 7) / 25)))
+            let used: CGFloat = n > 0 ? CGFloat(n) * 25 - 7 : 0
+            VStack(alignment: .leading, spacing: 8) {
+                if n > 0 {
+                    UpoTable(snap: snap, rows: Array(rows.prefix(n)))
+                }
+                if h - used >= 54 {
+                    TodayBlock(snap: snap)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+// Today: dawn, noon and sunset, and the moon (waxing / waning, the share lit).
+struct TodayBlock: View {
+    let snap: WSnap
+
+    var body: some View {
+        let l = snap.loc
+        let f = snap.heroPhase
+        let lit = Int(((1 - cos(2 * Double.pi * f)) / 2 * 100).rounded())
+        let word = l.s(f < 0.5 ? "waxing" : "waning")
+        let record = snap.data.days.first(where: { $0.date == snap.today })
+        HStack(alignment: .top, spacing: 10) {
+            MoonView(phase: f, size: 34, south: snap.south)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(l.s("today").uppercased()).font(dgFont(11.5, .bold)).foregroundColor(.dgMuted).kerning(0.6)
+                Text(word + " · " + String(lit) + "%").font(dgFont(13)).foregroundColor(.dgText).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if let day = record {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(l.s("sunrise") + " " + day.sunrise.hm).font(dgFont(11.5)).foregroundColor(.dgMuted)
+                    Text(l.s("noon") + " " + day.noon.hm).font(dgFont(11.5)).foregroundColor(.dgMuted)
+                    Text(l.s("sunset") + " " + day.sunset.hm).font(dgFont(11.5)).foregroundColor(.dgMuted)
                 }
             }
         }
@@ -645,9 +723,8 @@ struct MonthGrid: View {
                 .padding(.trailing, joinRight ? 0 : 1)
                 .padding(.vertical, 1)
             if isToday && item.inMonth {
-                RoundedRectangle(cornerRadius: 5).stroke(Color.dgText, lineWidth: 1.5)
-                    .padding(.horizontal, 1)
-                    .padding(.vertical, 1)
+                Capsule().stroke(Color.dgText, lineWidth: 1.5)
+                    .padding(2)
             }
             Text(item.inMonth ? String(item.day) : "").font(dgFont(font, weight)).foregroundColor(ink)
         }

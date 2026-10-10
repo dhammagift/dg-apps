@@ -140,7 +140,10 @@ final class WidgetMoon {
      * thick and looks like the new moon itself, and the 14th day looks like the full one; the thin part is made thicker (|k|: 0 at half, 1
      * at new and full; the thickness 1-|k| is raised to 0.6), the middle of the cycle hardly changes. Same function in dg-moon.js and MoonView.swift.
      */
-    static double seen(double a) { return 1 - Math.pow(1 - Math.min(1, Math.max(0, a)), 0.6); }
+    static double seen(double a) {
+        double u = 1 - Math.min(1, Math.max(0, a));
+        return 1 - (Math.pow(u, 0.6) + 0.07 * Math.exp(-u / 0.06) * (1 - Math.exp(-u / 0.0015)));   // + a bump for the first 5 %: not exact on purpose
+    }
 
     static double illumination(double f) { return (1 - Math.cos(2 * Math.PI * norm(f))) / 2; }
 

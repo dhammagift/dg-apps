@@ -128,12 +128,19 @@ final class WidgetMoon {
         f = norm(f);
         final int C = 50, R = 48, B = 62;
         double k = Math.cos(2 * Math.PI * f);
-        String rx = num(Math.abs(k) * R);
+        String rx = num(seen(Math.abs(k)) * R);
         boolean gib = k < 0, wax = f < 0.5;
         int ts = wax ? (gib ? 0 : 1) : (gib ? 1 : 0), bs = wax ? 1 : 0;
         return "M" + C + " " + (C - R) + "A" + rx + " " + R + " 0 0 " + ts + " " + C + " " + (C + R)
                 + "L" + C + " " + (C + B) + "A" + B + " " + B + " 0 0 " + bs + " " + C + " " + (C - B) + "Z";
     }
+
+    /**
+     * The terminator as it is DRAWN: a loader that is honest and still readable. The true crescent of the day after a new moon is two units
+     * thick and looks like the new moon itself, and the 14th day looks like the full one; the thin part is made thicker (|k|: 0 at half, 1
+     * at new and full; the thickness 1-|k| is raised to 0.6), the middle of the cycle hardly changes. Same function in dg-moon.js and MoonView.swift.
+     */
+    static double seen(double a) { return 1 - Math.pow(1 - Math.min(1, Math.max(0, a)), 0.6); }
 
     static double illumination(double f) { return (1 - Math.cos(2 * Math.PI * norm(f))) / 2; }
 

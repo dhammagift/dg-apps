@@ -11,7 +11,8 @@ struct MoonShade: Shape {
         if f < 0 { f += 1 }
         let c = 50.0, r = 48.0, big = 62.0
         let k = cos(2 * Double.pi * f)
-        let rx = abs(k) * r
+        // drawn, not true: the thin crescents are made thicker so that the day after a new moon (and the 14th day) can be told from the new (full) one; same as WidgetMoon.seen / dg-moon.js
+        let rx = (1 - pow(1 - min(1, abs(k)), 0.6)) * r
         let gibbous = k < 0
         let waxing = f < 0.5
         let terminatorRight = waxing ? !gibbous : gibbous

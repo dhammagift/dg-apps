@@ -178,14 +178,14 @@ job: that one exists to produce the offline library (a dg-node checkout, a ~213M
 the runner, the TOC snapshot) and none of it is needed here: `www/` is ddg-ui's page laid out from a
 shallow checkout (`DICT_UI_REF`) plus find on the page from dg-node (`DG_NODE_REF`).
 
-- **`dict-build`** — `npm ci`, the two checkouts, `tools/bundle-from-repo.js` and `test/bundle-files.js`, `npm run sync-android`, then the Gradle tasks. Runs on every tag and
-  on every manual run. Uploads three artifacts: `dg-dict-apk-<run>` (debug, installable straight
+- **`dict-build`** — `npm ci`, the two checkouts, `tools/bundle-from-repo.js` and `test/bundle-files.js`, `npm run sync-android`,
+  the browser checks of the bundle (`test/bundle-ui.js`, `test/bridge-ui.js` on the bundle itself), then the Gradle tasks. Runs with
+  `dict_only`, `release: dict` / `dict-ios` and on a `dict-v*` tag; `dict-launch` then opens the signed APK on an emulator. Uploads three artifacts: `dg-dict-apk-<run>` (debug, installable straight
   away), `dg-dict-apk-release-<run>` and `dg-dict-aab-release-<run>`. `versionCode` is the run
   number (`-PdgVersionCode`), like Dhamma.Gift — it must only ever climb, and the TWA last
   uploaded 2 under this package id.
-- **`dict-release`** — the same gate as Dhamma.Gift's `android-release`: a tag, or a manual run
-  with `release: play` / `both`. Uploads `gift.dhamma.pali` to the **internal** track of Google
-  Play. With `release: none` (the default) it does not run, so a manual run never burns a
+- **`dict-release`** — a manual run with `release: dict` from `main`, or a `dict-v*` tag, after `dict-build` and
+  `dict-launch` passed. Uploads `gift.dhamma.pali` to the **closed testing (alpha)** track of Google Play. With `release: none` (the default) it does not run, so a manual run never burns a
   versionCode in the console. Promoting internal → production stays a human decision.
 
 Both jobs use the secrets that are already in the repository, under the same names Dhamma.Gift
@@ -199,7 +199,7 @@ two Android files that are easy to confuse.
 ## Not done here
 
 - **Nothing is published to any store by hand.** The Play path above is dormant unless someone picks
-  `release: play` or pushes a tag.
+  `release: dict` or pushes a `dict-v*` tag.
 - **The old TWA module** (`dg-twa/dict-app`) and its CI job still exist; retiring it from Play is a
   separate decision. Both apps currently share one package id, so whichever uploads last wins —
   nothing should be promoted to production on `gift.dhamma.pali` until the TWA job stops running.

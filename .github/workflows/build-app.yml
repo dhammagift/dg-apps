@@ -7,8 +7,10 @@ name: Build App
 # THE UI IS NOT IN THIS REPOSITORY. It is generated at build time from a dg-node checkout:
 # build-page.js turns dg-node's search/index.html into www/index.html, build-assets.js copies
 # every asset that page references, build-toc-snapshot.js snapshots a running dg-fastify.js.
-# Which dg-node commit is used is pinned by the DG_NODE_REF file at this repo's root (a branch
-# name or tag), overridable per-run via the workflow_dispatch input below.hh
+# Which dg-node commit is used is pinned by the DG_NODE_REF file at this repo's root (a full commit
+# SHA; DICT_UI_REF pins ddg-ui the same way), overridable per-run via the workflow_dispatch input
+# below. The `plan` job resolves both to commits once, every job of the run checks out exactly those,
+# and the run summary and the release notes name them.
 #
 # dg-node has many git-tracked RELATIVE symlinks (reader/images/*.png, reader/css/index.css,
 # siteroot/*, ...) that assume the exact prod directory depth:
@@ -44,30 +46,37 @@ on:
   # So: a tag is a release and always builds; Actions → Build App → Run workflow builds any branch
   # on demand, with the same artifacts. Nothing else starts a run.
   #
+  # A tag releases ONE app, to both its stores (owner: never ship an app nobody asked for): dg-v* is
+  # Dhamma.Gift, dict-v* the dictionary, upo-v* Uposatha. A plain v* tag is Dhamma.Gift, which is what
+  # a tag meant before the other two apps existed (v1.16.0). Any other tag starts nothing.
+  #
   # The cost, stated rather than discovered later: main is no longer checked automatically by the
   # e2e steps below. Whoever merges something worth checking presses Run workflow — or we add a
   # light job that runs the checks without building the database, which is the expensive half.
   push:
     tags:
-      - '**'
+      - 'v*'
+      - 'dg-v*'
+      - 'dict-v*'
+      - 'upo-v*'
   workflow_dispatch:
     inputs:
       dg_node_ref:
-        description: 'dg-node branch or tag to build the UI from (default: contents of DG_NODE_REF)'
+        description: 'dg-node branch, tag or full commit SHA to build the UI from (default: the commit in DG_NODE_REF)'
         required: false
         type: string
       online_origin:
-        description: 'Site the app talks to (default: dhamma.gift; https://test.dhamma.gift to try unreleased site changes)'
+        description: 'Site the app talks to (default: dhamma.gift; https://test.dhamma.gift to try unreleased site changes; a store release refuses anything but https://dhamma.gift)'
         required: false
         type: string
       release:
-        description: 'Which store gets this build, one app at a time (owner, 2026-09-29: the same shape for all three apps, and never ship an app nobody asked for). dg = Dhamma.Gift to Play (closed testing, alpha; production still needs a promote in the console); dg-ios = Dhamma.Gift to TestFlight; dg-both = Dhamma.Gift to both, in one run; dict / dict-ios = the dictionary to Play (closed testing, alpha) / TestFlight; uposatha / uposatha-ios = Uposatha to Play (closed testing, alpha) / TestFlight. none (default) = build only, nothing uploaded. A dict/uposatha choice skips the Dhamma.Gift build (and its database) entirely. A tag always releases everything.'
+        description: 'Which store gets this build, one app at a time (owner, 2026-09-29: the same shape for all three apps, and never ship an app nobody asked for). dg = Dhamma.Gift to Play (closed testing, alpha; production still needs a promote in the console); dg-ios = Dhamma.Gift to TestFlight; dg-both = Dhamma.Gift to both, in one run; dict / dict-ios = the dictionary to Play (closed testing, alpha) / TestFlight; uposatha / uposatha-ios = Uposatha to Play (closed testing, alpha) / TestFlight. none (default) = build only, nothing uploaded. A dict/uposatha choice skips the Dhamma.Gift build (and its database) entirely. A store release runs only from main (or a tag) with the site at https://dhamma.gift, and waits for that app''s checks. A tag releases one app to both stores: dg-v* (or a plain v*) Dhamma.Gift, dict-v* the dictionary, upo-v* Uposatha.'
         required: false
         type: choice
         default: none
         options: [none, dg, dg-ios, dg-both, dict, dict-ios, uposatha, uposatha-ios]
       ios_checks:
-        description: 'Also run the iOS check jobs (simulator build, UI checks). Off by default: a manual run is usually about the Android half, and they only add minutes of waiting after it. A tag always runs them.'
+        description: 'Also run the iOS check jobs (simulator build, UI checks). Off by default: a manual run is usually about the Android half, and they only add minutes of waiting after it. A TestFlight release (dg-ios, dg-both, uposatha-ios, a tag) always runs its app''s checks and waits for them.'
         required: false
         type: boolean
         default: false
@@ -96,8 +105,13 @@ on:
         required: false
         type: boolean
         default: false
+      keep_ipa:
+        description: 'Also archive and sign a Dhamma.Gift IPA and keep it as an artifact, so ios-upload.yml can send this very build to TestFlight later (runs the iOS checks too). Off by default; dg-ios, dg-both and a Dhamma.Gift tag always make one.'
+        required: false
+        type: boolean
+        default: false
       dict_only:
-        description: 'Run ONLY the dictionary app jobs and skip Dhamma.Gift entirely. For checking a change under dict/ without building the offline library: minutes instead of the better part of an hour. A tag ignores it — a release builds everything.'
+        description: 'Run ONLY the dictionary app jobs and skip Dhamma.Gift entirely. For checking a change under dict/ without building the offline library: minutes instead of the better part of an hour. A tag ignores it.'
         required: false
         type: boolean
         default: false
@@ -118,6 +132,12 @@ concurrency:
   group: build-${{ github.ref }}-${{ inputs.dict_only && 'small' || 'full' }}-${{ inputs.release || 'none' }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
+# Read-only by default. The one job that writes (the GitHub release on a Dhamma.Gift tag) asks for it
+# itself, so the long build job — which runs npm packages of dg-node, the app and Playwright — holds no
+# token that could push to this repository.
+permissions:
+  contents: read
+
 env:
   # Builds talk to dhamma.gift (owner, 2026-09-15: the site's app layer is deployed to prod). For
   # unreleased site changes run the workflow by hand with online_origin=https://test.dhamma.gift.
@@ -128,44 +148,259 @@ env:
   DG_SERVER_PORT: '3000'
 
 jobs:
+  # ---------------------------------------------------------------------------------------------
+  # What this run is: the dg-node and ddg-ui commits it builds from, and which app goes to which store.
+  # Decided once, here, and read by every job below as needs.plan.outputs.*, rather than as a dozen
+  # copies of the same expression over inputs and github.ref that had already drifted apart (the
+  # comment on Uposatha's release said a tag did not touch it, the condition below it said it did).
+  #
+  # Commits, not branch names: DG_NODE_REF / DICT_UI_REF hold full SHAs, and a branch or tag given
+  # as dg_node_ref is turned into one here. Every job then fetches that exact commit, so the
+  # Dhamma.Gift and the Uposatha halves of one run can no longer get two different dg-node mains.
+  #
+  # The guard for store uploads lives here too, so a release that cannot go anyway fails in seconds
+  # instead of after the build: only from main or a tag, and only with the app talking to the real
+  # site. A test build (release=none) is never stopped by it.
+  plan:
+    name: Plan (pinned commits, what this run releases)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      dg_node_sha: ${{ steps.pin.outputs.dg_node_sha }}
+      ddg_ui_sha: ${{ steps.pin.outputs.ddg_ui_sha }}
+      build_dg: ${{ steps.what.outputs.build_dg }}
+      dg_android_tests: ${{ steps.what.outputs.dg_android_tests }}
+      dg_ios_checks: ${{ steps.what.outputs.dg_ios_checks }}
+      dg_ios_archive: ${{ steps.what.outputs.dg_ios_archive }}
+      dg_play: ${{ steps.what.outputs.dg_play }}
+      dg_ios: ${{ steps.what.outputs.dg_ios }}
+      github_release: ${{ steps.what.outputs.github_release }}
+      build_dict: ${{ steps.what.outputs.build_dict }}
+      dict_launch: ${{ steps.what.outputs.dict_launch }}
+      dict_play: ${{ steps.what.outputs.dict_play }}
+      dict_ios: ${{ steps.what.outputs.dict_ios }}
+      build_upo: ${{ steps.what.outputs.build_upo }}
+      upo_launch: ${{ steps.what.outputs.upo_launch }}
+      upo_ios_checks: ${{ steps.what.outputs.upo_ios_checks }}
+      upo_play: ${{ steps.what.outputs.upo_play }}
+      upo_ios: ${{ steps.what.outputs.upo_ios }}
+    steps:
+      - name: Checkout this repo (the app)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve dg-node and ddg-ui to commits
+        id: pin
+        env:
+          DG_NODE_INPUT: ${{ inputs.dg_node_ref }}
+        run: |
+          set -euo pipefail
+          resolve() {  # <repo> <branch | tag | full commit sha>
+            if [[ "$2" =~ ^[0-9a-f]{40}$ ]]; then echo "$2"; return 0; fi
+            local out sha
+            out=$(git ls-remote "https://github.com/dhammagift/$1.git" "refs/heads/$2" "refs/tags/$2" "refs/tags/$2^{}")
+            sha=$(awk '/\^\{\}$/ { print $1; exit }' <<< "$out")   # an annotated tag: the commit it points at
+            [ -n "$sha" ] || sha=$(awk 'NR == 1 { print $1 }' <<< "$out")
+            [ -n "$sha" ] && echo "$sha"
+          }
+          NODE_REF="${DG_NODE_INPUT:-$(tr -d '[:space:]' < DG_NODE_REF)}"
+          UI_REF="$(tr -d '[:space:]' < DICT_UI_REF)"
+          [ -n "$NODE_REF" ] || { echo "::error::DG_NODE_REF is empty and no dg_node_ref input given"; exit 1; }
+          [ -n "$UI_REF" ] || { echo "::error::DICT_UI_REF is empty"; exit 1; }
+          NODE_SHA=$(resolve dg-node "$NODE_REF") || { echo "::error::dg-node has no branch or tag '$NODE_REF' (a commit must be the full 40-character SHA)"; exit 1; }
+          UI_SHA=$(resolve ddg-ui "$UI_REF") || { echo "::error::ddg-ui has no branch or tag '$UI_REF'"; exit 1; }
+          echo "dg_node_sha=$NODE_SHA" >> "$GITHUB_OUTPUT"
+          echo "ddg_ui_sha=$UI_SHA" >> "$GITHUB_OUTPUT"
+          echo "dg-node: $NODE_REF = $NODE_SHA"
+          echo "ddg-ui:  $UI_REF = $UI_SHA"
+          {
+            echo "### Built from"
+            echo ""
+            echo "| | commit |"
+            echo "|---|---|"
+            echo "| dg-apps | \`$GITHUB_SHA\` ($GITHUB_REF_NAME) |"
+            echo "| dg-node | \`$NODE_SHA\` (from \`$NODE_REF\`) |"
+            echo "| ddg-ui | \`$UI_SHA\` (from \`$UI_REF\`) |"
+            echo ""
+            echo "Site the apps talk to: $DG_ONLINE_ORIGIN"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A push only ever arrives here as one of the tag patterns under `on:`; a dispatch says what it
+      # wants in its inputs. Every output is the string true or false.
+      - name: Decide what this run builds and releases
+        id: what
+        env:
+          RELEASE: ${{ inputs.release }}
+          IOS_CHECKS: ${{ inputs.ios_checks }}
+          UPOSATHA: ${{ inputs.uposatha }}
+          DICT_ONLY: ${{ inputs.dict_only }}
+          KEEP_IPA: ${{ inputs.keep_ipa }}
+        run: |
+          set -euo pipefail
+          app=""; stores=""
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            case "$GITHUB_REF_NAME" in
+              dict-v*) app=dict ;;
+              upo-v*)  app=uposatha ;;
+              dg-v*|v*) app=dg ;;
+              *) echo "::error::tag $GITHUB_REF_NAME names no app (dg-v*, dict-v*, upo-v*; a plain v* is Dhamma.Gift)"; exit 1 ;;
+            esac
+            stores="play ios"
+          else
+            case "${RELEASE:-}" in
+              dg) app=dg; stores=play ;;
+              dg-ios) app=dg; stores=ios ;;
+              dg-both) app=dg; stores="play ios" ;;
+              dict) app=dict; stores=play ;;
+              dict-ios) app=dict; stores=ios ;;
+              uposatha) app=uposatha; stores=play ;;
+              uposatha-ios) app=uposatha; stores=ios ;;
+            esac
+          fi
+          yes() { "$@" && echo true || echo false; }
+          to() { [ "$app" = "$1" ] && [[ " $stores " == *" $2 "* ]]; }
+          on() { [ "${1:-}" = true ]; }
+          dg_play=$(yes to dg play); dg_ios=$(yes to dg ios)
+          dict_play=$(yes to dict play); dict_ios=$(yes to dict ios)
+          upo_play=$(yes to uposatha play); upo_ios=$(yes to uposatha ios)
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            build_dg=$(yes [ "$app" = dg ]); build_dict=$(yes [ "$app" = dict ]); build_upo=$(yes [ "$app" = uposatha ])
+            dg_android_tests=$build_dg
+          else
+            # As before: a dictionary-only run or a dictionary/Uposatha release skips Dhamma.Gift and its database,
+            # and an iOS-only release skips the Android emulator suite.
+            build_dg=$(yes eval '! on "${DICT_ONLY:-}" && [ "$app" != dict ] && [ "$app" != uposatha ]')
+            build_dict=$(yes eval 'on "${DICT_ONLY:-}" || [ "$app" = dict ]')
+            build_upo=$(yes eval '[ "$app" = uposatha ] || on "${IOS_CHECKS:-}" || on "${UPOSATHA:-}"')
+            dg_android_tests=$(yes eval '[ "$build_dg" = true ] && [[ "${RELEASE:-}" != *-ios ]]')
+          fi
+          # An IPA is made only when someone will send it: TestFlight now, or ios-upload.yml later (keep_ipa).
+          dg_ios_archive=$(yes eval '[ "$build_dg" = true ] && { [ "$dg_ios" = true ] || on "${KEEP_IPA:-}"; }')
+          # The iOS checks run for every IPA, so nothing reaches TestFlight, now or later, without them.
+          dg_ios_checks=$(yes eval 'on "${IOS_CHECKS:-}" || [ "$dg_ios_archive" = true ]')
+          upo_ios_checks=$(yes eval 'on "${IOS_CHECKS:-}" || on "${UPOSATHA:-}" || [ "$upo_ios" = true ]')
+          # The emulator launch checks: before every Play upload, and on the test runs of that app so they are known to work.
+          dict_launch=$(yes eval '[ "$build_dict" = true ] && { [ "$dict_play" = true ] || on "${DICT_ONLY:-}"; }')
+          upo_launch=$(yes eval '[ "$build_upo" = true ] && { [ "$upo_play" = true ] || on "${UPOSATHA:-}"; }')
+          github_release=$(yes eval '[ "$GITHUB_EVENT_NAME" = push ] && [ "$app" = dg ]')
+          for v in build_dg dg_android_tests dg_ios_checks dg_ios_archive dg_play dg_ios github_release \
+                   build_dict dict_launch dict_play dict_ios build_upo upo_launch upo_ios_checks upo_play upo_ios; do
+            echo "$v=${!v}" >> "$GITHUB_OUTPUT"
+            echo "$v=${!v}"
+          done
+          uploads=""
+          for v in dg_play dg_ios dict_play dict_ios upo_play upo_ios; do [ "${!v}" = true ] && uploads="$uploads $v"; done
+          if [ -z "$uploads" ]; then
+            echo "Nothing from this run goes to a store." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "Store uploads:$uploads (each waits for its app's checks)" >> "$GITHUB_STEP_SUMMARY"
+          # The guard (verified 2026-10-10: Uposatha 488 went to Play from a FAILED run of a feature branch on 2026-10-03,
+          # and nothing would have stopped a build talking to test.dhamma.gift either).
+          case "$GITHUB_REF" in
+            refs/heads/main|refs/tags/*) ;;
+            *) echo "::error::a store release runs only from main or a tag, not $GITHUB_REF (release=none builds any branch)"; exit 1 ;;
+          esac
+          if [ "$DG_ONLINE_ORIGIN" != https://dhamma.gift ]; then
+            echo "::error::a store release talks to https://dhamma.gift, not $DG_ONLINE_ORIGIN (online_origin is for test builds)"; exit 1
+          fi
+
+      # What play-upload.yml and ios-upload.yml check before they send this run's files anywhere later.
+      - name: Write down what this run is
+        env:
+          DG_NODE_SHA: ${{ steps.pin.outputs.dg_node_sha }}
+          DDG_UI_SHA: ${{ steps.pin.outputs.ddg_ui_sha }}
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          e = os.environ
+          json.dump({'run_number': int(e['GITHUB_RUN_NUMBER']), 'ref': e['GITHUB_REF'], 'sha': e['GITHUB_SHA'],
+                     'dg_node': e['DG_NODE_SHA'], 'ddg_ui': e['DDG_UI_SHA'], 'online_origin': e['DG_ONLINE_ORIGIN']},
+                    open('build-info.json', 'w'), indent=2)
+          EOF
+          cat build-info.json
+
+      - name: Keep it with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info-${{ github.run_number }}
+          path: build-info.json
+          retention-days: 14
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------------------------
+  # The checks that need nothing but node: no device, no database, no built bundle. Every run, and
+  # every store upload waits for them. (The browser checks of each app's built page run in that app's
+  # build job, where the page is: build, dict-build, uposatha-build.)
+  unit:
+    name: Unit checks (node only)
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout this repo (the app)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      # The code that replaces an installed app's files with the site's (src/site-updater.js): gate closed = nothing applied,
+      # a changed file = handed over, one failed fetch = nothing applied.
+      - name: Check the site updater
+        run: node test/site-updater.test.js
+
+      # The dhammagift:// contract, checked as pure string work: every documented form and every documented refusal. It is
+      # the test for Android and iOS at once, because both hand the same raw URL to the same mapping (src/deep-link.js).
+      - name: Check the deep-link contract
+        run: node test/deep-link.test.js
+
+      # One version per app (version.properties), read by gradle and passed to xcodebuild. The Xcode project still carries
+      # MARKETING_VERSION for a build from Xcode on a Mac; it must say the same, or a local build and CI would disagree.
+      - name: Check the iOS projects carry the version in version.properties
+        run: |
+          set -euo pipefail
+          for app in . dict uposatha; do
+            v=$(sed -n 's/^ios=//p' "$app/version.properties")
+            [ -n "$v" ] || v=$(sed -n 's/^version=//p' "$app/version.properties")
+            [ -n "$v" ] || { echo "::error::$app/version.properties has no version="; exit 1; }
+            bad=$(grep -oE 'MARKETING_VERSION = [^;]+' "$app/ios/App/App.xcodeproj/project.pbxproj" | sort -u | grep -vxF "MARKETING_VERSION = $v" || true)
+            [ -z "$bad" ] || { echo "::error::$app: the Xcode project says '$bad', version.properties says $v"; exit 1; }
+            echo "$app: android $(sed -n 's/^version=//p' "$app/version.properties"), ios $v"
+          done
+
   build:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 90
     # The dict_only dispatch input skips this job and everything that needs it (android-release,
     # the three iOS jobs, ios-release): a change under dict/ has nothing to do with the offline
-    # library this job builds, and waiting an hour to find out would be the wrong price. A tag push
-    # has no inputs at all, so it always builds.
-    # Also skipped when only the dictionary or Uposatha is being released: neither needs it.
-    if: ${{ !inputs.dict_only && !contains(fromJSON('["dict","dict-ios","uposatha","uposatha-ios"]'), inputs.release) }}
-    # The default GITHUB_TOKEN is read-only on this org; action-gh-release below needs
-    # contents: write to create a release on a tag push, and fails with a 403 without it (never
-    # caught before because every prior CI run here was workflow_dispatch, which the Create
-    # Release step skips entirely).
-    permissions:
-      contents: write
+    # library this job builds, and waiting an hour to find out would be the wrong price.
+    # Also skipped when only the dictionary or Uposatha is being released (or tagged): neither needs it.
+    if: needs.plan.outputs.build_dg == 'true'
+    # Read-only (the workflow default). The GitHub release of a tag is made by the small
+    # github-release job below, the only one with contents: write.
+    outputs:
+      app_version: ${{ steps.appver.outputs.name }}
+      cert: ${{ steps.sig.outputs.cert }}
 
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      # The pin lives in a committed file rather than only in this workflow so a dg-node upgrade
-      # is a reviewable one-line diff, and so local builds can read the same value.
-      # Read once, near the top, so both the artifact names and the release step (near the bottom
-      # of this job) can use it without re-parsing build.gradle.
+      # Read once, near the top, so both the artifact names and the release job can use it.
       - name: Read app version
         id: appver
         run: |
-          name=$(grep -oP 'versionName\s+"\K[^"]+' android/app/build.gradle)
+          name=$(sed -n 's/^version=//p' version.properties)
           echo "name=$name" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve dg-node ref
-        id: pin
-        run: |
-          REF="${{ inputs.dg_node_ref }}"
-          if [ -z "$REF" ]; then REF="$(tr -d '[:space:]' < DG_NODE_REF)"; fi
-          if [ -z "$REF" ]; then echo "::error::DG_NODE_REF is empty and no dg_node_ref input given"; exit 1; fi
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-          echo "Building UI from dg-node@$REF"
 
       - name: Prepare workspace layout
         run: |
@@ -208,18 +443,20 @@ jobs:
           git fetch --depth 1 origin main -q
           git checkout -q FETCH_HEAD
 
-      # Anonymous `git fetch origin <full-sha>` returns HTTP 401 for these repos (GitHub's
-      # allowReachableSHA1InWant extension isn't enabled) — fetch by ref name, which is always in
-      # the standard ref advertisement, and report the resolved commit for the build log.
+      # By the commit the plan job resolved. (An anonymous `git fetch origin <full-sha>` once
+      # answered HTTP 401 here; it works on these public repos now — checked 2026-10-10 for the tip
+      # of main and for an older commit.)
       - name: Checkout dg-node (the website — source of the UI)
+        env:
+          DG_NODE_SHA: ${{ needs.plan.outputs.dg_node_sha }}
         run: |
           mkdir -p "$DG_NODE_PATH"
           cd "$DG_NODE_PATH"
           git init -q
           git remote add origin https://github.com/dhammagift/dg-node.git
-          git fetch --depth 1 origin "${{ steps.pin.outputs.ref }}" -q
+          git fetch --depth 1 origin "$DG_NODE_SHA" -q
           git checkout -q FETCH_HEAD
-          echo "dg-node@${{ steps.pin.outputs.ref }} = $(git rev-parse HEAD)"
+          echo "dg-node = $(git rev-parse HEAD)"
 
       # structure/tree is NOT optional — dg-fastify.js's TOC_TREE_ROOT reads
       # .../sc-data/structure/tree/{sutta,vinaya,abhidhamma}/{code}-tree.json for every single
@@ -229,6 +466,7 @@ jobs:
       - name: Checkout SuttaCentral bilara data (public, root/variant/html/translation only)
         uses: actions/checkout@v4
         with:
+          persist-credentials: false
           repository: suttacentral/sc-data
           path: repos/sc-data
           sparse-checkout: |
@@ -240,6 +478,7 @@ jobs:
       - name: Checkout DhammaGift offline translations
         uses: actions/checkout@v4
         with:
+          persist-credentials: false
           repository: dhammagift/offline-data
           path: repos/offline-data
           sparse-checkout: |
@@ -303,16 +542,17 @@ jobs:
         with:
           node-version: '24.20.0'
 
-      - name: Restore npm cache
+      # Only npm's download cache, never node_modules: a restored node_modules of dg-node (whose lock file
+      # is outside the workspace, so no key could see it) or of an older Node could be stale without anyone
+      # noticing, and an exact key hit never refreshed it. ~/.npm is content-addressed, so restoring an
+      # older one is always safe; the installs below then lay node_modules out from the lock files.
+      - name: Restore the npm download cache
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.npm
-            /var/www/html/nodejs/node_modules
-            ${{ github.workspace }}/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package.json') }}
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-24.20.0-${{ hashFiles('package-lock.json') }}-${{ needs.plan.outputs.dg_node_sha }}
           restore-keys: |
-            ${{ runner.os }}-node-
+            ${{ runner.os }}-npm-24.20.0-
 
       # `cache: gradle` works here but did NOT in dg-node's version of this workflow: setup-java's
       # gradle-file glob (like hashFiles()) refuses to look outside $GITHUB_WORKSPACE, and there
@@ -326,7 +566,7 @@ jobs:
           cache: 'gradle'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         with:
           # The action's default package list includes the legacy "tools" package, which Google has
           # dropped from the SDK repository (sdkmanager: "Failed to find package 'tools'"), so the
@@ -338,7 +578,7 @@ jobs:
         run: npm install --legacy-peer-deps --no-audit
 
       - name: Install app dependencies
-        run: npm install --legacy-peer-deps --no-audit
+        run: npm ci --no-audit
 
       # public/overrides/js/fontawesome-local.js is gitignored in dg-node and generated from its
       # @fortawesome devDependency. dg-node's own CI never ran this, so every APK it produced
@@ -454,13 +694,8 @@ jobs:
       # out from under a workflow without any warning. `playwright install` pins an EXACT Chromium
       # build matched to this playwright-core version instead, the same guarantee build-app.yml
       # already gives every other dependency (npm's lockfile, DG_NODE_REF, the JDK/SDK versions).
-      # The dhammagift:// contract, checked as pure string work: 25 cases covering every documented
-      # form and every documented refusal. It is the test for Android and iOS at once, because both
-      # hand the same raw URL to the same mapping (src/deep-link.js) — and it needs nothing but node,
-      # so it runs here rather than only on a macOS runner.
-      - name: Check the deep-link contract
-        run: node test/deep-link.test.js
-
+      # (The dhammagift:// contract itself, test/deep-link.test.js, needs nothing but node: it runs
+      # in the unit job.)
       - name: Install a browser driver for the end-to-end checks
         # 40-170 s normally; run 429 hung here for 40 min (a stuck download on the runner) with nothing
         # to stop it but the 6-hour job limit. Each try is capped, and a second one follows a hang.
@@ -480,6 +715,23 @@ jobs:
           # pin either way, so both packages agree on which Chromium revision to fetch/resolve.
           timeout 300 npx --yes playwright@1.49.1 install --with-deps chromium webkit \
             || timeout 300 npx --yes playwright@1.49.1 install --with-deps chromium webkit
+
+      # The app's own rows on the built pages, with Capacitor mocked and the real src/native-bridge.js:
+      # the rating invitation (when it shows, when it must not) and the launcher-shortcut sets the
+      # settings switch pushes. These tests load Playwright from the path it has on the dev server
+      # (/usr/lib/node_modules/@playwright/cli/...), so that path is pointed at the copy installed above.
+      # (test/rate-us-ui.js and test/launch-screens-ui.js fail on main as it is — expectations older
+      # than the iOS App Store id and the launch screens — and are not run until they are brought up to date.)
+      - name: Check the rating invitation and the launcher-shortcut sets (built page, a browser)
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /opt/pw-browsers
+          DG_SHOTS: ${{ runner.temp }}/dg-shots
+        run: |
+          sudo mkdir -p /usr/lib/node_modules/@playwright/cli/node_modules
+          sudo ln -sfn "$GITHUB_WORKSPACE/node_modules/playwright-core" /usr/lib/node_modules/@playwright/cli/node_modules/playwright
+          mkdir -p "$DG_SHOTS"
+          node test/rate-prompt-ui.js
+          node test/shortcuts-ui.js
 
       # The app's own checks, run in dg-node against the server that is already up: every bundled
       # page compared with the live site (the "tile opens the search page" family — a missing path
@@ -544,6 +796,27 @@ jobs:
       - name: List the offline library
         working-directory: /var/www/html/nodejs
         run: ls -lah siteroot/mobile-data/ || { echo "::error::publishing the offline library produced nothing"; exit 1; }
+
+      # The checks below run on the database this run built, but a phone downloads the one the site
+      # publishes ($DG_ONLINE_ORIGIN/mobile-data). If dg-node changed the schema and the site has not
+      # republished yet (or the other way round), every check here is green and offline search is broken
+      # on every device. So the two must agree on what the app's code depends on: schema and FTS tokenizer.
+      - name: The site's published library has the schema this build expects
+        working-directory: /var/www/html/nodejs
+        run: |
+          set -euo pipefail
+          curl -sSf --retry 3 --max-time 30 "$DG_ONLINE_ORIGIN/mobile-data/db-manifest.json" -o /tmp/site-manifest.json \
+            || { echo "::error::$DG_ONLINE_ORIGIN/mobile-data/db-manifest.json did not answer: the app would have no library to download"; exit 1; }
+          python3 - siteroot/mobile-data/db-manifest.json /tmp/site-manifest.json <<'EOF'
+          import json, sys
+          built, site = (json.load(open(f)) for f in sys.argv[1:3])
+          bad = [k for k in ('schema_version', 'fts') if built.get(k) != site.get(k)]
+          for k in ('schema_version', 'fts', 'build_id', 'built_at'):
+              print(f"{k:15} built here: {built.get(k)!s:28} published: {site.get(k)}")
+          if bad:
+              print("::error::the published library differs in " + ", ".join(bad) + ": the app built here would fail on the database phones download")
+              sys.exit(1)
+          EOF
 
       - name: Serve the built app and its database
         run: |
@@ -656,6 +929,9 @@ jobs:
       # installable without tagging anything. The release below only happens for tag pushes:
       # action-gh-release needs a tag to attach to, and on a dispatch run there is none — that
       # is what failed run #3 after the APK itself had already built fine.
+      # The repository is public, so every artifact can be downloaded by anyone signed in to GitHub:
+      # the APK/AAB/IPA files are kept 14 days (long enough to test a build and send it on with
+      # play-upload.yml / ios-upload.yml), not 30.
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -663,7 +939,7 @@ jobs:
           name: dg-app-full-apk-${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
       # Release-signed build: the ONLY kind that can pass Android App Links verification (see
       # AndroidManifest.xml's autoVerify comment) — install this one, not the debug APK above, to
@@ -706,7 +982,7 @@ jobs:
           name: dg-app-full-apk-release-${{ github.run_number }}
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
       # The AAB is what Google Play takes — an APK built from this same project cannot be uploaded
       # there, and until now the workflow produced only APKs (owner: "поправишь где надо git action
@@ -735,10 +1011,46 @@ jobs:
           name: dg-app-full-aab-release-${{ github.run_number }}
           path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
-      # Kept as an artifact rather than committed anywhere, and attached to the release below on
-      # tags so a tagged build is self-contained: the APK plus the exact database it expects.
+      # The emulator tests used to install the sideload APK (gift.dhamma.mobile) while Play got this AAB
+      # (gift.dhamma.twa, its own shortcuts.xml): the package that reaches readers was never installed
+      # anywhere before it did. bundletool makes the universal APK Play itself would serve from this very
+      # AAB, signed with the same key, and android-tests runs its launcher-shortcut suite on that.
+      - name: The Play bundle as an installable APK (for the emulator tests)
+        if: env.skip != 'true'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEYSTORE_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/bundletool.jar" https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $RUNNER_TEMP/bundletool.jar" | sha256sum -c -
+          java -jar "$RUNNER_TEMP/bundletool.jar" build-apks --mode=universal \
+            --bundle=android/app/build/outputs/bundle/release/app-release.aab \
+            --output="$RUNNER_TEMP/play.apks" \
+            --aapt2="$ANDROID_HOME/build-tools/36.0.0/aapt2" \
+            --ks="$ANDROID_KEYSTORE_PATH" --ks-key-alias="$ANDROID_KEY_ALIAS" \
+            --ks-pass="pass:$ANDROID_KEYSTORE_PASSWORD" --key-pass="pass:$ANDROID_KEY_PASSWORD"
+          mkdir -p play-apk
+          unzip -o -q "$RUNNER_TEMP/play.apks" universal.apk -d play-apk
+          pkg=$("$ANDROID_HOME/build-tools/36.0.0/aapt2" dump packagename play-apk/universal.apk)
+          echo "package: $pkg"
+          [ "$pkg" = gift.dhamma.twa ] || { echo "::error::the universal APK of the Play bundle is $pkg, not gift.dhamma.twa"; exit 1; }
+
+      - name: Upload the Play bundle's APK
+        if: success() && env.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dg-app-full-apk-play-${{ github.run_number }}
+          path: play-apk/universal.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      # 214 MB per run, and phones download the site's own copy, not this one: kept two days, for a
+      # look at what this run tested against (and for the GitHub release of a tag, which takes it
+      # from here within the same run).
       - name: Upload offline database
         if: success()
         uses: actions/upload-artifact@v4
@@ -748,36 +1060,67 @@ jobs:
             /var/www/html/nodejs/siteroot/mobile-data/dg.db.gz
             /var/www/html/nodejs/siteroot/mobile-data/db-manifest.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 2
 
-      # Named, clearly-labelled copies for the two very different things this build produces — a
-      # sideloadable APK (gift.dhamma.mobile, for testing) and the Google Play bundle (gift.dhamma.twa,
-      # replaces the TWA listing) — so the release page doesn't just show two files both called
-      # "app-release.*" with no way to tell which is which. The debug APK is a CI smoke-test build
-      # (assembleDebug earlier in this job); it was attached to old releases by mistake and confused
-      # "which one do I install" — dropped here, still in the per-run artifacts above if ever needed.
+  # ---------------------------------------------------------------------------------------------
+  # The GitHub release of a Dhamma.Gift tag: the sideload APK, the Play AAB and the database this
+  # build expects, from the build job's artifacts. Its own small job because it is the only thing in
+  # this workflow that writes to the repository — the build job, which runs third-party npm code for
+  # an hour, keeps a read-only token.
+  #
+  # Named, clearly-labelled copies for the two very different things the build produces — a
+  # sideloadable APK (gift.dhamma.mobile, for testing) and the Google Play bundle (gift.dhamma.twa,
+  # replaces the TWA listing) — so the release page doesn't just show two files both called
+  # "app-release.*" with no way to tell which is which. The debug APK is a CI smoke-test build; it was
+  # attached to old releases by mistake and confused "which one do I install" — still in the per-run
+  # artifacts if ever needed.
+  github-release:
+    name: GitHub release (Dhamma.Gift tag)
+    needs: [plan, unit, build]
+    if: needs.plan.outputs.github_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dg-app-full-apk-release-${{ github.run_number }}
+          path: apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: dg-app-full-aab-release-${{ github.run_number }}
+          path: aab
+      - uses: actions/download-artifact@v4
+        with:
+          name: dg-app-full-db-${{ github.run_number }}
+          path: db
+
       - name: Rename release assets
-        if: success() && startsWith(github.ref, 'refs/tags/')
+        env:
+          VERSION: ${{ needs.build.outputs.app_version }}
         run: |
+          set -euo pipefail
           mkdir -p release-assets
-          cp android/app/build/outputs/apk/release/app-release.apk "release-assets/dhamma-gift-${{ steps.appver.outputs.name }}-sideload.apk"
-          cp android/app/build/outputs/bundle/release/app-release.aab "release-assets/dhamma-gift-${{ steps.appver.outputs.name }}-play.aab"
-          cp /var/www/html/nodejs/siteroot/mobile-data/dg.db.gz release-assets/
-          cp /var/www/html/nodejs/siteroot/mobile-data/db-manifest.json release-assets/
+          cp apk/app-release.apk "release-assets/dhamma-gift-$VERSION-sideload.apk"
+          cp aab/app-release.aab "release-assets/dhamma-gift-$VERSION-play.aab"
+          cp db/dg.db.gz db/db-manifest.json release-assets/
+          ls -la release-assets
 
       - name: Create Release
-        if: success() && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: release-assets/*
           body: |
-            Built from dg-node@${{ steps.pin.outputs.ref }}, app version ${{ steps.appver.outputs.name }} (code ${{ github.run_number }}).
+            App version ${{ needs.build.outputs.app_version }} (code ${{ github.run_number }}), built from:
+            - dg-apps `${{ github.sha }}`
+            - dg-node `${{ needs.plan.outputs.dg_node_sha }}`
 
             - `*-sideload.apk` — package `gift.dhamma.mobile`, install directly on a device for testing. Points at https://dhamma.gift.
             - `*-play.aab` — package `gift.dhamma.twa`, upload to Google Play (updates the existing TWA listing).
             - `dg.db.gz` / `db-manifest.json` — the offline library this build expects.
 
-            Signing certificate SHA-256: `${{ steps.sig.outputs.cert }}`
+            Signing certificate SHA-256: `${{ needs.build.outputs.cert }}`
           token: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------------------------
@@ -801,23 +1144,29 @@ jobs:
   #   GitHub -> Settings -> Secrets -> PLAY_SERVICE_ACCOUNT_JSON = the whole JSON file.
   # Play's "the first upload must be done by hand" rule is already satisfied: the package exists,
   # it replaced the TWA listing.
+  # The upload itself is play-release.yml, the same few steps for all three apps; each app's job waits
+  # for that app's checks, so a red check keeps its build out of the store.
   # Emulator tests on the same APK the owner gets (dg-apps#45): launcher shortcuts, recent searches in them,
   # Favorites & History, a recent text reopening. Runs on every build, in parallel with everything else;
   # the Play upload below waits for it, so a red test keeps a build out of the store.
   android-tests:
     name: Android emulator tests (shortcuts, history)
-    needs: build
+    needs: [plan, build]
     runs-on: ubuntu-latest
     # An iOS-only release has nothing to do with the Android half. Without this gate the emulator
     # suite ran on every dg-ios build, and a flaky launcher check failed the whole run AFTER the
     # IPA had already been uploaded to TestFlight (owner, 2026-10-01).
-    if: ${{ !endsWith(inputs.release || '', '-ios') }}
+    if: needs.plan.outputs.dg_android_tests == 'true'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # The package Play gets (gift.dhamma.twa, the universal APK of the very AAB that is uploaded),
+      # not the sideload one: launcher shortcuts name their package, and only this one ships.
       - uses: actions/download-artifact@v4
         with:
-          name: dg-app-full-apk-release-${{ github.run_number }}
+          name: dg-app-full-apk-play-${{ github.run_number }}
           path: apk
       - name: OCR
         run: sudo apt-get install -y -qq tesseract-ocr ${{ inputs.video && 'ffmpeg' || '' }} > /dev/null
@@ -829,7 +1178,7 @@ jobs:
       - name: Emulator
         env:
           VIDEO: ${{ inputs.video && '1' || '0' }}
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 36
           target: google_apis
@@ -837,7 +1186,7 @@ jobs:
           profile: pixel_7
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.mobile shortcuts
+          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.twa shortcuts
       # The notification player (Pause / Play on the shade) on the debug APK, with both kinds of voice: the page's own audio and the
       # OS speech (tools/emu-tray.js). Added 2026-10-08 after "Play in the notification does nothing" (an audio-focus race between the
       # plugin and the WebView) reached testers: a red test keeps the build out of the store.
@@ -851,7 +1200,7 @@ jobs:
         with:
           node-version: '24.20.0'
       - name: Emulator, notification player
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 36
           target: google_apis
@@ -888,59 +1237,15 @@ jobs:
 
   android-release:
     name: Android release (Play closed testing, alpha)
-    needs: [build, android-tests]
-    if: (github.event_name == 'workflow_dispatch' && (inputs.release == 'dg' || inputs.release == 'dg-both')) || startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Is the service account there?
-        id: play
-        env:
-          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-        run: |
-          if [ -n "$PLAY_JSON" ]; then
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-            echo "service account present"
-          else
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::notice::PLAY_SERVICE_ACCOUNT_JSON is not set - nothing was uploaded to Play."
-            {
-              echo "### Android release: nothing happened"
-              echo ""
-              echo "Missing repository secret: \`PLAY_SERVICE_ACCOUNT_JSON\`."
-              echo ""
-              echo "Nothing was uploaded to Google Play. See docs/ANDROID_RELEASE.md."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      # The artifact the build job uploaded, not a rebuild: the bytes that go to Play are the same
-      # ones the checks ran against and the same ones in dg-app-full-aab-release-<run>.
-      - name: Download the signed AAB
-        if: steps.play.outputs.have == 'yes'
-        uses: actions/download-artifact@v4
-        with:
-          name: dg-app-full-aab-release-${{ github.run_number }}
-          path: aab
-
-      - name: Upload to Google Play
-        if: steps.play.outputs.have == 'yes'
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: gift.dhamma.twa
-          releaseFiles: aab/app-release.aab
-          track: alpha
-          status: completed
-
-      - name: Say what went to Play
-        if: success() && steps.play.outputs.have == 'yes'
-        run: |
-          {
-            echo "### Android release: uploaded"
-            echo ""
-            echo "versionCode ${{ github.run_number }} is on the **closed testing (alpha)** track of \`gift.dhamma.twa\`."
-            echo "Testers get it within minutes. Production needs a promote in the Play Console."
-          } >> "$GITHUB_STEP_SUMMARY"
+    needs: [plan, unit, build, android-tests]
+    if: needs.plan.outputs.dg_play == 'true'
+    uses: ./.github/workflows/play-release.yml
+    with:
+      app: Dhamma.Gift
+      package: gift.dhamma.twa
+      aab_artifact: dg-app-full-aab-release-${{ github.run_number }}
+    secrets:
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
 
   # ---------------------------------------------------------------------------------------------
   # The dictionary app (gift.dhamma.pali) — a Capacitor shell around https://dict.dhamma.gift,
@@ -964,10 +1269,11 @@ jobs:
   # job below, which is the only path that needs the artifact anyway.
   dict-build:
     name: Dictionary app (Android)
+    needs: plan
     runs-on: ubuntu-latest
-    # Only when the dictionary is what was asked for (a tag releases everything). Every manual run
-    # used to build all three apps, whatever the release target was (owner, 2026-10-01).
-    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.dict_only || inputs.release == 'dict' || inputs.release == 'dict-ios' }}
+    # Only when the dictionary is what was asked for (dict_only, dict / dict-ios, a dict-v* tag). Every
+    # manual run used to build all three apps, whatever the release target was (owner, 2026-10-01).
+    if: needs.plan.outputs.build_dict == 'true'
     timeout-minutes: 40
     # Artifacts only — nothing here creates or edits a GitHub release.
     permissions:
@@ -975,6 +1281,8 @@ jobs:
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -984,7 +1292,7 @@ jobs:
           cache: 'gradle'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
@@ -997,20 +1305,12 @@ jobs:
       # its public/, static files), and Dhamma.Gift's find-on-page from the dg-node checkout pinned by DG_NODE_REF
       # (dict/tools/bundle-from-repo.js) — no live site, no browser: it used to be crawled off dict.dhamma.gift, so a
       # build shipped whatever production served that minute. Fails the job when a file a page references is missing.
-      - name: Resolve the ddg-ui and dg-node refs
-        id: pin
-        run: |
-          UI="$(tr -d '[:space:]' < DICT_UI_REF)"
-          if [ -z "$UI" ]; then echo "::error::DICT_UI_REF is empty"; exit 1; fi
-          REF="${{ inputs.dg_node_ref }}"
-          if [ -z "$REF" ]; then REF="$(tr -d '[:space:]' < DG_NODE_REF)"; fi
-          if [ -z "$REF" ]; then echo "::error::DG_NODE_REF is empty and no dg_node_ref input given"; exit 1; fi
-          echo "ui=$UI" >> "$GITHUB_OUTPUT"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-
       - name: Checkout ddg-ui (the dictionary's page) and dg-node (find on the page)
+        env:
+          DDG_UI_SHA: ${{ needs.plan.outputs.ddg_ui_sha }}
+          DG_NODE_SHA: ${{ needs.plan.outputs.dg_node_sha }}
         run: |
-          for pair in "ddg-ui ${{ steps.pin.outputs.ui }}" "dg-node ${{ steps.pin.outputs.ref }}"; do
+          for pair in "ddg-ui $DDG_UI_SHA" "dg-node $DG_NODE_SHA"; do
             set -- $pair
             mkdir -p "$RUNNER_TEMP/$1"
             git -C "$RUNNER_TEMP/$1" init -q
@@ -1046,6 +1346,27 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # The bundled page in a real browser, before anything is packaged: it opens with every request to
+      # the network refused, the updater hands over exactly the file the site changed, and the app's own
+      # burger rows (src/dict-bridge.js) land in the page in both languages and themes. bridge-ui.js is
+      # pointed at the bundle itself (a static server over www/, a directory's index.html like the app),
+      # not at the live dictionary. The tests load Playwright from the path it has on the dev server, so
+      # that path is pointed at this app's own copy. Every dictionary upload waits for this job.
+      - name: Browser checks of the bundled page (offline start, updater, the app's rows)
+        working-directory: dict
+        env:
+          DG_SHOTS: ${{ runner.temp }}/dict-shots
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          sudo mkdir -p /usr/lib/node_modules/@playwright/cli/node_modules
+          sudo ln -sfn "$PWD/node_modules/playwright" /usr/lib/node_modules/@playwright/cli/node_modules/playwright
+          mkdir -p "$DG_SHOTS"
+          node test/bundle-ui.js
+          python3 -m http.server 8191 --bind 127.0.0.1 --directory www > /dev/null 2>&1 &
+          sleep 1
+          DG_DICT_URL=http://127.0.0.1:8191/ node test/bridge-ui.js
+
       - name: Grant gradlew permissions
         run: chmod +x dict/android/gradlew
 
@@ -1060,7 +1381,7 @@ jobs:
           name: dg-dict-apk-${{ github.run_number }}
           path: dict/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
       # Same keystore and the same secret names as Dhamma.Gift (this repo's ANDROID_* or
       # dg-twa's KEYSTORE_* — whichever set exists), so one key signs both apps. When no secret is
@@ -1094,7 +1415,7 @@ jobs:
           name: dg-dict-apk-release-${{ github.run_number }}
           path: dict/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
       - name: Build Release AAB (Google Play)
         if: env.skip != 'true'
@@ -1114,7 +1435,20 @@ jobs:
           name: dg-dict-aab-release-${{ github.run_number }}
           path: dict/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
+
+  # The signed release APKs of the dictionary and Uposatha on an emulator, before their Play uploads:
+  # installed, opened from the launcher, the page painted, the process alive, no crash in the log
+  # (tools/emu-launch.sh). Also on the test runs of that app (dict_only / uposatha), so the check is
+  # known to work before a release depends on it.
+  dict-launch:
+    name: Dictionary app launch check (emulator)
+    needs: [plan, dict-build]
+    if: needs.plan.outputs.dict_launch == 'true'
+    uses: ./.github/workflows/launch-check.yml
+    with:
+      apk_artifact: dg-dict-apk-release-${{ github.run_number }}
+      package: gift.dhamma.pali
 
   # ---------------------------------------------------------------------------------------------
   # The Uposatha calendar app (gift.dhamma.uposatha) — a Capacitor shell around the site's calendar
@@ -1128,17 +1462,20 @@ jobs:
   # listing is created the file is already in the run.
   uposatha-build:
     name: Uposatha app (Android)
+    needs: plan
     runs-on: ubuntu-latest
-    # Same gate as dict-build, its own target only (owner, 2026-10-01), plus ios_checks: the iOS
-    # simulator job below needs this job's web bundle, and a manual ios_checks run asks for nothing
-    # else (release=none uploads nothing anywhere).
-    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release == 'uposatha' || inputs.release == 'uposatha-ios' || inputs.ios_checks || inputs.uposatha }}
+    # Same gate as dict-build, its own target only (owner, 2026-10-01: uposatha / uposatha-ios, an upo-v*
+    # tag), plus ios_checks and uposatha: the iOS simulator job below needs this job's web bundle, and a
+    # manual ios_checks run asks for nothing else (release=none uploads nothing anywhere).
+    if: needs.plan.outputs.build_upo == 'true'
     timeout-minutes: 40
     permissions:
       contents: read
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -1148,7 +1485,7 @@ jobs:
           cache: 'gradle'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
 
@@ -1161,23 +1498,17 @@ jobs:
       # build no longer depends on what production serves at that minute, and a change to the calendar
       # reaches an app by being in dg-node, not by being deployed. Only the texts (json) follow the site at
       # run time (updatable in uposatha-bridge.js). Fails the job when a file of the page is not in dg-node.
-      - name: Resolve dg-node ref
-        id: pin
-        run: |
-          REF="${{ inputs.dg_node_ref }}"
-          if [ -z "$REF" ]; then REF="$(tr -d '[:space:]' < DG_NODE_REF)"; fi
-          if [ -z "$REF" ]; then echo "::error::DG_NODE_REF is empty and no dg_node_ref input given"; exit 1; fi
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-
       - name: Checkout dg-node (the calendar page and what it loads)
+        env:
+          DG_NODE_SHA: ${{ needs.plan.outputs.dg_node_sha }}
         run: |
           mkdir -p "$RUNNER_TEMP/dg-node"
           cd "$RUNNER_TEMP/dg-node"
           git init -q
           git remote add origin https://github.com/dhammagift/dg-node.git
-          git fetch --depth 1 origin "${{ steps.pin.outputs.ref }}" -q
+          git fetch --depth 1 origin "$DG_NODE_SHA" -q
           git checkout -q FETCH_HEAD
-          echo "dg-node@${{ steps.pin.outputs.ref }} = $(git rev-parse HEAD)"
+          echo "dg-node = $(git rev-parse HEAD)"
 
       - name: Lay the calendar page out from dg-node
         working-directory: uposatha
@@ -1208,6 +1539,26 @@ jobs:
       - name: Edge-to-edge checks (bundle, bridge, resources)
         run: node uposatha/test/edge-to-edge.js
 
+      # The bundled page in a real browser, on the just-built www/: it opens with the network refused and
+      # the updater hands over only what the site changed (bundle-ui.js), the person's own sound is in all
+      # four lists (own-sound.js), and the bridge's shortcuts, reminders and launch screens over the bundled
+      # calendar page (bridge-ui.js, served the way Capacitor serves it, not from a running dg-node). The
+      # tests load Playwright from the path it has on the dev server, so that path is pointed at this app's
+      # own copy. Every Uposatha upload waits for this job.
+      - name: Browser checks of the bundled page (offline start, own sound, the bridge)
+        env:
+          DG_SHOTS: ${{ runner.temp }}/upo-shots
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /usr/lib/node_modules/@playwright/cli/node_modules
+          sudo ln -sfn "$GITHUB_WORKSPACE/uposatha/node_modules/playwright" /usr/lib/node_modules/@playwright/cli/node_modules/playwright
+          mkdir -p "$DG_SHOTS"
+          node uposatha/test/bundle-ui.js
+          node uposatha/test/own-sound.js
+          node test/serve-local.js uposatha/www "$RUNNER_TEMP/no-dist" 8192 > /dev/null 2>&1 &
+          sleep 1
+          DG_SITE=http://127.0.0.1:8192 node uposatha/test/bridge-ui.js
+
       - name: Grant gradlew permissions
         run: chmod +x uposatha/android/gradlew
 
@@ -1222,7 +1573,7 @@ jobs:
           name: dg-uposatha-apk-${{ github.run_number }}
           path: uposatha/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
       # The web bundle the APK was built from (uposatha/www: the page, the bridge, the sounds), for the iOS job below:
       # the same files go into both apps, so the page is snapshotted once.
@@ -1262,7 +1613,7 @@ jobs:
           name: dg-uposatha-apk-release-${{ github.run_number }}
           path: uposatha/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
       - name: Build Release AAB (Google Play)
         if: env.skip != 'true'
@@ -1280,74 +1631,46 @@ jobs:
           name: dg-uposatha-aab-release-${{ github.run_number }}
           path: uposatha/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
-  # The Uposatha app's Play release: the signed AAB uposatha-build made, uploaded to the closed testing (alpha) track of gift.dhamma.uposatha.
-  # Only on a hand-started run with release = uposatha: it is a separate app with its own listing, so it does not ride along
-  # with `play`, `both` or a tag (those keep shipping the reader and the dictionary only).
+  uposatha-launch:
+    name: Uposatha app launch check (emulator)
+    needs: [plan, uposatha-build]
+    if: needs.plan.outputs.upo_launch == 'true'
+    uses: ./.github/workflows/launch-check.yml
+    with:
+      apk_artifact: dg-uposatha-apk-release-${{ github.run_number }}
+      package: gift.dhamma.uposatha
+
+  # The Uposatha app's Play release: the signed AAB uposatha-build made, uploaded to the closed testing (alpha) track of
+  # gift.dhamma.uposatha. On release = uposatha, or an upo-v* tag (which also sends it to TestFlight); never with another app.
+  # Waits for the bundle's browser checks (uposatha-build) and the launch check on an emulator.
   uposatha-release:
     name: Uposatha app release (Play closed testing, alpha)
-    needs: uposatha-build
-    if: (github.event_name == 'workflow_dispatch' && inputs.release == 'uposatha') || startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Is the service account there?
-        id: play
-        env:
-          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-        run: |
-          if [ -n "$PLAY_JSON" ]; then
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-            echo "service account present"
-          else
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::notice::PLAY_SERVICE_ACCOUNT_JSON is not set - nothing was uploaded to Play."
-            {
-              echo "### Uposatha release: nothing happened"
-              echo ""
-              echo "Missing repository secret: \`PLAY_SERVICE_ACCOUNT_JSON\`. Nothing was uploaded to Google Play."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      # The artifact uposatha-build uploaded, not a rebuild: the bytes that go to Play are the ones just built and signed.
-      - name: Download the signed AAB
-        if: steps.play.outputs.have == 'yes'
-        uses: actions/download-artifact@v4
-        with:
-          name: dg-uposatha-aab-release-${{ github.run_number }}
-          path: aab
-
-      - name: Upload to Google Play
-        if: steps.play.outputs.have == 'yes'
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: gift.dhamma.uposatha
-          releaseFiles: aab/app-release.aab
-          track: alpha
-          status: completed
-
-      - name: Say what went to Play
-        if: success() && steps.play.outputs.have == 'yes'
-        run: |
-          {
-            echo "### Uposatha app uploaded"
-            echo ""
-            echo "versionCode ${{ github.run_number }} is on the **closed testing (alpha)** track of \`gift.dhamma.uposatha\`."
-          } >> "$GITHUB_STEP_SUMMARY"
+    needs: [plan, unit, uposatha-build, uposatha-launch]
+    if: needs.plan.outputs.upo_play == 'true'
+    uses: ./.github/workflows/play-release.yml
+    with:
+      app: Uposatha
+      package: gift.dhamma.uposatha
+      aab_artifact: dg-uposatha-aab-release-${{ github.run_number }}
+    secrets:
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
 
   # Uposatha on iOS (uposatha/ios): builds the app for the simulator from the same web bundle as the APK, launches it and
-  # keeps a screenshot. Started with `ios_checks` (no Apple account, certificate or device needed).
+  # keeps a screenshot. Started with `ios_checks` or `uposatha` (no Apple account, certificate or device needed), and always
+  # before Uposatha goes to TestFlight (uposatha-ios, an upo-v* tag): the upload waits for it.
   uposatha-ios:
     name: Uposatha app (iOS simulator)
-    needs: uposatha-build
-    if: inputs.ios_checks || inputs.uposatha   # `uposatha` alone: the Uposatha APK and this simulator check, without Dhamma.Gift's iOS checks
+    needs: [plan, uposatha-build]
+    if: needs.plan.outputs.upo_ios_checks == 'true'
     runs-on: macos-26
     timeout-minutes: 60
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download the web bundle
         uses: actions/download-artifact@v4
@@ -1386,12 +1709,8 @@ jobs:
           done
           ls -la uposatha/www/ios-sounds
 
-      - name: Select the newest Xcode 26
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          echo "Using $XCODE"
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
+      - name: Select Xcode
+        run: tools/select-xcode.sh
 
       - name: Sync Capacitor into uposatha/ios
         working-directory: uposatha
@@ -1459,329 +1778,38 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-  # Uposatha's TestFlight release (release = uposatha-ios): the same steps as ios-release above, for uposatha/ios, from the
-  # web bundle uposatha-build made. It needs the app's record in App Store Connect (My Apps, +, bundle id gift.dhamma.uposatha); the
-  # signing secrets are the account's, the same as the reader's.
+  # Uposatha's TestFlight release (release = uposatha-ios, or an upo-v* tag): testflight-release.yml, from the web bundle
+  # uposatha-build made, after the bundle's browser checks and the iOS simulator run (uposatha-ios). It needs the app's
+  # record in App Store Connect (bundle id gift.dhamma.uposatha); the signing secrets are the account's, the same as the reader's.
   uposatha-ios-release:
     name: Uposatha app iOS release (TestFlight)
-    needs: uposatha-build
-    if: (github.event_name == 'workflow_dispatch' && inputs.release == 'uposatha-ios') || startsWith(github.ref, 'refs/tags/')
-    runs-on: macos-26
-    timeout-minutes: 90
-    steps:
-      - name: Checkout this repo (the app)
-        uses: actions/checkout@v4
+    needs: [plan, unit, uposatha-build, uposatha-ios]
+    if: needs.plan.outputs.upo_ios == 'true'
+    uses: ./.github/workflows/testflight-release.yml
+    with:
+      app: uposatha
+      upload: true
+    secrets:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Download the web bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: uposatha-www-${{ github.run_number }}
-          path: uposatha/www
-
-      - name: Are the signing secrets there?
-        id: asc
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          missing=""
-          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
-          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
-          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
-          [ -n "$APPLE_TEAM_ID" ] || missing="$missing APPLE_TEAM_ID"
-          if [ -z "$missing" ]; then
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::notice::missing secrets:$missing - nothing was archived or uploaded."
-            { echo "### Uposatha iOS release: nothing happened"; echo ""; echo "Missing repository secrets: \`$missing\`"; } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Set up Node.js
-        if: steps.asc.outputs.have == 'yes'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.20.0'
-
-      - name: Install the app's dependencies
-        if: steps.asc.outputs.have == 'yes'
-        working-directory: uposatha
-        run: npm ci
-
-      - name: Make the reminders' sounds
-        if: steps.asc.outputs.have == 'yes'
-        run: |
-          mkdir -p uposatha/www/ios-sounds
-          for f in uposatha/android/app/src/main/res/raw/*.mp3; do
-            n=$(basename "$f" .mp3)
-            afconvert -f caff -d ima4 -c 1 "$f" "uposatha/www/ios-sounds/$n.caf"
-          done
-
-      - name: Select the newest Xcode 26
-        if: steps.asc.outputs.have == 'yes'
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
-
-      - name: Write the App Store Connect key
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/asc"
-          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
-          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
-
-      # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
-      # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
-      # CI runs left (only "Created via API" ones, never a person's own); the job's own is revoked
-      # after the export below.
-      - name: Free the development-certificate slots older CI runs used
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" prune
-
-      - name: Sync Capacitor into uposatha/ios
-        if: steps.asc.outputs.have == 'yes'
-        working-directory: uposatha
-        run: npx cap sync ios
-
-      - name: Archive
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -project uposatha/ios/App/App.xcodeproj \
-            -scheme App \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath uposatha/ios/build/App.xcarchive \
-            -derivedDataPath uposatha/ios/DerivedData \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            archive 2>&1 | tee ios-archive.log | tail -30
-
-      - name: Export the IPA
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>uploadSymbols</key><true/>
-          </dict>
-          </plist>
-          PLIST
-          set -o pipefail
-          xcodebuild -exportArchive \
-            -archivePath uposatha/ios/build/App.xcarchive \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath uposatha/ios/build/export \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            2>&1 | tee ios-export.log | tail -30
-          grep -q "Upload succeeded" ios-export.log
-
-      - name: Revoke this job's development certificate
-        if: always() && steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup
-
-      - name: Upload the logs on failure
-        if: failure() && steps.asc.outputs.have == 'yes'
-        uses: actions/upload-artifact@v4
-        with:
-          name: uposatha-ios-release-logs-${{ github.run_number }}
-          path: |
-            ios-archive.log
-            ios-export.log
-          retention-days: 7
-          if-no-files-found: ignore
-
-      - name: Say what went to TestFlight
-        if: success() && steps.asc.outputs.have == 'yes'
-        run: |
-          { echo "### Uposatha iOS release: uploaded"; echo ""; echo "Build ${{ github.run_number }} was archived and sent to TestFlight (processing takes 5-15 minutes)."; } >> "$GITHUB_STEP_SUMMARY"
-
+  # The dictionary's TestFlight release (release = dict-ios, or a dict-v* tag), after the bundle's browser checks in dict-build.
+  # (The dictionary has no iOS simulator check of its own yet; its screenshot tour is the only iOS run it gets.)
   dict-ios-release:
     name: Dictionary app iOS release (TestFlight)
-    needs: dict-build
-    if: (github.event_name == 'workflow_dispatch' && inputs.release == 'dict-ios') || startsWith(github.ref, 'refs/tags/')
-    runs-on: macos-26
-    timeout-minutes: 90
-    steps:
-      - name: Checkout this repo (the app)
-        uses: actions/checkout@v4
-
-      - name: Download the web bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: dict-www-${{ github.run_number }}
-          path: dict/www
-
-      - name: Are the signing secrets there?
-        id: asc
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          missing=""
-          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
-          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
-          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
-          [ -n "$APPLE_TEAM_ID" ] || missing="$missing APPLE_TEAM_ID"
-          if [ -z "$missing" ]; then
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::notice::missing secrets:$missing - nothing was archived or uploaded."
-            { echo "### Dictionary iOS release: nothing happened"; echo ""; echo "Missing repository secrets: \`$missing\`"; } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Set up Node.js
-        if: steps.asc.outputs.have == 'yes'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.20.0'
-
-      - name: Install the app's dependencies
-        if: steps.asc.outputs.have == 'yes'
-        working-directory: dict
-        run: npm ci
-
-      - name: Select the newest Xcode 26
-        if: steps.asc.outputs.have == 'yes'
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
-
-      - name: Write the App Store Connect key
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/asc"
-          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
-          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
-
-      # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
-      # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
-      # CI runs left (only "Created via API" ones, never a person's own); the job's own is revoked
-      # after the export below.
-      - name: Free the development-certificate slots older CI runs used
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" prune
-
-      - name: Sync Capacitor into dict/ios
-        if: steps.asc.outputs.have == 'yes'
-        working-directory: dict
-        run: npx cap sync ios
-
-      - name: Archive
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -project dict/ios/App/App.xcodeproj \
-            -scheme App \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath dict/ios/build/App.xcarchive \
-            -derivedDataPath dict/ios/DerivedData \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            archive 2>&1 | tee ios-archive.log | tail -30
-
-      - name: Export the IPA
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>uploadSymbols</key><true/>
-          </dict>
-          </plist>
-          PLIST
-          set -o pipefail
-          xcodebuild -exportArchive \
-            -archivePath dict/ios/build/App.xcarchive \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath dict/ios/build/export \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            2>&1 | tee ios-export.log | tail -30
-          grep -q "Upload succeeded" ios-export.log
-
-      - name: Revoke this job's development certificate
-        if: always() && steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup
-
-      - name: Upload the logs on failure
-        if: failure() && steps.asc.outputs.have == 'yes'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dict-ios-release-logs-${{ github.run_number }}
-          path: |
-            ios-archive.log
-            ios-export.log
-          retention-days: 7
-          if-no-files-found: ignore
-
-      - name: Say what went to TestFlight
-        if: success() && steps.asc.outputs.have == 'yes'
-        run: |
-          { echo "### Dictionary iOS release: uploaded"; echo ""; echo "Build ${{ github.run_number }} was archived and sent to TestFlight (processing takes 5-15 minutes)."; } >> "$GITHUB_STEP_SUMMARY"
+    needs: [plan, unit, dict-build]
+    if: needs.plan.outputs.dict_ios == 'true'
+    uses: ./.github/workflows/testflight-release.yml
+    with:
+      app: dict
+      upload: true
+    secrets:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
   # App Store screenshots for Uposatha (test/ios-sim/tour.js + drive.sh): the same page the APK ships, walked
   # through its views on an iPhone 6.9" and an iPad 13" simulator. Started with `ios_checks`, same as the reader
@@ -1795,6 +1823,8 @@ jobs:
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download the web bundle
         uses: actions/download-artifact@v4
@@ -1822,11 +1852,8 @@ jobs:
         working-directory: dict
         run: npm ci
 
-      - name: Select the newest Xcode 26
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
+      - name: Select Xcode
+        run: tools/select-xcode.sh
 
       - name: Turn www/ into the screenshot-tour bundle
         working-directory: dict
@@ -1924,6 +1951,8 @@ jobs:
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download the web bundle
         uses: actions/download-artifact@v4
@@ -1951,11 +1980,8 @@ jobs:
         working-directory: uposatha
         run: npm ci
 
-      - name: Select the newest Xcode 26
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
+      - name: Select Xcode
+        run: tools/select-xcode.sh
 
       - name: Turn www/ into the screenshot-tour bundle
         working-directory: uposatha
@@ -2047,9 +2073,9 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------------------------
-  # The dictionary half of the Play release path, the same shape as android-release above and
-  # gated by the same choice: `release: play` (or `both`, or any tag) uploads BOTH Android apps,
-  # each to its own package on a testing track. `release: none` — the default — uploads neither.
+  # The dictionary half of the Play release path, the same shape as android-release above: release = dict
+  # (or a dict-v* tag) uploads the dictionary, and only the dictionary, after its bundle checks (dict-build)
+  # and its launch check on an emulator (dict-launch). `release: none` — the default — uploads nothing.
   #
   # Closed testing (alpha), for the same reason as Dhamma.Gift's testing track: promoting it to
   # production stays a human decision in the Play Console.
@@ -2060,59 +2086,15 @@ jobs:
   # which is the point of asking Play rather than assuming.
   dict-release:
     name: Dictionary app release (Play closed testing, alpha)
-    needs: dict-build
-    if: (github.event_name == 'workflow_dispatch' && inputs.release == 'dict') || startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Is the service account there?
-        id: play
-        env:
-          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-        run: |
-          if [ -n "$PLAY_JSON" ]; then
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-            echo "service account present"
-          else
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::notice::PLAY_SERVICE_ACCOUNT_JSON is not set - nothing was uploaded to Play."
-            {
-              echo "### Dictionary release: nothing happened"
-              echo ""
-              echo "Missing repository secret: \`PLAY_SERVICE_ACCOUNT_JSON\`."
-              echo ""
-              echo "Nothing was uploaded to Google Play. See docs/ANDROID_RELEASE.md."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      # The artifact dict-build uploaded, not a rebuild: the bytes that go to Play are the ones
-      # that were just built and signed.
-      - name: Download the signed AAB
-        if: steps.play.outputs.have == 'yes'
-        uses: actions/download-artifact@v4
-        with:
-          name: dg-dict-aab-release-${{ github.run_number }}
-          path: aab
-
-      - name: Upload to Google Play
-        if: steps.play.outputs.have == 'yes'
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: gift.dhamma.pali
-          releaseFiles: aab/app-release.aab
-          track: alpha
-          status: completed
-
-      - name: Say what went to Play
-        if: success() && steps.play.outputs.have == 'yes'
-        run: |
-          {
-            echo "### Dictionary app uploaded"
-            echo ""
-            echo "versionCode ${{ github.run_number }} is on the **closed testing (alpha)** track of \`gift.dhamma.pali\`."
-            echo "Testers get it within minutes. Production needs a promote in the Play Console."
-          } >> "$GITHUB_STEP_SUMMARY"
+    needs: [plan, unit, dict-build, dict-launch]
+    if: needs.plan.outputs.dict_play == 'true'
+    uses: ./.github/workflows/play-release.yml
+    with:
+      app: Dictionary
+      package: gift.dhamma.pali
+      aab_artifact: dg-dict-aab-release-${{ github.run_number }}
+    secrets:
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
 
   # ---------------------------------------------------------------------------------------------
   # iOS: build the Capacitor project for the simulator on a macOS runner.
@@ -2125,9 +2107,8 @@ jobs:
   #
   # Why this runner and not macos-latest: Capacitor 8 requires Xcode 26.0+, and macos-15's DEFAULT
   # Xcode is 16.4, which cannot build this project at all. macos-26 ships Xcode 26.x and the
-  # simulator runtimes iOS 26.x. Xcode is selected by glob (newest first) rather than by an exact
-  # path: the image's set changes between runner releases, and a hardcoded
-  # /Applications/Xcode_26.6.app would break the day the image moves on.
+  # simulator runtimes iOS 26.x. Xcode is picked by tools/select-xcode.sh: the newest non-beta Xcode 26
+  # on the image (Apple refuses store builds from a beta), named in the job summary.
   #
   # The SPM template (Capacitor 8's default for `cap add ios`) means no CocoaPods and no Ruby step.
   #
@@ -2136,13 +2117,16 @@ jobs:
   # pipeline, which iOS does not need (the app downloads dg.db itself at runtime).
   ios-build:
     name: iOS simulator build
-    needs: build
-    if: inputs.ios_checks || startsWith(github.ref, 'refs/tags/')
+    needs: [plan, build]
+    # ios_checks, and always when an IPA is made (dg-ios, dg-both, keep_ipa, a Dhamma.Gift tag): ios-release waits for it.
+    if: needs.plan.outputs.dg_ios_checks == 'true'
     runs-on: macos-26
     timeout-minutes: 60
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download the built web bundle
         uses: actions/download-artifact@v4
@@ -2186,12 +2170,8 @@ jobs:
       - name: Install app dependencies
         run: npm install --legacy-peer-deps --no-audit
 
-      - name: Select the newest Xcode 26
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          echo "Using $XCODE"
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
+      - name: Select Xcode
+        run: tools/select-xcode.sh
 
       # Apple's required-reason APIs have to be DECLARED in the app's own PrivacyInfo.xcprivacy:
       # FileManager's size/timestamp/metadata reads, UserDefaults, system boot time, disk space and
@@ -2272,13 +2252,15 @@ jobs:
   # web work is held to, on the platform where the WebView is a different engine.
   ios-ui:
     name: iOS simulator checks
-    needs: build
-    if: inputs.ios_checks || startsWith(github.ref, 'refs/tags/')
+    needs: [plan, build]
+    if: needs.plan.outputs.dg_ios_checks == 'true'   # the same rule as ios-build; ios-release waits for both
     runs-on: macos-26
     timeout-minutes: 60
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download the built web bundle
         uses: actions/download-artifact@v4
@@ -2322,12 +2304,9 @@ jobs:
       - name: Install app dependencies
         run: npm install --legacy-peer-deps --no-audit
 
-      - name: Select the newest Xcode 26
+      - name: Select Xcode
         run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          echo "Using $XCODE"
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
+          tools/select-xcode.sh
           xcrun simctl list devices available | head -20
 
       # The fixture is built from source (test/make-fixture-db.js needs no corpus and no dg.db):
@@ -2425,6 +2404,8 @@ jobs:
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Download the built web bundle
         uses: actions/download-artifact@v4
@@ -2452,12 +2433,8 @@ jobs:
       - name: Install app dependencies
         run: npm install --legacy-peer-deps --no-audit
 
-      - name: Select the newest Xcode 26
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          echo "Using $XCODE"
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
+      - name: Select Xcode
+        run: tools/select-xcode.sh
 
       # --online --tour: the real site, no fixture, no dead origin, download declined, and the tour
       # script instead of the self-test (see test/ios-sim/prepare-www.js).
@@ -2539,295 +2516,32 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-  # The release path: archive, export and upload to TestFlight.
+  # The release path: archive, export and upload to TestFlight (testflight-release.yml, shared with the other two apps).
   #
   # It stays dormant until the account exists — every step that needs a secret checks for it first and
-  # says what is missing, rather than failing a push that has nothing to do with releases. That is the
-  # point of writing it now: the day the account lands, the only work left is pasting four values into
-  # repo secrets (docs/IOS_ACCOUNT_DAY.md) and pressing Run workflow.
+  # says what is missing (docs/IOS_ACCOUNT_DAY.md).
   #
-  # Why TestFlight rather than an ad-hoc IPA: TestFlight installs on a phone with no Mac, no cable and
-  # no registered UDID, which is exactly the situation the device checks are waiting on (background
-  # download, audible TTS, the dictionary tap, the share sheet).
-  # Runs on a tag always (a real release); on workflow_dispatch only when release names this store.
-  # Every manual run used to archive and upload unconditionally, so iterating on ios-build/ios-ui
-  # left a new App Store Connect build behind each time, none of them asked for (owner, 2026-09-20:
-  # a manual run must not release).
-  # One switch rather than two booleans, and it names a store rather than saying yes: the first
-  # shape of this was a single checkbox meaning "both", and the first time the Play upload needed a
-  # retry it would have put a second, identical build in TestFlight for nothing (owner: "жди эпл,
-  # не перезаливай"). Retrying one store must not disturb the other.
-  # push never runs this — push builds are for the installable APK, not for the stores.
-  # Every manual Dhamma.Gift build also archives a signed IPA and keeps it as an artifact, so an
-  # already built and tested build can go to TestFlight later without building again (ios-upload.yml,
-  # the iOS twin of play-upload.yml; owner, 2026-10-01: "чтобы можно было Apple существующую сборку
-  # отправить, а не новую собирать"). The IPA is sent to TestFlight here only on dg-ios / dg-both / a tag.
+  # An IPA is made only when someone will send it: dg-ios / dg-both / a Dhamma.Gift tag send it to TestFlight
+  # here, keep_ipa keeps it as an artifact for ios-upload.yml (owner, 2026-10-01: "чтобы можно было Apple
+  # существующую сборку отправить, а не новую собирать"). It used to be made on every manual run —
+  # a macOS job and an Apple certificate created and revoked each time for a build nobody asked for.
+  # Every manual run used to upload unconditionally before that, too (owner, 2026-09-20: a manual run must
+  # not release). One switch rather than two booleans, and it names a store rather than saying yes:
+  # retrying one store must not disturb the other (owner: "жди эпл, не перезаливай").
+  #
+  # Waits for the iOS checks (ios-build, ios-ui), which run whenever this job does: nothing reaches
+  # TestFlight, now or later through ios-upload.yml, without them (verified 2026-10-10: all four DG
+  # TestFlight uploads since 2026-10-01 went with the checks skipped).
   ios-release:
     name: iOS archive (IPA; TestFlight on release)
-    needs: build
-    if: (github.event_name == 'workflow_dispatch' && !inputs.dict_only && !contains(fromJSON('["dict","dict-ios","uposatha","uposatha-ios"]'), inputs.release)) || startsWith(github.ref, 'refs/tags/')
-    runs-on: macos-26
-    timeout-minutes: 90
-    steps:
-      - name: Checkout this repo (the app)
-        uses: actions/checkout@v4
-
-      - name: Download the built web bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: www-${{ github.run_number }}
-          path: www
-
-      - name: Are the signing secrets there?
-        id: asc
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          missing=""
-          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
-          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
-          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
-          [ -n "$APPLE_TEAM_ID" ] || missing="$missing APPLE_TEAM_ID"
-          if [ -z "$missing" ]; then
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-            echo "signing secrets present"
-            {
-              echo "### iOS release"
-              echo "Signing secrets found — archiving and uploading to TestFlight."
-            } >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::notice::missing secrets:$missing — skipping the archive and the upload. See docs/IOS_ACCOUNT_DAY.md."
-            # A green job that did nothing reads like a successful release. The summary is where that is
-            # impossible to misread: nothing was built, nothing was uploaded.
-            {
-              echo "### iOS release: nothing happened"
-              echo ""
-              echo "Missing repository secrets: \`$missing\`"
-              echo ""
-              echo "No archive was made and nothing was uploaded to TestFlight. See docs/IOS_ACCOUNT_DAY.md."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Set up Node.js
-        if: steps.asc.outputs.have == 'yes'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.20.0'
-
-      - name: Restore npm and SwiftPM caches
-        if: steps.asc.outputs.have == 'yes'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            ~/Library/Caches/org.swift.swiftpm
-            ~/Library/Developer/Xcode/DerivedData
-            ios/DerivedData/SourcePackages
-          key: ${{ runner.os }}-ios-${{ hashFiles('ios/App/CapApp-SPM/Package.swift', 'ios/App/App.xcodeproj/project.pbxproj', 'ios/**/Package.resolved', 'package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-ios-
-
-      - name: Install app dependencies
-        if: steps.asc.outputs.have == 'yes'
-        run: npm install --legacy-peer-deps --no-audit
-
-      - name: Select the newest Xcode 26
-        if: steps.asc.outputs.have == 'yes'
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          echo "Using $XCODE"
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
-
-      # The key is written where xcodebuild expects it and removed at the end of the job by the
-      # runner's own cleanup (RUNNER_TEMP is not cached, not uploaded, and not the workspace).
-      - name: Write the App Store Connect key
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/asc"
-          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
-          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
-
-      # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
-      # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
-      # CI runs left (only "Created via API" ones, never a person's own); the job's own is revoked
-      # after the export below.
-      - name: Free the development-certificate slots older CI runs used
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" prune
-
-      - name: Sync Capacitor into ios/
-        if: steps.asc.outputs.have == 'yes'
-        run: npx cap sync ios
-
-      # The bundle id, the team and the marketing version come from the project; only the build number
-      # is injected (Play/App Store both refuse a number they have seen, and the run number is the one
-      # value this repository already treats as one).
-      #
-      # Signing, in the order the runs taught it:
-      #   * run 156 — the Capacitor template's "iPhone Developer" in BOTH configurations made the
-      #     archive ask Apple for an iOS App Development profile. Those list device UDIDs, and a fresh
-      #     account has registered none, so Apple answered "Your team has no devices from which to
-      #     generate a provisioning profile" and no distribution profile was ever requested.
-      #   * run 160/162 — naming the distribution identity while CODE_SIGN_STYLE stayed Automatic is
-      #     rejected outright ("has conflicting provisioning settings … automatically signed for
-      #     development, but a conflicting code signing identity Apple Distribution has been manually
-      #     specified"), whether the identity comes from the command line or from the configuration.
-      #   * run 164 — with no identity anywhere, automatic signing again resolved to a development
-      #     profile, i.e. an unset identity means "Apple Development" and the style does not change
-      #     that for an archive.
-      #   * run 167 — CODE_SIGN_STYLE = Manual with the distribution identity: "requires a provisioning
-      #     profile", because Manual means a named profile and there is none.
-      # Automatic signing is right; the archive step is signed for development by design and the
-      # distribution profile is applied at export. What it needed was one registered device on the
-      # team (Certificates, Identifiers & Profiles → Devices), so both configurations stay Automatic.
-      - name: What signing does Xcode resolve?
-        if: steps.asc.outputs.have == 'yes'
-        run: |
-          security find-identity -v -p codesigning | tail -5
-          for cfg in Release Debug; do
-            echo "--- $cfg ---"
-            xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration "$cfg" \
-              -destination 'generic/platform=iOS' -showBuildSettings 2>/dev/null \
-              | grep -E "^ +(CODE_SIGN_IDENTITY|CODE_SIGN_STYLE|CODE_SIGN_ENTITLEMENTS|PROVISIONING_PROFILE_SPECIFIER|DEVELOPMENT_TEAM|CONFIGURATION) " \
-              | sort -u || true
-          done
-
-      - name: Archive
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -project ios/App/App.xcodeproj \
-            -scheme App \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath ios/build/App.xcarchive \
-            -derivedDataPath ios/DerivedData \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            archive 2>&1 | tee ios-archive.log | tail -30
-
-      # app-store-connect is Xcode 15+'s name for what used to be `app-store`; the older spelling still
-      # works, so a rename here is not a silent breakage.
-      - name: Export the IPA
-        if: steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>export</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>uploadSymbols</key><true/>
-          </dict>
-          </plist>
-          PLIST
-          set -o pipefail
-          xcodebuild -exportArchive \
-            -archivePath ios/build/App.xcarchive \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath ios/build/export \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            2>&1 | tee ios-export.log | tail -30
-          # destination=export writes the IPA to disk (destination=upload sent it straight away and left
-          # nothing, run 170): it is kept as an artifact and uploaded by the step below or by ios-upload.yml.
-          ls -la ios/build/export/*.ipa
-
-      - name: Keep the IPA
-        if: steps.asc.outputs.have == 'yes'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dg-app-full-ipa-${{ github.run_number }}
-          path: ios/build/export/*.ipa
-          retention-days: 30
-          if-no-files-found: error
-
-      # The same altool call ios-upload.yml uses, as --validate-app: proves on every build that the IPA
-      # and the key would be accepted, without putting a build into TestFlight.
-      - name: Validate the IPA with App Store Connect (no upload)
-        if: steps.asc.outputs.have == 'yes'
-        continue-on-error: true
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          cp "$RUNNER_TEMP/asc/AuthKey.p8" "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8"
-          API_PRIVATE_KEYS_DIR="$RUNNER_TEMP/asc" xcrun altool --validate-app -t ios \
-            -f "$(ls ios/build/export/*.ipa | head -1)" \
-            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
-
-      # The release itself keeps the export path that has worked since run 170 (destination=upload,
-      # "Upload succeeded" in the log), so adding the IPA artifact above changes nothing about a release.
-      - name: Upload to TestFlight
-        if: steps.asc.outputs.have == 'yes' && ((github.event_name == 'workflow_dispatch' && (inputs.release == 'dg-ios' || inputs.release == 'dg-both')) || startsWith(github.ref, 'refs/tags/'))
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          sed 's#<string>export</string>#<string>upload</string>#' "$RUNNER_TEMP/ExportOptions.plist" > "$RUNNER_TEMP/ExportUpload.plist"
-          set -o pipefail
-          xcodebuild -exportArchive \
-            -archivePath ios/build/App.xcarchive \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportUpload.plist" \
-            -exportPath ios/build/upload \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            2>&1 | tee ios-upload.log | tail -30
-          grep -q "Upload succeeded" ios-upload.log
-
-      - name: Revoke this job's development certificate
-        if: always() && steps.asc.outputs.have == 'yes'
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup
-
-      - name: Upload the archive log on failure
-        if: failure() && steps.asc.outputs.have == 'yes'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-release-logs-${{ github.run_number }}
-          path: |
-            ios-archive.log
-            ios-export.log
-            ios-upload.log
-          retention-days: 7
-          if-no-files-found: ignore
-
-      - name: Say what went to TestFlight
-        if: success() && steps.asc.outputs.have == 'yes'
-        run: |
-          if [ -f ios-upload.log ]; then
-            printf '### iOS release: uploaded\n\nBuild %s was archived and sent to TestFlight (processing takes 5–15 minutes).\n' "${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
-          else
-            printf '### iOS: IPA kept, not uploaded\n\nArtifact dg-app-full-ipa-%s. To send it to TestFlight later: ios-upload.yml with this run id.\n' "${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
-          fi
+    needs: [plan, unit, build, ios-build, ios-ui]
+    if: needs.plan.outputs.dg_ios_archive == 'true'
+    uses: ./.github/workflows/testflight-release.yml
+    with:
+      app: dg
+      upload: ${{ needs.plan.outputs.dg_ios == 'true' }}
+    secrets:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

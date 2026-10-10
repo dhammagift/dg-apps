@@ -118,7 +118,8 @@ The first two compare against `test/snapshots/site` and print a per-case SAME/DI
 or a decision someone has to make on purpose — which is the point of having the files.
 
 CI does exactly this — see `.github/workflows/build-app.yml`. Which dg-node commit it builds from
-is pinned in **`DG_NODE_REF`** (a branch name or tag); a `workflow_dispatch` run can override it.
+is pinned in **`DG_NODE_REF`** (a full commit SHA; `DICT_UI_REF` pins ddg-ui the same way); a `workflow_dispatch` run can
+override it with a branch, tag or SHA. Moving the pin is a one-line commit: `git ls-remote https://github.com/dhammagift/dg-node.git main`.
 
 ## The bundled-page apps (Uposatha, Dictionary)
 

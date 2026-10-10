@@ -39,15 +39,33 @@
              system sends its own broadcasts to it; the taps are PendingIntents of this app. The extra actions re-plan the redraws after a
              reboot, an update of the app, or a change of the clock or the zone (the counter runs on the clock). The reminders'
              receiver above is separate and untouched. -->
-        <receiver android:name=".WidgetProvider" android:label="@string/widget_label" android:exported="false">
+        <!-- WidgetProvider is the base of the three widgets below: it receives the taps on the dots (CYCLE), the redraw alarm (TICK) and the
+             system's boot / update / clock broadcasts; it is not itself in the picker. -->
+        <receiver android:name=".WidgetProvider" android:exported="false">
             <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
+        </receiver>
+        <receiver android:name=".WidgetProviderSmall" android:label="@string/widget_label_s" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_s" />
+        </receiver>
+        <receiver android:name=".WidgetProviderMedium" android:label="@string/widget_label_m" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_m" />
+        </receiver>
+        <receiver android:name=".WidgetProviderLarge" android:label="@string/widget_label_l" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_l" />
         </receiver>
 
         <!-- DgSound: the sound the reader picked for the reminders. The file is copied into the app's

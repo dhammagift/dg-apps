@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The widget picker's preview: a card with the moon and the counter's line, in the widget's own colours. -->
+<!-- The widget picker's preview (240x120): a card with the moon and the counter's lines, in the widget's own colours. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
@@ -15,7 +15,7 @@
         <shape android:shape="rectangle"><solid android:color="#0f7c63" /><corners android:radius="4dp" /></shape>
     </item>
     <item android:left="104dp" android:top="46dp" android:width="116dp" android:height="14dp">
-        <shape android:shape="rectangle"><solid android:color="#1b1d19" /><corners android:radius="5dp" /></shape>
+        <shape android:shape="rectangle"><solid android:color="#1b1d19" /><corners android:radius="4dp" /></shape>
     </item>
     <item android:left="104dp" android:top="70dp" android:width="90dp" android:height="8dp">
         <shape android:shape="rectangle"><solid android:color="#d7d4c9" /><corners android:radius="4dp" /></shape>

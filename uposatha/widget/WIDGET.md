@@ -20,6 +20,11 @@ The moon photo for native: `moon-nasa-420.png` (NASA SVS CGI Moon Kit, LROC colo
   uposathas: [ { start, day, end, lunarDay (8|14|15), phaseName (new|firstQuarter|full|lastQuarter), phase (0..1) } ],  // from 2 days ago, ~11 weeks
   days: [ { date, sunrise, noon, sunset, aruna, parts: [[name, "HH:MM", "HH:MM"] x6] } ] }   // 14 days from today
 ```
+- `day` is the Uposatha's OWN day: by the suttas the date AFTER `start.ymd` (it begins the evening before, `start` .. `end` is evening to evening); in the modern scheme `day == start.ymd`.
+  The month grid: the evening-start date solid, `day` a light band joined to it (the same rule as the page's grid). Lists name the date it BEGINS on (`start.ymd`).
+- `settings.weekStart`: 0 = the week starts on Sunday, 1 = Monday (the app's own setting; the widget's grid follows it).
+- `days` starts YESTERDAY (14 entries): the night part that is still running before dawn belongs to yesterday's day.
+- The moon: layer 1's big moon is the real phase now (`today.moon`, carried on by the clock); moons in list rows are the plain phase of that Uposatha day (new, 50 %, full; the 14th a crescent / gibbous).
 - The Uposatha runs from `start` (the evening before) to `end` (the evening after its day) by the app's own rule. The designer's text says "to dawn":
   the app is the source of truth, so `end` is what the page says.
 - kala = `aruna.ms` .. `noon.ms` of a day; vikala = `noon.ms` .. next day's `aruna.ms`.

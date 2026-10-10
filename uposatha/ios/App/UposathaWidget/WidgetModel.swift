@@ -20,6 +20,7 @@ struct WSettings: Codable {
     let showKala: Bool?
     let placeSet: Bool?
     let south: Bool?
+    let weekStart: Int?      // 0 = the week starts on Sunday, 1 = Monday
 }
 
 struct WToday: Codable {
@@ -295,6 +296,32 @@ struct WCycle {
     func fraction(of m: WMoment) -> Double { fraction(m.date) }
 }
 
+struct WGridMarks {
+    var solid: Set<String> = []
+    var light: Set<String> = []
+    var joinNext: Set<String> = []   // a solid date whose strip goes on into the next date
+    var joinPrev: Set<String> = []   // a light date that continues the strip of the date before it
+}
+
+extension WUposatha {
+    // The plain phase of this Uposatha's day, for a moon in a list row (full 0.5, new 0, quarters .25 / .75, the 14th a crescent or gibbous)
+    var listPhase: Double {
+        switch lunarDay {
+        case 15:
+            if phaseName == "full" { return 0.5 }
+            if phaseName == "new" { return 0 }
+        case 8:
+            if phaseName == "firstQuarter" { return 0.25 }
+            if phaseName == "lastQuarter" { return 0.75 }
+        case 14:
+            return phase > 0 && phase < 0.5 ? 0.375 : 0.875
+        default:
+            break
+        }
+        return phase
+    }
+}
+
 struct WCell {
     let ymd: String
     let day: Int
@@ -315,6 +342,20 @@ extension WData {
     var detail: Bool { settings?.detail ?? false }
     var placeSet: Bool { settings?.placeSet ?? true }
     var south: Bool { settings?.south ?? false }
+
+    // The week's first day: the app's own setting; absent -> Monday for Russian, Sunday for English.
+    var weekStart: Int { settings?.weekStart ?? (lang == "ru" ? 1 : 0) }
+    // columns to shift a Monday-first weekday index by (Sunday-first: Sunday is column 0)
+    var weekShift: Int { weekStart == 0 ? 1 : 0 }
+
+    func weekColumn(ofDays z: Int) -> Int { (WTime.weekdayIndex(fromDays: z) + weekShift) % 7 }
+
+    // The weekday names for the header, in the order of the columns.
+    func weekdayNames(_ loc: Loc) -> [String] {
+        let names = loc.list("weekdays")
+        guard names.count == 7, weekShift == 1 else { return names }
+        return [names[6]] + Array(names[0..<6])
+    }
 
     // Whether the data can say what is true at `t`: not older than 14 days, and `t` falls inside the days it covers.
     // Outside that the widget shows "Open Uposatha" and no times: it never shows a wrong one.
@@ -400,14 +441,21 @@ extension WData {
         return out
     }
 
-    // 1 = the evening an Uposatha begins (solid), 2 = its day (lighter; wins when both fall on one date)
-    func marks() -> [String: Int] {
-        var m: [String: Int] = [:]
+    // The month grid's marks (the page's own rule): the evening-start date is solid, `day` a light band joined to it when both sit in one row;
+    // on a date that is both (back-to-back 14th and 15th) the solid one wins, and the strip runs through it.
+    func gridMarks() -> WGridMarks {
+        var marks = WGridMarks()
         for u in uposathas {
-            if u.start.ymd != u.day && m[u.start.ymd] == nil { m[u.start.ymd] = 1 }
-            m[u.day] = 2
+            marks.solid.insert(u.start.ymd)
+            if u.day != u.start.ymd {
+                marks.light.insert(u.day)
+                if let a = WTime.dayNumber(u.start.ymd), let b = WTime.dayNumber(u.day), b == a + 1 {
+                    marks.joinNext.insert(u.start.ymd)
+                    marks.joinPrev.insert(u.day)
+                }
+            }
         }
-        return m
+        return marks
     }
 
     // The moments the widget has to change at, within `hours` from `now`, for the timeline.
@@ -493,6 +541,17 @@ struct WSnap {
     }
 
     var south: Bool { data.south }
+
+    // The real phase of the moon now: the page's today.moon (at generatedAt) carried on by the clock (a lunation is 29.530588853 days).
+    var heroPhase: Double {
+        let base = data.today?.moon ?? upo?.phase ?? 0.5
+        var gone = 0.0
+        if let g = data.generatedAt.flatMap({ WTime.parseISO($0) }) { gone = t.timeIntervalSince(g) / (29.530588853 * 86400) }
+        var f = (base + gone).truncatingRemainder(dividingBy: 1)
+        if f < 0 { f += 1 }
+        return f
+    }
+
     var secondsToTarget: TimeInterval { (target ?? t).timeIntervalSince(t) }
 
     // days from the place's today to a date

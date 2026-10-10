@@ -3,4 +3,7 @@
     <string name="widget_label">Uposatha</string>
     <string name="widget_description">Ближайшая упосатха, kala и луна на главном экране</string>
     <string name="widget_cd">Виджет Uposatha</string>
+    <string name="widget_label_s">Uposatha 2×2</string>
+    <string name="widget_label_m">Uposatha 4×2</string>
+    <string name="widget_label_l">Uposatha 4×4</string>
 </resources>

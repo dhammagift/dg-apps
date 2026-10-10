@@ -38,13 +38,12 @@ struct MoonShade: Shape {
 }
 
 // The moon: the NASA photo (the disk fills the square), the double shadow (sharp + wide penumbra), edge darkening, a thin rim.
-// `south` turns it by 180 degrees; `mono` is for the lock screen; `glow` is a faint halo for dark backgrounds.
+// `south` turns it by 180 degrees; `mono` is for the lock screen. In dark mode every moon has a halo (also a new moon) and a light rim.
 struct MoonView: View {
     let phase: Double
     let size: CGFloat
     var south: Bool = false
     var mono: Bool = false
-    var glow: Bool = false
     @Environment(\.colorScheme) private var scheme
 
     private var illumination: Double {
@@ -55,8 +54,10 @@ struct MoonView: View {
 
     var body: some View {
         let u = size / 100
+        let dark = scheme == .dark && !mono
         let shade: Color = mono ? Color.black : Color.dgMoonShade
-        let rim: Color = mono ? Color.white.opacity(0.4) : Color.dgNavyInk.opacity(0.22)
+        let haze = Color(red: 0xE9 / 255.0, green: 0xE4 / 255.0, blue: 0xDC / 255.0)
+        let rim: Color = mono ? Color.white.opacity(0.4) : (dark ? haze.opacity(0.45) : Color.dgNavyInk.opacity(0.22))
         let edge = RadialGradient(
             gradient: Gradient(stops: [
                 Gradient.Stop(color: Color.black.opacity(0), location: 0.5),
@@ -64,22 +65,30 @@ struct MoonView: View {
                 Gradient.Stop(color: Color.black.opacity(0.42), location: 1.0)
             ]),
             center: .center, startRadius: 0, endRadius: 48 * u)
-        let halo = glow && scheme == .dark
+        let haloBlur = size * CGFloat((3 + 3.5 * illumination) / 100)
         ZStack {
-            Image("moon")
-                .resizable()
-                .interpolation(.high)
-                .saturation(mono ? 0 : 1)
-                .frame(width: 97.2 * u, height: 97.2 * u)
-            Circle().fill(edge).frame(width: 96 * u, height: 96 * u)
-            MoonShade(phase: phase).fill(shade).opacity(0.5).blur(radius: 4.5 * u)
-            MoonShade(phase: phase).fill(shade).opacity(0.8).blur(radius: 1.3 * u)
+            if dark {
+                // the halo: the disk, blurred, behind the moon; stronger the brighter the moon is
+                Circle()
+                    .fill(haze.opacity(0.26 + 0.22 * illumination))
+                    .frame(width: 96 * u, height: 96 * u)
+                    .blur(radius: haloBlur)
+            }
+            ZStack {
+                Image("moon")
+                    .resizable()
+                    .interpolation(.high)
+                    .saturation(mono ? 0 : 1)
+                    .frame(width: 97.2 * u, height: 97.2 * u)
+                Circle().fill(edge).frame(width: 96 * u, height: 96 * u)
+                MoonShade(phase: phase).fill(shade).opacity(0.5).blur(radius: 4.5 * u)
+                MoonShade(phase: phase).fill(shade).opacity(0.8).blur(radius: 1.3 * u)
+            }
+            .frame(width: size, height: size)
+            .clipShape(Circle().inset(by: 2 * u))
+            .overlay(Circle().inset(by: 2.4 * u).stroke(rim, lineWidth: 0.8 * u))
         }
         .frame(width: size, height: size)
-        .clipShape(Circle().inset(by: 2 * u))
-        .overlay(Circle().inset(by: 2.4 * u).stroke(rim, lineWidth: 0.8 * u))
-        .shadow(color: halo ? Color.white.opacity(0.4 * illumination) : Color.clear,
-                radius: halo ? size * CGFloat(0.02 + 0.05 * illumination) : 0)
         .rotationEffect(.degrees(south ? 180 : 0))
     }
 }

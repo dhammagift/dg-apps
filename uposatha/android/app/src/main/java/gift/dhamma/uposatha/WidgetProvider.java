@@ -11,7 +11,12 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.os.Bundle;
+import android.util.ArrayMap;
+import android.util.SizeF;
 import android.widget.RemoteViews;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import org.json.JSONObject;
 
@@ -71,7 +76,8 @@ public class WidgetProvider extends AppWidgetProvider {
             int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
             if (id != AppWidgetManager.INVALID_APPWIDGET_ID) {
                 SharedPreferences p = prefs(ctx);
-                p.edit().putInt("layer_" + id, (p.getInt("layer_" + id, 0) + 1) % WidgetRenderer.LAYERS).apply();
+                int dir = intent.getIntExtra("dir", 1) < 0 ? WidgetRenderer.LAYERS - 1 : 1;   // the left half goes back, the right half forward
+                p.edit().putInt("layer_" + id, (p.getInt("layer_" + id, 0) + dir) % WidgetRenderer.LAYERS).apply();
                 update(ctx, AppWidgetManager.getInstance(ctx), id);
             }
             return;
@@ -96,51 +102,72 @@ public class WidgetProvider extends AppWidgetProvider {
         try { return new JSONObject(s); } catch (Exception e) { return null; }
     }
 
+    /** The ids of every Uposatha widget on the screen: the three picker entries (2x2, 4x2, 4x4) share this code. */
+    static int[] allIds(Context ctx, AppWidgetManager mgr) {
+        Class<?>[] cls = { WidgetProviderSmall.class, WidgetProviderMedium.class, WidgetProviderLarge.class };
+        int total = 0;
+        int[][] per = new int[cls.length][];
+        for (int i = 0; i < cls.length; i++) { per[i] = mgr.getAppWidgetIds(new ComponentName(ctx, cls[i])); total += per[i].length; }
+        int[] out = new int[total];
+        int at = 0;
+        for (int[] a : per) { System.arraycopy(a, 0, out, at, a.length); at += a.length; }
+        return out;
+    }
+
     /** Redraws every widget on the screen and plans the next redraw (new data, boot, update, a tick). */
     static void refreshAll(Context ctx) {
         AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
-        int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, WidgetProvider.class));
-        for (int id : ids) update(ctx, mgr, id);
+        for (int id : allIds(ctx, mgr)) update(ctx, mgr, id);
         schedule(ctx);
     }
 
-    /** The widget's size in dp as the launcher reports it: width x height for the current orientation. */
-    static int[] sizeDp(Context ctx, AppWidgetManager mgr, int id) {
+    /**
+     * The sizes (dp, width x height) this widget can really have right now. Android 12+ lists them (OPTION_APPWIDGET_SIZES: one per
+     * orientation, from the launcher's own grid) and the launcher picks the matching RemoteViews itself; before that, the two numbers
+     * of the current orientation. A picture drawn for another size than the one it is shown at is stretched (a Motorola launcher
+     * reported sizes the old two-number way read wrongly: a squeezed moon), so the list is the source.
+     */
+    static List<int[]> sizesDp(Context ctx, AppWidgetManager mgr, int id) {
         Bundle o = mgr.getAppWidgetOptions(id);
-        boolean port = ctx.getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE;
-        int w = o.getInt(port ? AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH : AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0);
-        int h = o.getInt(port ? AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT : AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
-        return new int[] { w > 0 ? w : 160, h > 0 ? h : 160 };
+        List<int[]> out = new ArrayList<>();
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            ArrayList<SizeF> list = o.getParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES);
+            if (list != null) {
+                for (SizeF f : list) {
+                    int w = Math.round(f.getWidth()), h = Math.round(f.getHeight());
+                    if (w < 40 || h < 40) continue;
+                    boolean dup = false;
+                    for (int[] x : out) if (Math.abs(x[0] - w) < 6 && Math.abs(x[1] - h) < 6) dup = true;
+                    if (!dup && out.size() < 3) out.add(new int[] { w, h });
+                }
+            }
+        }
+        if (out.isEmpty()) {
+            boolean port = ctx.getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE;
+            int w = o.getInt(port ? AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH : AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0);
+            int h = o.getInt(port ? AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT : AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0);
+            out.add(new int[] { w > 0 ? w : 160, h > 0 ? h : 160 });
+        }
+        return out;
     }
 
     static void update(Context ctx, AppWidgetManager mgr, int id) {
         try {
-            int[] sz = sizeDp(ctx, mgr, id);
-            int cls = WidgetRenderer.sizeClass(sz[0], sz[1]);
+            List<int[]> sizes = sizesDp(ctx, mgr, id);
             JSONObject data = readData(ctx);
             long now = System.currentTimeMillis();
             WidgetModel model = WidgetModel.parse(data, now);
             int layer = model == null ? 0 : prefs(ctx).getInt("layer_" + id, 0) % WidgetRenderer.LAYERS;
-
-            RemoteViews rv = new RemoteViews(ctx.getPackageName(), LAYOUT[cls]);
-            // Both themes are drawn; the layout (res/layout and res/layout-night) shows the one that matches the launcher's theme,
-            // so a switch of the system theme needs no redraw.
-            Bitmap light = WidgetRenderer.render(ctx, data, layer, sz[0], sz[1], false, now);
-            Bitmap dark = WidgetRenderer.render(ctx, data, layer, sz[0], sz[1], true, now);
-            rv.setImageViewBitmap(R.id.w_img_light, light);
-            rv.setImageViewBitmap(R.id.w_img_dark, dark);
-
-            rv.setOnClickPendingIntent(R.id.w_tap, openApp(ctx, id, 0, route(model == null ? 0 : layer, null)));
-            if (model != null) {
-                rv.setViewVisibility(R.id.w_dots, android.view.View.VISIBLE);
-                rv.setOnClickPendingIntent(R.id.w_dots, cycle(ctx, id));
+            RemoteViews rv;
+            if (android.os.Build.VERSION.SDK_INT >= 31 && sizes.size() > 1) {
+                // One RemoteViews per size; the launcher shows the one that fits. A RemoteViews may carry only so many bitmap pixels
+                // (about 1.5 screens): each size gets its share of it (two pictures, light and dark, per size).
+                ArrayMap<SizeF, RemoteViews> map = new ArrayMap<>();
+                for (int[] sz : sizes) map.put(new SizeF(sz[0], sz[1]), build(ctx, id, sz[0], sz[1], sizes.size(), data, model, layer, now));
+                rv = new RemoteViews(map);
             } else {
-                rv.setViewVisibility(R.id.w_dots, android.view.View.GONE);   // nothing to cycle: a tap anywhere opens the app
-            }
-            boolean month = model != null && layer == 2 && cls != WidgetRenderer.SMALL;
-            if (cls != WidgetRenderer.SMALL) {
-                rv.setViewVisibility(R.id.w_grid, month ? android.view.View.VISIBLE : android.view.View.GONE);
-                if (month) wireGrid(ctx, rv, id, model, cls, sz[0], sz[1]);
+                int[] sz = sizes.get(0);
+                rv = build(ctx, id, sz[0], sz[1], 1, data, model, layer, now);
             }
             mgr.updateAppWidget(id, rv);
         } catch (RuntimeException e) {
@@ -148,9 +175,37 @@ public class WidgetProvider extends AppWidgetProvider {
         }
     }
 
+    /** The widget for one size: the layout of its class, both pictures, the taps. */
+    private static RemoteViews build(Context ctx, int id, int wDp, int hDp, int shares, JSONObject data, WidgetModel model, int layer, long now) {
+        int cls = WidgetRenderer.sizeClass(wDp, hDp);
+        RemoteViews rv = new RemoteViews(ctx.getPackageName(), LAYOUT[cls]);
+        // Both themes are drawn; the layout (res/layout and res/layout-night) shows the one that matches the launcher's theme,
+        // so a switch of the system theme needs no redraw.
+        float scale = WidgetRenderer.scaleFor(ctx, wDp, hDp, 3.2e6f / (2 * shares));
+        Bitmap light = WidgetRenderer.render(ctx, data, layer, wDp, hDp, false, now, scale);
+        Bitmap dark = WidgetRenderer.render(ctx, data, layer, wDp, hDp, true, now, scale);
+        rv.setImageViewBitmap(R.id.w_img_light, light);
+        rv.setImageViewBitmap(R.id.w_img_dark, dark);
+
+        rv.setOnClickPendingIntent(R.id.w_tap, openApp(ctx, id, 0, route(model == null ? 0 : layer, null)));
+        if (model != null) {
+            rv.setViewVisibility(R.id.w_dots, android.view.View.VISIBLE);
+            rv.setOnClickPendingIntent(R.id.w_dots_prev, cycle(ctx, id, -1));
+            rv.setOnClickPendingIntent(R.id.w_dots_next, cycle(ctx, id, 1));
+        } else {
+            rv.setViewVisibility(R.id.w_dots, android.view.View.GONE);   // nothing to cycle: a tap anywhere opens the app
+        }
+        boolean month = model != null && layer == 2 && cls != WidgetRenderer.SMALL;
+        if (cls != WidgetRenderer.SMALL) {
+            rv.setViewVisibility(R.id.w_grid, month ? android.view.View.VISIBLE : android.view.View.GONE);
+            if (month) wireGrid(ctx, rv, id, model, cls, wDp, hDp);
+        }
+        return rv;
+    }
+
     /** Each day number of the month grid is its own target; empty cells open the calendar like the rest of the layer. */
     private static void wireGrid(Context ctx, RemoteViews rv, int id, WidgetModel m, int cls, int wDp, int hDp) {
-        int[] mo = WidgetModel.month(m.today);   // year, month, offset, days, rows
+        int[] mo = WidgetModel.month(m.today, m.weekStart);   // year, month, offset, days, rows
         // The grid's padding from the picture's own geometry: left, top (+ header), right, and what is left under the rows.
         float[] g = WidgetRenderer.monthGeo(ctx, cls, wDp, hDp, mo[4]);
         float dens = ctx.getResources().getDisplayMetrics().density;
@@ -168,7 +223,7 @@ public class WidgetProvider extends AppWidgetProvider {
     }
 
     static String route(int layer, String day) {
-        return "/uposatha-calendar?app=1&tab=" + TAB[layer] + (day != null ? "&day=" + day : "");
+        return "/uposatha-calendar?app=1&tab=" + TAB[layer] + (day != null ? "&day=" + day : "") + (layer == 0 ? "&moon=1" : "");   // a tap on the first layer lands on the moon, which plays its cycle once
     }
 
     private static PendingIntent openApp(Context ctx, int widgetId, int slot, String route) {
@@ -180,11 +235,13 @@ public class WidgetProvider extends AppWidgetProvider {
         return PendingIntent.getActivity(ctx, widgetId * 64 + slot, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    private static PendingIntent cycle(Context ctx, int id) {
+    private static PendingIntent cycle(Context ctx, int id, int dir) {
         Intent i = new Intent(ctx, WidgetProvider.class);
         i.setAction(ACTION_CYCLE);
         i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
-        return PendingIntent.getBroadcast(ctx, id, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        i.putExtra("dir", dir);
+        // The two intents differ only in an extra, which PendingIntent ignores: the request code tells them apart.
+        return PendingIntent.getBroadcast(ctx, id * 2 + (dir < 0 ? 1 : 0), i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     // ------------------------------------------------------------------ the plan: one alarm, always the next moment that matters
@@ -207,7 +264,7 @@ public class WidgetProvider extends AppWidgetProvider {
         PendingIntent pi = tickIntent(ctx);
         am.cancel(pi);
         AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
-        if (mgr.getAppWidgetIds(new ComponentName(ctx, WidgetProvider.class)).length == 0) return;
+        if (allIds(ctx, mgr).length == 0) return;
         long now = System.currentTimeMillis();
         WidgetModel m = WidgetModel.parse(readData(ctx), now);
         long at = now + WidgetFormat.HOUR;   // no data: look again in an hour (it may have arrived)

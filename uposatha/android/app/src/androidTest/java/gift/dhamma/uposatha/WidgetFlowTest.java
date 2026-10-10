@@ -31,7 +31,7 @@ public class WidgetFlowTest {
     private static final String PKG = "gift.dhamma.uposatha";
     // The big moon of the Summary section (fractions of the screen), tuned on the first runs.
     private static final float MOON_X = 0.5f, MOON_Y = 0.23f;
-    private static final Pattern DOTS = Pattern.compile(".*:id/w_dots");
+    private static final Pattern DOTS = Pattern.compile(".*:id/w_dots_next");
     private static final Pattern CELL = Pattern.compile(".*:id/c[0-9][0-9]");
 
     private UiDevice dev;
@@ -149,7 +149,7 @@ public class WidgetFlowTest {
         step("pin-request", () -> {
             AppWidgetManager am = AppWidgetManager.getInstance(ctx);
             Log.i(TAG, "pin supported: " + am.isRequestPinAppWidgetSupported());
-            am.requestPinAppWidget(new ComponentName(ctx, "gift.dhamma.uposatha.WidgetProvider"), null, null);
+            am.requestPinAppWidget(new ComponentName(ctx, "gift.dhamma.uposatha.WidgetProviderLarge"), null, null);
             sleep(2500);
         });
         dump("pin-dialog");

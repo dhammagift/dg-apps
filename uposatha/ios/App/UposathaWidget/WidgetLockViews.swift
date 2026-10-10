@@ -58,7 +58,7 @@ struct LockRectangular: View {
         let l = snap.loc
         if let u = snap.upo {
             HStack(spacing: 6) {
-                MoonView(phase: u.phase, size: 26, south: snap.south, mono: true)
+                MoonView(phase: snap.heroPhase, size: 26, south: snap.south, mono: true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(snap.active ? l.s("toNow", ["n": String(u.lunarDay)])
                                      : l.s("lock.rect", ["n": String(u.lunarDay), "count": l.countText(snap.secondsToTarget)]))
@@ -104,7 +104,7 @@ struct LockCircular: View {
 
     var body: some View {
         if #available(iOS 17.0, *) {
-            Button(intent: SwitchLayerIntent(family: key, count: 3)) { face }
+            Button(intent: SwitchLayerIntent(family: key, count: 3, step: 1)) { face }
                 .buttonStyle(.plain)
         } else {
             face
@@ -126,9 +126,9 @@ struct LockCircular: View {
     // 1: the moon and the time to the start (or the end)
     @ViewBuilder
     private var counter: some View {
-        if let u = snap.upo {
+        if snap.upo != nil {
             VStack(spacing: 1) {
-                MoonView(phase: u.phase, size: 24, south: snap.south, mono: true)
+                MoonView(phase: snap.heroPhase, size: 24, south: snap.south, mono: true)
                 Text(snap.loc.countParts(snap.secondsToTarget).map { $0.0 + $0.1 }.joined(separator: " "))
                     .font(dgFont(11, .bold)).lineLimit(1).minimumScaleFactor(0.6)
             }
@@ -162,8 +162,8 @@ struct LockCircular: View {
     private var date: some View {
         if let u = snap.upo {
             VStack(spacing: 0) {
-                Text(snap.loc.dayOfMonth(u.day)).font(dgFont(22, .bold))
-                Text(snap.loc.monthShort(u.day)).font(dgFont(11, .medium))
+                Text(snap.loc.dayOfMonth(u.start.ymd)).font(dgFont(22, .bold))
+                Text(snap.loc.monthShort(u.start.ymd)).font(dgFont(11, .medium))
             }
         } else {
             OpenAppView()

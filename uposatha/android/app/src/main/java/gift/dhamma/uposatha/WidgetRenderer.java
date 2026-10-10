@@ -49,9 +49,12 @@ final class WidgetRenderer {
     }
 
     /** Pixels per dp of the bitmap: the screen's own, but not beyond what a RemoteViews bitmap can afford. */
-    static float scaleFor(Context ctx, int widthDp, int heightDp) {
+    static float scaleFor(Context ctx, int widthDp, int heightDp) { return scaleFor(ctx, widthDp, heightDp, 1.4e6f); }
+
+    /** The same with the picture's pixel budget given (a RemoteViews with several sizes shares what one may carry). */
+    static float scaleFor(Context ctx, int widthDp, int heightDp, float budgetPx) {
         float s = Math.min(ctx.getResources().getDisplayMetrics().density, 2.6f);
-        while (s > 1f && (widthDp * s) * (heightDp * s) > 1.4e6f) s -= 0.2f;
+        while (s > 1f && (widthDp * s) * (heightDp * s) > budgetPx) s -= 0.2f;
         return Math.max(1f, s);
     }
 
@@ -250,14 +253,25 @@ final class WidgetRenderer {
         /** Centre line of the dots: at the usual spot, a little lower on a short 4x2 so the content has room. */
         float dotsCy() { return cls == MEDIUM && H < 150 ? H - 9 : H - padB() - 8; }
 
+        /** The layer switch: three wide segments (the current one in accent) between two chevrons; the left half of the strip goes back, the right half forward. */
         void dots(int active) {
-            float cy = dotsCy(), total = 5 * 2 + 14 + 5 * 2, x = W / 2 - total / 2;
+            float cy = dotsCy(), seg = 22, gap = 6, h = 6, total = 3 * seg + 2 * gap, x = W / 2 - total / 2;
             for (int i = 0; i < 3; i++) {
-                float wd = i == active ? 14 : 5;
                 fill.setColor(i == active ? th.accentInk : th.borderStrong);
-                c.drawRoundRect(x, cy - 2.5f, x + wd, cy + 2.5f, 2.5f, 2.5f, fill);
-                x += wd + 5;
+                c.drawRoundRect(x, cy - h / 2, x + seg, cy + h / 2, h / 2, h / 2, fill);
+                x += seg + gap;
             }
+            Paint ch = new Paint(Paint.ANTI_ALIAS_FLAG);
+            ch.setStyle(Paint.Style.STROKE);
+            ch.setStrokeWidth(1.8f);
+            ch.setStrokeCap(Paint.Cap.ROUND);
+            ch.setStrokeJoin(Paint.Join.ROUND);
+            ch.setColor(th.muted);
+            float lx = W / 2 - total / 2 - 20, rx = W / 2 + total / 2 + 20;
+            Path l = new Path(); l.moveTo(lx + 3, cy - 5); l.lineTo(lx - 2, cy); l.lineTo(lx + 3, cy + 5);
+            Path r = new Path(); r.moveTo(rx - 3, cy - 5); r.lineTo(rx + 2, cy); r.lineTo(rx - 3, cy + 5);
+            c.drawPath(l, ch);
+            c.drawPath(r, ch);
         }
 
         float lbSize() { return cls == LARGE ? 12.5f : 11.5f; }
@@ -285,11 +299,11 @@ final class WidgetRenderer {
             c.scale(d / 100f, d / 100f);
             if (south) c.rotate(180, C, C);
             double I = illumination(phase);
-            if (dark) {   // a faint halo for a dark background, stronger as the moon fills
+            if (dark) {   // a halo under EVERY moon on a dark background (a new moon on black would be lost), a bit stronger as the moon fills
                 Paint g = new Paint(Paint.ANTI_ALIAS_FLAG);
-                g.setColor(ColorUtils.setAlphaComponent(th.glow, (int) Math.round(255 * (0.05 + 0.20 * I))));
-                g.setMaskFilter(new BlurMaskFilter(blurRadius((float) (1 + 2.5 * I)), BlurMaskFilter.Blur.NORMAL));
-                c.drawCircle(C, C, R, g);
+                g.setColor(ColorUtils.setAlphaComponent(th.glow, (int) Math.round(255 * (0.26 + 0.22 * I))));
+                g.setMaskFilter(new BlurMaskFilter(blurRadius((float) (3 + 3.5 * I)), BlurMaskFilter.Blur.NORMAL));
+                c.drawCircle(C, C, R + 1f, g);
             }
             Path disc = new Path();
             disc.addCircle(C, C, R, Path.Direction.CW);
@@ -319,7 +333,7 @@ final class WidgetRenderer {
             Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
             rim.setStyle(Paint.Style.STROKE);
             rim.setStrokeWidth(.8f);
-            rim.setColor(ColorUtils.setAlphaComponent(th.navyInk, Math.round(255 * .22f)));
+            rim.setColor(dark ? ColorUtils.setAlphaComponent(th.glow, Math.round(255 * .45f)) : ColorUtils.setAlphaComponent(th.navyInk, Math.round(255 * .22f)));
             c.drawCircle(C, C, R - .4f, rim);
             c.restore();
         }
@@ -443,7 +457,7 @@ final class WidgetRenderer {
         void layer1Small(WidgetModel m, WidgetModel.Upo u, long rem, boolean kalaOn, String to, String lbl) {
             float x = padL(), maxW = W - 2 * padL(), y = padT();
             label(lbl, x, y + 4, maxW - 28);
-            moon(W - padL() - 22, y, 22, u.phase, m.south);
+            moon(W - padL() - 22, y, 22, u.nominal(), m.south);
             y += 22 + 6;
             t(fit(to, maxW, 12, f600, 0, false), x, y, 14, 12, f600, th.text2, 0, false);
             y += 14;
@@ -474,9 +488,9 @@ final class WidgetRenderer {
             bigS = Math.min(bigS, avail - fixed - (show1 ? 17.6f : 0));
             float h = fixed + bigS + (show1 ? 17.6f : 0) + (show2 ? 17 : 0);
             float y = top + Math.max(0, (avail - h) / 2);
-            moon(x, top + (avail - md) / 2, md, u.phase, m.south);
+            moon(x, top + (avail - md) / 2, md, m.moonNow, m.south);   // the moon as it is now
             float lw = label(lbl, tx0, y);
-            t(fit("· " + dateLabel(u.day), maxW - lw - 8, 12, f600, 0.04f, false), tx0 + lw + 8, y, 14, 12, f600, th.muted, 0.04f, false);
+            t(fit("· " + dateLabel(u.start.ymd), maxW - lw - 8, 12, f600, 0.04f, false), tx0 + lw + 8, y, 14, 12, f600, th.muted, 0.04f, false);
             y += 14 + 2;
             t(fit(to, maxW, 13, f600, 0, false), tx0, y, 16, 13, f600, th.text2, 0, false);
             y += 16;
@@ -498,7 +512,7 @@ final class WidgetRenderer {
             float md = (kalaOn ? 90 : 100) * (tight ? .86f : 1), bigS = (kalaOn ? 54 : 58) - (tight ? 8 : 0), tx0 = x + md + 16, tw = W - padL() - tx0;
             float colH = 19 + bigS + 4 + 18 + (l2 != null ? 3 + 16 : 0);
             float heroH = Math.max(md, colH);
-            moon(x, y + (heroH - md) / 2, md, u.phase, m.south);
+            moon(x, y + (heroH - md) / 2, md, m.moonNow, m.south);   // the moon as it is now
             float cy = y + (heroH - colH) / 2;
             t(fit(to, tw, 15, f600, 0, false), tx0, cy, 19, 15, f600, th.text2, 0, false);
             cy += 19;
@@ -523,9 +537,9 @@ final class WidgetRenderer {
                 float rx = W - padL();
                 String in = inText(m, n);
                 float rw = tr(in, rx, y, 24, 14, f400, th.muted, 0, true);
-                moon(x, y, 24, n.phase, m.south);
+                moon(x, y, 24, n.nominal(), m.south);
                 float cx = x + 24 + 8;
-                String date = dateLabel(n.day);
+                String date = dateLabel(n.start.ymd);   // the date it BEGINS on (the evening), as the app's own lists say
                 float bw = t(date, cx, y, 24, 16, f600, th.text, 0, true);
                 cx += bw + 8;
                 String em = ordinal(n.lunarDay) + (m.detail ? " " + (tx.ru() ? "день" : "day") : "");
@@ -685,7 +699,7 @@ final class WidgetRenderer {
         // ================================================================== layer 3: month
 
         void layer3(WidgetModel m) {
-            int[] mo = WidgetModel.month(m.today);   // year, month, offset, days, rows
+            int[] mo = WidgetModel.month(m.today, m.weekStart);   // year, month, offset, days, rows
             float x = padL(), y = padT();
             String monthName = tx.monthName(mo[1]);
             if (cls == SMALL) {
@@ -694,7 +708,7 @@ final class WidgetRenderer {
                 weekHeader(x, y, W - 2 * padL(), 10.5f, 14, m);
                 y += 14 + 2;
                 // two weeks: the one with today and the next, whatever month they fall in
-                int off = WidgetFormat.dow(WidgetFormat.year(m.today), WidgetFormat.month(m.today), WidgetFormat.day(m.today));
+                int off = WidgetModel.column(WidgetFormat.dow(WidgetFormat.year(m.today), WidgetFormat.month(m.today), WidgetFormat.day(m.today)), m.weekStart);
                 long start = WidgetFormat.daysFromCivil(WidgetFormat.year(m.today), WidgetFormat.month(m.today), WidgetFormat.day(m.today)) - off;
                 float colW = (W - 2 * padL()) / 7f;
                 for (int r = 0; r < 2; r++) {
@@ -706,7 +720,7 @@ final class WidgetRenderer {
                 }
                 y += 6;
                 WidgetModel.Upo u = m.cur();
-                String line = wd(u.day) + " " + WidgetFormat.day(u.day) + " · " + ordinal(u.lunarDay) + " " + (tx.ru() ? "день" : "day");
+                String line = wd(u.start.ymd) + " " + WidgetFormat.day(u.start.ymd) + " · " + ordinal(u.lunarDay) + " " + (tx.ru() ? "день" : "day");
                 t(fit(line, W - 2 * padL(), 12.5f, f700, 0, false), x, y, 15, 12.5f, f700, th.text, 0, false);
                 return;
             }
@@ -721,9 +735,9 @@ final class WidgetRenderer {
                 float ly = y + 14 + 10;
                 List<WidgetModel.Upo> ups = m.upos.subList(m.curIdx, Math.min(m.upos.size(), m.curIdx + 3));
                 for (WidgetModel.Upo n : ups) {
-                    moon(x, ly, 20, n.phase, m.south);
+                    moon(x, ly, 20, n.nominal(), m.south);
                     float cx = x + 20 + 8;
-                    float bw = t(dayLabel(n.day), cx, ly, 20, 14, f600, th.text, 0, true);
+                    float bw = t(dayLabel(n.start.ymd), cx, ly, 20, 14, f600, th.text, 0, true);
                     t(fit(ordinal(n.lunarDay), 132 - 20 - 8 - bw - 8, 14, f400, 0, false), cx + bw + 8, ly, 20, 14, f400, th.text2, 0, false);
                     ly += 20 + 8;
                 }
@@ -747,9 +761,9 @@ final class WidgetRenderer {
                 float rx = W - padL();
                 String right = m.ongoing ? tx.get("now") : tx.get("inDays").substring(0, tx.get("inDays").indexOf("{n}")) + counter(u.start.ms - m.now);
                 float rw = tr(right, rx, ry, 24, 14, f400, th.muted, 0, true);
-                moon(x, ry + 2, 20, u.phase, m.south);
+                moon(x, ry + 2, 20, u.nominal(), m.south);
                 float cx = x + 20 + 8;
-                float bw = t(dateLabel(u.day), cx, ry, 24, 15, f600, th.text, 0, true);
+                float bw = t(dateLabel(u.start.ymd), cx, ry, 24, 15, f600, th.text, 0, true);
                 String em = ordinal(u.lunarDay) + " · " + phase(u);
                 t(fit(em, rx - rw - 8 - cx - bw - 8, 15, f400, 0, false), cx + bw + 8, ry, 24, 15, f400, th.text2, 0, false);
             }
@@ -758,7 +772,7 @@ final class WidgetRenderer {
         void weekHeader(float x, float y, float width, float size, float h, WidgetModel m) {
             float colW = width / 7f;
             for (int i = 0; i < 7; i++) {
-                String s = tx.weekday(i);
+                String s = tx.weekday(m.weekStart == 0 ? (i + 6) % 7 : i);
                 if (!tx.ru()) s = s.substring(0, 2);
                 float sw = w(s, size, f600, 0, false);
                 t(s, x + i * colW + (colW - sw) / 2, y, h, size, f600, th.muted, 0, false);
@@ -770,7 +784,7 @@ final class WidgetRenderer {
             int day = WidgetFormat.day(ymd);
             boolean today = ymd.equals(m.today), past = ymd.compareTo(m.today) < 0;
             WidgetModel.Upo startOf = m.startingOn(ymd), dayOf = m.uposathaOn(ymd);
-            int dow = WidgetFormat.dow(WidgetFormat.year(ymd), WidgetFormat.month(ymd), day);
+            int dow = WidgetModel.column(WidgetFormat.dow(WidgetFormat.year(ymd), WidgetFormat.month(ymd), day), m.weekStart);   // the column in the week, 0 = its first day
             int textColor = past ? th.muted : th.text;
             Typeface tf = f400;
             RectF r = new RectF(x, y, x + colW, y + h);

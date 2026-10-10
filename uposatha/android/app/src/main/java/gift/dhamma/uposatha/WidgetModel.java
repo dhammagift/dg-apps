@@ -34,12 +34,22 @@ final class WidgetModel {
 
     static final class Upo {
         Mo start, end; String day, phaseName; int lunarDay; double phase;
+        /** The moon of a LIST row: the plain phase of that day (new, 50 %, full; the 14th a crescent or a gibbous), not the exact fraction. */
+        double nominal() {
+            boolean wax = phase > 0 && phase < 0.5;
+            if (lunarDay == 8) return "firstQuarter".equals(phaseName) ? 0.25 : "lastQuarter".equals(phaseName) ? 0.75 : (wax ? 0.25 : 0.75);
+            if (lunarDay == 14) return wax ? 0.375 : 0.875;
+            if (lunarDay == 15) return "full".equals(phaseName) ? 0.5 : "new".equals(phaseName) ? 0.0 : (wax ? 0.5 : 0.0);
+            return phase;
+        }
     }
 
     final long now;
     final TimeZone tz;
     final String lang;
     final boolean bySuttas, detail, showKala, placeSet, south;
+    final double moonNow;                     // the real phase of the moon now (0 new .. 0.5 full), carried on from when the data was made
+    final int weekStart;                      // 0: the week starts on Sunday, 1: on Monday (the app's own setting)
     final String today;                       // YYYY-MM-DD in the place's zone
     final List<Day> days = new ArrayList<>();
     final List<Upo> upos = new ArrayList<>();
@@ -62,6 +72,12 @@ final class WidgetModel {
         showKala = st.optBoolean("showKala", true);
         placeSet = st.optBoolean("placeSet", true);
         south = st.optBoolean("south", false);
+        weekStart = st.optInt("weekStart", "ru".equals(st.optString("lang")) ? 1 : 0) == 0 ? 0 : 1;
+        long gen0 = parseIso(root.optString("generatedAt", ""));
+        JSONObject td = root.optJSONObject("today");
+        double mf = td == null ? 0 : td.optDouble("moon", 0);
+        if (Double.isNaN(mf)) mf = 0;
+        moonNow = ((mf + (gen0 > 0 ? (now - gen0) / (29.530588853 * 86400000.0) : 0)) % 1 + 1) % 1;   // the moon moves about 0.034 of a cycle a day
         String tzid = root.optString("tz", "");
         TimeZone z = tzid.isEmpty() ? TimeZone.getDefault() : TimeZone.getTimeZone(tzid);
         tz = z;
@@ -225,10 +241,16 @@ final class WidgetModel {
     }
 
     /** Month grid of the given date: first column offset (Monday = 0), length, rows (4..6). */
-    static int[] month(String ymd) {
+    /** The month of a date: year, month, column of the 1st (0 = the first day of the week), days, rows. weekStart: 0 Sunday, 1 Monday. */
+    static int[] month(String ymd, int weekStart) {
         int y = WidgetFormat.year(ymd), m = WidgetFormat.month(ymd);
-        int off = WidgetFormat.dow(y, m, 1), dim = WidgetFormat.daysInMonth(y, m);
+        int off = column(WidgetFormat.dow(y, m, 1), weekStart), dim = WidgetFormat.daysInMonth(y, m);
         return new int[] { y, m, off, dim, (off + dim + 6) / 7 };
+    }
+
+    /** The column of a weekday (WidgetFormat.dow: Monday 0 .. Sunday 6) in a week that starts on Sunday (0) or Monday (1). */
+    static int column(int dow, int weekStart) {
+        return weekStart == 0 ? (dow + 1) % 7 : dow;
     }
 
     static String ymd(int y, int m, int d) {

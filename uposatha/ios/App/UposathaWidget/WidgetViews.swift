@@ -167,7 +167,7 @@ struct DotsStrip: View {
             // the tap area is the whole strip (the full width, 32 pt high), not just the dots
             let w: CGFloat = vertical ? 18 : CGFloat.infinity
             let h: CGFloat = vertical ? CGFloat.infinity : 32
-            Button(intent: SwitchLayerIntent(family: key, count: count)) {
+            Button(intent: SwitchLayerIntent(family: key, count: count, step: 1)) {
                 DotsRow(count: count, active: active, vertical: vertical, mono: mono)
                     .frame(maxWidth: w, maxHeight: h)
                     .contentShape(Rectangle())
@@ -217,7 +217,7 @@ struct UposathaLayer: View {
         VStack(alignment: .leading, spacing: 10) {
             if size == .large {
                 HStack {
-                    Caption(text: l.s(snap.active ? "layer.uposathaNow" : "layer.uposatha"), size: m.label, date: l.dateShort(u.day))
+                    Caption(text: l.s(snap.active ? "layer.uposathaNow" : "layer.uposatha"), size: m.label, date: l.dateShort(u.start.ymd))
                     Spacer(minLength: 8)
                     Text(l.s((snap.data.settings?.bySuttas ?? true) ? "mode.bySuttas" : "mode.notBySuttas"))
                         .font(dgFont(m.label)).foregroundColor(.dgMuted)
@@ -225,12 +225,12 @@ struct UposathaLayer: View {
             }
             HStack(alignment: .top, spacing: 12) {
                 if size != .small {
-                    MoonView(phase: u.phase, size: m.moon, south: snap.south, glow: true)
+                    MoonView(phase: snap.heroPhase, size: m.moon, south: snap.south)
                 }
                 UpoTexts(snap: snap, u: u, size: size)
                 if size == .small {
                     Spacer(minLength: 0)
-                    MoonView(phase: u.phase, size: m.moon, south: snap.south, glow: true)
+                    MoonView(phase: snap.heroPhase, size: m.moon, south: snap.south)
                 }
             }
             if size == .large {
@@ -272,7 +272,7 @@ struct UpoTexts: View {
             if size != .large {
                 Caption(text: l.s(snap.active ? "layer.uposathaNow" : "layer.uposatha"),
                         size: m.label,
-                        date: size == .small ? nil : l.dateShort(u.day))
+                        date: size == .small ? nil : l.dateShort(u.start.ymd))
             }
             Text(l.s(snap.active ? "toNow" : "to", ["n": String(u.lunarDay)]))
                 .font(dgFont(m.to, .medium)).foregroundColor(.dgText).lineLimit(1).minimumScaleFactor(0.8)
@@ -307,11 +307,11 @@ struct UpoNext: View {
             Text(l.s("next").uppercased()).font(dgFont(11.5, .bold)).foregroundColor(.dgMuted).kerning(0.6)
             ForEach(0..<rows.count, id: \.self) { i in
                 HStack(spacing: 8) {
-                    MoonView(phase: rows[i].phase, size: 18, south: snap.south)
-                    Text(l.dateShort(rows[i].day)).font(dgFont(14, .semibold)).foregroundColor(.dgText)
+                    MoonView(phase: rows[i].listPhase, size: 18, south: snap.south)
+                    Text(l.dateShort(rows[i].start.ymd)).font(dgFont(14, .semibold)).foregroundColor(.dgText)
                     Text(l.s("dayN", ["n": String(rows[i].lunarDay)])).font(dgFont(13)).foregroundColor(.dgMuted)
                     Spacer(minLength: 0)
-                    Text(l.s("inDays", ["n": String(snap.daysUntil(rows[i].day))])).font(dgFont(13)).foregroundColor(.dgMuted)
+                    Text(l.s("inDays", ["n": String(snap.daysUntil(rows[i].start.ymd))])).font(dgFont(13)).foregroundColor(.dgMuted)
                 }
             }
         }
@@ -509,7 +509,7 @@ struct MonthLayer: View {
     private var monthRows: [[WCell]] {
         let p = ymdParts
         let first = WTime.daysFromCivil(p.y, p.m, 1)
-        let lead = WTime.weekdayIndex(fromDays: first)
+        let lead = snap.data.weekColumn(ofDays: first)
         let next = p.m == 12 ? WTime.daysFromCivil(p.y + 1, 1, 1) : WTime.daysFromCivil(p.y, p.m + 1, 1)
         let rows = (lead + (next - first) + 6) / 7
         return snap.data.cells(from: first - lead, rows: rows, month: p.m)
@@ -519,12 +519,12 @@ struct MonthLayer: View {
         let l = snap.loc
         let p = ymdParts
         let todayNumber = WTime.daysFromCivil(p.y, p.m, p.d)
-        let monday = todayNumber - WTime.weekdayIndex(fromDays: todayNumber)
+        let monday = todayNumber - snap.data.weekColumn(ofDays: todayNumber)   // the first day of this week
         return VStack(alignment: .leading, spacing: 6) {
             Caption(text: l.monthTitle(p.m), size: 11.5)
             MonthGrid(snap: snap, rows: snap.data.cells(from: monday, rows: 2, month: nil), cellHeight: 17, font: 12, linked: false)
             if let u = upcoming.first {
-                Text(l.dayShort(u.day) + " · " + l.s("dayN", ["n": String(u.lunarDay)]))
+                Text(l.dayShort(u.start.ymd) + " · " + l.s("dayN", ["n": String(u.lunarDay)]))
                     .font(dgFont(12, .semibold)).foregroundColor(.dgText).lineLimit(1).minimumScaleFactor(0.8)
             }
         }
@@ -538,14 +538,14 @@ struct MonthLayer: View {
                 Caption(text: l.monthTitle(p.m), size: 11.5)
                 ForEach(0..<min(3, upcoming.count), id: \.self) { i in
                     HStack(spacing: 6) {
-                        MoonView(phase: upcoming[i].phase, size: 16, south: snap.south)
-                        Text(l.dayShort(upcoming[i].day)).font(dgFont(13, .semibold)).foregroundColor(.dgText)
+                        MoonView(phase: upcoming[i].listPhase, size: 16, south: snap.south)
+                        Text(l.dayShort(upcoming[i].start.ymd)).font(dgFont(13, .semibold)).foregroundColor(.dgText)
                         Text(l.s("dayN", ["n": String(upcoming[i].lunarDay)])).font(dgFont(12)).foregroundColor(.dgMuted).lineLimit(1).minimumScaleFactor(0.7)
                     }
                 }
             }
             .frame(width: 128, alignment: .leading)
-            MonthGrid(snap: snap, rows: monthRows, cellHeight: 16, font: 11.5, linked: true)
+            MonthGrid(snap: snap, rows: monthRows, cellHeight: 13, font: 11, linked: true)
         }
     }
 
@@ -553,7 +553,7 @@ struct MonthLayer: View {
         let l = snap.loc
         let p = ymdParts
         let prefix = String(format: "%04d-%02d", p.y, p.m)
-        let inMonth = snap.data.uposathas.filter { $0.day.hasPrefix(prefix) }.count
+        let inMonth = snap.data.uposathas.filter { $0.start.ymd.hasPrefix(prefix) }.count
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Caption(text: l.monthTitle(p.m) + " " + String(p.y), size: 12.5)
@@ -563,8 +563,8 @@ struct MonthLayer: View {
             MonthGrid(snap: snap, rows: monthRows, cellHeight: 34, font: 15, linked: true)
             if let u = upcoming.first {
                 HStack(spacing: 8) {
-                    MoonView(phase: u.phase, size: 22, south: snap.south)
-                    Text(l.dateShort(u.day)).font(dgFont(15, .semibold)).foregroundColor(.dgText)
+                    MoonView(phase: u.listPhase, size: 22, south: snap.south)
+                    Text(l.dateShort(u.start.ymd)).font(dgFont(15, .semibold)).foregroundColor(.dgText)
                     Text(l.s("dayN", ["n": String(u.lunarDay)]) + " · " + l.s("phase." + u.phaseName))
                         .font(dgFont(14)).foregroundColor(.dgMuted).lineLimit(1).minimumScaleFactor(0.7)
                     Spacer(minLength: 0)
@@ -575,8 +575,23 @@ struct MonthLayer: View {
     }
 }
 
-// The month as in the app (.grid .c): the evening an Uposatha begins solid, its day a light band, today outlined, past days muted.
-// In the medium and large widget every number is a link to the calendar on that day.
+// A grid cell: rounded, except where it joins the next / previous cell into one strip.
+struct StripShape: Shape {
+    var joinLeft: Bool
+    var joinRight: Bool
+
+    func path(in rect: CGRect) -> Path {
+        var corners: UIRectCorner = []
+        if !joinLeft { corners.formUnion([.topLeft, .bottomLeft]) }
+        if !joinRight { corners.formUnion([.topRight, .bottomRight]) }
+        let bezier = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: 5, height: 5))
+        return Path(bezier.cgPath)
+    }
+}
+
+// The month as in the app (.grid .c): the evening an Uposatha begins solid, its day a light band joined to it in one strip (it breaks at the
+// row's last column), today outlined, past days muted. The week starts as the app's setting says. In the medium and large widget every
+// number is a link to the calendar on that day.
 struct MonthGrid: View {
     let snap: WSnap
     let rows: [[WCell]]
@@ -585,18 +600,18 @@ struct MonthGrid: View {
     let linked: Bool
 
     var body: some View {
-        let marks = snap.data.marks()
-        let names = snap.loc.list("weekdays")
-        VStack(spacing: 2) {
-            HStack(spacing: 2) {
+        let marks = snap.data.gridMarks()
+        let names = snap.data.weekdayNames(snap.loc)
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
                 ForEach(0..<names.count, id: \.self) { i in
                     Text(names[i]).font(dgFont(10.5, .medium)).foregroundColor(.dgMuted).frame(maxWidth: .infinity)
                 }
             }
             ForEach(0..<rows.count, id: \.self) { r in
-                HStack(spacing: 2) {
+                HStack(spacing: 0) {
                     ForEach(0..<rows[r].count, id: \.self) { c in
-                        cell(rows[r][c], marks)
+                        cell(rows[r][c], column: c, marks: marks)
                     }
                 }
             }
@@ -604,26 +619,37 @@ struct MonthGrid: View {
     }
 
     @ViewBuilder
-    private func cell(_ cell: WCell, _ marks: [String: Int]) -> some View {
-        if linked && cell.inMonth {
-            Link(destination: WLinks.open("cal", day: cell.ymd)) { face(cell, marks) }
+    private func cell(_ item: WCell, column: Int, marks: WGridMarks) -> some View {
+        if linked && item.inMonth {
+            Link(destination: WLinks.open("cal", day: item.ymd)) { face(item, column: column, marks: marks) }
         } else {
-            face(cell, marks)
+            face(item, column: column, marks: marks)
         }
     }
 
-    private func face(_ cell: WCell, _ marks: [String: Int]) -> some View {
-        let mark = cell.inMonth ? (marks[cell.ymd] ?? 0) : 0
-        let isToday = cell.ymd == snap.today
-        let past = snap.daysUntil(cell.ymd) < 0
-        let fill: Color = mark == 1 ? Color.dgAccent : (mark == 2 ? Color.dgAccent.opacity(0.30) : Color.clear)
-        let ink: Color = mark == 1 ? Color.white : (mark == 2 ? Color.dgAccentInk : (past ? Color.dgMuted : Color.dgText))
+    private func face(_ item: WCell, column: Int, marks: WGridMarks) -> some View {
+        let solid = item.inMonth && marks.solid.contains(item.ymd)
+        let light = item.inMonth && !solid && marks.light.contains(item.ymd)
+        let isToday = item.ymd == snap.today
+        let past = snap.daysUntil(item.ymd) < 0
+        // a strip goes on into the neighbour only inside one row
+        let joinRight = item.inMonth && marks.joinNext.contains(item.ymd) && column < 6
+        let joinLeft = item.inMonth && marks.joinPrev.contains(item.ymd) && column > 0
+        let fill: Color = solid ? Color.dgAccent : (light ? Color.dgAccent.opacity(0.30) : Color.clear)
+        let ink: Color = solid ? Color.white : (light ? Color.dgAccentInk : (past ? Color.dgMuted : Color.dgText))
+        let weight: Font.Weight = (solid || light) ? .semibold : .regular
         return ZStack {
-            RoundedRectangle(cornerRadius: 5).fill(fill)
-            if isToday && cell.inMonth {
+            StripShape(joinLeft: joinLeft, joinRight: joinRight)
+                .fill(fill)
+                .padding(.leading, joinLeft ? 0 : 1)
+                .padding(.trailing, joinRight ? 0 : 1)
+                .padding(.vertical, 1)
+            if isToday && item.inMonth {
                 RoundedRectangle(cornerRadius: 5).stroke(Color.dgText, lineWidth: 1.5)
+                    .padding(.horizontal, 1)
+                    .padding(.vertical, 1)
             }
-            Text(cell.inMonth ? String(cell.day) : "").font(dgFont(font, mark == 0 ? .regular : .semibold)).foregroundColor(ink)
+            Text(item.inMonth ? String(item.day) : "").font(dgFont(font, weight)).foregroundColor(ink)
         }
         .frame(maxWidth: .infinity)
         .frame(height: cellHeight)
@@ -638,10 +664,21 @@ struct SystemWidgetView: View {
     let layer: Int
     let key: String
 
+    // Room kept under the layer for the switch (iOS 17+). The switch's tap strip is 44 pt; on the text layers it may reach over the
+    // bottom of the content (a tap there only turns the layer), on the month and the large widget the content stays clear of it.
+    private var reserve: CGFloat {
+        if #available(iOS 17.0, *) {
+            return (layer == 2 || size == .large) ? 44 : 26
+        }
+        return 0
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            layerView.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            DotsStrip(key: key, count: 3, active: layer)
+        ZStack(alignment: .bottom) {
+            layerView
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.bottom, reserve)
+            LayerSwitch(key: key, count: 3, active: layer)
         }
         .widgetURL(WLinks.tab(layer))
     }
@@ -652,6 +689,52 @@ struct SystemWidgetView: View {
         case 1: DayNightLayer(snap: snap, size: size)
         case 2: MonthLayer(snap: snap, size: size)
         default: UposathaLayer(snap: snap, size: size)
+        }
+    }
+}
+
+// The layer switch: three wide segments between two chevrons. The whole strip (at least 44 pt high) is two buttons: the left half goes
+// to the previous layer, the right half to the next (iOS 17+ App Intents). Before iOS 17 there is one layer and no switch.
+struct LayerSwitch: View {
+    let key: String
+    let count: Int
+    let active: Int
+
+    var body: some View {
+        if #available(iOS 17.0, *) {
+            ZStack {
+                HStack(spacing: 0) {
+                    stepButton(-1)
+                    stepButton(1)
+                }
+                picture.allowsHitTesting(false)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+        }
+    }
+
+    @available(iOS 17.0, *)
+    private func stepButton(_ step: Int) -> some View {
+        Button(intent: SwitchLayerIntent(family: key, count: count, step: step)) {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var picture: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chevron.left").font(dgFont(11, .semibold)).foregroundColor(.dgMuted)
+            HStack(spacing: 6) {
+                ForEach(0..<count, id: \.self) { i in
+                    Capsule()
+                        .fill(i == active ? Color.dgAccent : Color.dgBorderStrong)
+                        .frame(width: 22, height: 6)
+                }
+            }
+            Image(systemName: "chevron.right").font(dgFont(11, .semibold)).foregroundColor(.dgMuted)
         }
     }
 }

@@ -8,7 +8,7 @@
 //
 // Shared code is pasted in by marker, one source each:
 //   "// @rate-prompt"     in uposatha-bridge.js: the rating sheet, from ../src/native-bridge.js
-//   "// @site-updater"    in uposatha-bridge.js: no service worker in the app, from ../src/site-no-sw.js (Uposatha never updates its page from the site: it ships with the app)
+//   "// @site-updater"    in uposatha-bridge.js: no service worker in the app (../src/site-no-sw.js) + the updater that runs ONLY when a person asks (../src/site-updater.js, SITE_CONFIG.manual)
 //   "// @launch-screens"  in index.html: the "no connection"
 //                         screen, from ../src/launch-screens.js
 const fs = require('fs');
@@ -24,7 +24,7 @@ function bridgeSource() {
     const block = main.split(/^.*@rate-prompt-begin.*\n/m)[1].split(/^.*@rate-prompt-end.*\n/m)[0];
     return fs.readFileSync(path.join(SRC, 'uposatha-bridge.js'), 'utf8')
         .replace(/^.*\/\/ @rate-prompt .*\n/m, () => block)
-        .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'site-no-sw.js'), 'utf8'))
+        .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'site-no-sw.js'), 'utf8') + fs.readFileSync(path.join(ROOT_SRC, 'site-updater.js'), 'utf8'))
         .replace(/^.*\/\/ @launch-screens .*\n/m, () => launchScreens());
 }
 
@@ -83,7 +83,9 @@ function bundleSnapshot() {
     if (empty.length) throw new Error('the snapshot has empty files (a bundle with blank styles is worse than none): ' + empty.join(', '));
     const hashes = {};
     for (const f of files) hashes[f] = crypto.createHash('sha256').update(fs.readFileSync(path.join(WWW, f))).digest('hex');
-    fs.writeFileSync(path.join(WWW, 'site-manifest.json'), JSON.stringify({ built: new Date().toISOString(), files, hashes }));
+    // ids: the elements of the calendar page; a refresh from the site is applied only if the site's page has no element the bundled page lacks
+    const ids = []; raw.replace(/\sid="([^"]+)"/g, (m, i) => { if (!ids.includes(i)) ids.push(i); return m; });
+    fs.writeFileSync(path.join(WWW, 'site-manifest.json'), JSON.stringify({ built: new Date().toISOString(), files, hashes, ids }));
     return files.length;
 }
 

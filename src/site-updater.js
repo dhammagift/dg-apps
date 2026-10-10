@@ -3,7 +3,8 @@
 // "// @site-updater"; the bridge defines SITE_CONFIG first and calls updateSite() when the page has loaded.
 //
 //   SITE_CONFIG = { site: 'https://dict.dhamma.gift', urlFor: function (path) { return path; }, updatable: optional (path) => bool,
-//                   gate: optional (manifest) => Promise<bool> (false: this check applies nothing), silent: optional bool (no "new version" bar) }
+//                   gate: optional (manifest) => Promise<bool> (false: this check applies nothing), silent: optional bool (no "new version" bar),
+//                   manual: optional bool (nothing is fetched unless a person asks: the version row's button; no checks at start or on return to the app) }
 //
 // Uses the bridge's Cap (window.Capacitor) and store() (localStorage read).
   // ---- keeping the bundled page up to date --------------------------------------------------
@@ -167,6 +168,7 @@
     // Called once the page has settled: the files it started with are good.
     try { localStorage.setItem('dgSiteBoots', '0'); localStorage.setItem('dgSiteFresh', '0'); } catch (e) { /* no storage */ }
     if (!DS || !window.crypto || !crypto.subtle) return Promise.resolve({ state: 'failed' });
+    if (SITE_CONFIG.manual && !force) return Promise.resolve(res);   // only the safety markers above: no network unless a person asks
     if (checking) return Promise.resolve({ state: 'busy' });
     if (navigator.onLine === false) return Promise.resolve({ state: 'offline' });
     // A first start has no time stamp and always checks; after that, not sooner than SITE_CHECK_EVERY.
@@ -240,5 +242,5 @@
   window.__dgCheckSiteUpdate = function () { return updateSite(true); };
 
   // Back in the app after a while: the same check, which the time stamp keeps to once in six hours.
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') updateSite(); });
+  if (!SITE_CONFIG.manual) document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') updateSite(); });
 

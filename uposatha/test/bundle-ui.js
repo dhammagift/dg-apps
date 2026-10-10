@@ -88,10 +88,17 @@ function capacitorStub() {
                 console.log('       requests refused (the site chrome asking for the network):', JSON.stringify([...new Set(refused)].slice(0, 6)));
             }
             await page.screenshot({ path: path.join(SHOTS, `launch-upo-offline-${lang}-${theme}.png`) });
-            // The updater: 6 s after load, one changed file goes to DgSite, and only that one.
+            // The updater runs only when a person asks (the version row's button): nothing by itself 6 s after load, then one tap
+            // takes the one changed file from the site, and only that one.
             await page.waitForTimeout(7000);
+            const before = await page.evaluate(() => window.__calls.puts.filter((p) => p.path !== '/dg-edgetoedge.json').length);
+            check(`${lang}/${theme}: nothing is fetched by itself`, before, 0);
+            check(`${lang}/${theme}: the version row has its check button`, await page.evaluate(() => !!document.querySelector('.up-ver .up-check')), true);
+            await page.evaluate(() => document.querySelector('.up-ver .up-check').click());
+            await page.waitForTimeout(6000);
             const puts = await page.evaluate(() => window.__calls.puts.filter((p) => p.path !== '/dg-edgetoedge.json').map((p) => [p.path, atob(p.data).endsWith('\n\n')]));
-            check(`${lang}/${theme}: the updater hands over exactly the file the site changed`, puts, [[changed, true]]);
+            check(`${lang}/${theme}: the button hands over exactly the file the site changed`, puts, [[changed, true]]);
+            check(`${lang}/${theme}: the row says what happened`, await page.evaluate(() => (document.querySelector('.up-check-note') || {}).textContent.length > 3), true);
             await ctx.close();
         }
     } finally {

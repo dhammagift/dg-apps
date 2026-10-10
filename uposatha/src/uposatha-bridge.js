@@ -66,12 +66,61 @@
   // launch splash (the animated system splash) already covers a cold start, and the page's copy
   // right after it made every launch show two. Nothing to signal from here any more.
 
-  // ---- the bundled page: no service worker, and no updates from the site ----------------------------
-  // The page ships with the app (owner, 2026-10-08): it works without a network and changes only with a new version from the store.
+  // ---- the bundled page: no service worker; the files refresh from the site ONLY when a person asks ------------
+  // The page ships with the app (owner, 2026-10-08): it works without a network, and nothing is fetched by itself. Since 2026-10-10 the app
+  // version row in the menu has a "check" button: a tap goes to the site, takes what changed (scripts, styles, texts, images; the page's html
+  // stays the app's own, so the markup always fits the app) and shows the same "new version" bar and the same notes as the other apps.
+  function pageIds(html) {
+    var found = {}, m, re = /\sid="([^"]+)"/g;
+    while ((m = re.exec(html))) found[m[1]] = 1;
+    return found;
+  }
   var SITE_CONFIG = {
-    site: 'https://dhamma.gift'   // where the site's own pages (help, docs) are when the page asks for them
+    site: 'https://dhamma.gift',
+    // The page's file in the bundle is /uposatha-calendar.html; on the site it is /uposatha-calendar.
+    urlFor: function (path) { return path === '/uposatha-calendar.html' ? '/uposatha-calendar' : path; },
+    // Everything the page loads, except the page itself (the site's html carries cache-busters and is not the app's markup).
+    updatable: function (path) { return !/\.html$/.test(path) && path !== '/site-manifest.json'; },
+    manual: true,
+    // The site's scripts were written against the site's page: if it has an element the bundled page lacks, they could reach for it.
+    gate: function (manifest) {
+      if (!manifest.ids) return false;
+      return fetch('https://dhamma.gift/uposatha-calendar', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+        if (!html) return false;
+        var site = pageIds(html), mine = {};
+        manifest.ids.forEach(function (i) { mine[i] = 1; });
+        for (var i in site) if (!mine[i]) { console.log('[dg-site] the site page has #' + i + ', the bundled one does not: no update'); return false; }
+        return true;
+      }).catch(function () { return false; });
+    }
   };
-  // @site-updater (inlined from src/site-no-sw.js by uposatha/build.js: the service worker stays out of the app)
+  // @site-updater (inlined from src/site-no-sw.js + src/site-updater.js by uposatha/build.js: no service worker, the refresh on request)
+
+  // The version row of the menu: a "check" button and a line with the result. The row is the page's (#up-ver); the button is the app's.
+  function wireVersionCheck() {
+    var row = document.querySelector('.up-ver');
+    if (!row || row.querySelector('.up-check') || typeof window.__dgSiteCheckSay !== 'function') return;
+    var ru = isRu();
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'up-check';
+    btn.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:4px 10px;border-radius:10px;border:1px solid currentColor;background:none;color:inherit;font:inherit;opacity:.85';
+    btn.innerHTML = '<svg viewBox="0 0 512 512" width="12" height="12" aria-hidden="true" style="flex:none"><path fill="currentColor" d="M65.9 228.5c13.3-93 93.4-164.5 190.1-164.5 53 0 101 21.5 135.8 56.2 .2 .2 .4 .4 .6 .6l7.6 7.2-47.9 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l128 0c17.7 0 32-14.3 32-32l0-128c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 53.4-11.3-10.7C390.5 28.6 326.5 0 256 0 127 0 20.3 95.4 2.6 219.5 .1 237 12.2 253.2 29.7 255.7s33.7-9.7 36.2-27.1zm443.5 64c2.5-17.5-9.7-33.7-27.1-36.2s-33.7 9.7-36.2 27.1c-13.3 93-93.4 164.5-190.1 164.5-53 0-101-21.5-135.8-56.2-.2-.2-.4-.4-.6-.6l-7.6-7.2 47.9 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 320c-8.5 0-16.7 3.4-22.7 9.5S-.1 343.7 0 352.3l1 127c.1 17.7 14.6 31.9 32.3 31.7S65.2 496.4 65 478.7l-.4-51.5 10.7 10.1c46.3 46.1 110.2 74.7 180.7 74.7 129 0 235.7-95.4 253.4-219.5z"/></svg>';
+    btn.appendChild(document.createTextNode(ru ? 'проверить' : 'check'));
+    var note = document.createElement('div');
+    note.className = 'up-check-note';
+    note.style.cssText = 'font-size:12px;opacity:.7;padding:4px 4px 0;min-height:1em';
+    row.appendChild(btn);
+    row.parentNode.insertBefore(note, row.nextSibling);
+    var busy = false;
+    btn.addEventListener('click', function () {
+      if (busy) return;
+      busy = true;
+      var icon = btn.firstChild;
+      var spin = icon.animate ? icon.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: 800, iterations: Infinity }) : null;
+      window.__dgSiteCheckSay(function (m) { note.textContent = m; }).then(function () { busy = false; if (spin) spin.cancel(); });
+    });
+  }
 
   // ---- an app, not a page ----------------------------------------------------------------------
   //
@@ -911,6 +960,9 @@
     // UposathaCore is loaded by the page: give it until the page has finished loading.
     function afterLoad() {
       pushShortcuts();
+      setTimeout(function () { updateSite(); }, 6000);   // manual mode: only marks that the page started well (the safety net); nothing is fetched
+      wireVersionCheck();
+      setTimeout(wireVersionCheck, 1500);   // the menu is built by the page: once more after it
       applyTopInset();
       // ?drawer=1: the proof opens the burger menu itself (Android: android-screens mode=edgetoedge).
       // A tap cannot be aimed at a WebView element from adb, and a check that guesses coordinates

@@ -205,8 +205,10 @@ final class DgWebViewConfiguration: WKWebViewConfiguration {
 // A downloaded file first; a file with an extension the bundle does not have is the site's (asked for there); everything else is Capacitor's.
 final class DgSiteRouter: NSObject, WKURLSchemeHandler {
     private let inner: WKURLSchemeHandler
-    private var stopped = Set<ObjectIdentifier>()
-    private let lock = NSLock()
+    // Proxied tasks still waiting for the site. WebKit calls start/stop on the main thread and the answer is handed over there
+    // too, so no lock: a task leaves this set exactly once, answered or stopped. While it is in here the request's closure
+    // holds it, so its identity (an address) cannot be taken by a new task.
+    private var waiting = Set<ObjectIdentifier>()
 
     init(inner: WKURLSchemeHandler) { self.inner = inner }
 
@@ -240,9 +242,9 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         return patched == html ? data : (patched.data(using: .utf8) ?? data)
     }
 
-    private func isStopped(_ task: WKURLSchemeTask) -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        return stopped.contains(ObjectIdentifier(task))
+    // True for the first of "the site answered" and "WebKit stopped it" (main thread only).
+    private func claim(_ task: WKURLSchemeTask) -> Bool {
+        waiting.remove(ObjectIdentifier(task)) != nil
     }
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
@@ -297,27 +299,34 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         guard let target = parts.url else { return fallback() }
         var request = URLRequest(url: target, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.httpMethod = "GET"
+        waiting.insert(ObjectIdentifier(task))
         URLSession.shared.dataTask(with: request) { data, response, error in
-            if self.isStopped(task) { return }
-            guard let http = response as? HTTPURLResponse, let data = data, error == nil else {
-                if let notFound = HTTPURLResponse(url: url, statusCode: 404, httpVersion: "HTTP/1.1", headerFields: ["Access-Control-Allow-Origin": "*"]) {
-                    task.didReceive(notFound)
-                    task.didReceive(Data())
-                    task.didFinish()
+            DispatchQueue.main.async {
+                // Stopped meanwhile (a new page, the page left): WebKit raises on an answer to a stopped task.
+                guard self.claim(task) else { return }
+                guard let http = response as? HTTPURLResponse, let data = data, error == nil else {
+                    if let notFound = HTTPURLResponse(url: url, statusCode: 404, httpVersion: "HTTP/1.1", headerFields: ["Access-Control-Allow-Origin": "*"]) {
+                        task.didReceive(notFound)
+                        task.didReceive(Data())
+                        task.didFinish()
+                    }
+                    return
                 }
-                return
-            }
-            let type = http.value(forHTTPHeaderField: "Content-Type") ?? Self.typeOf(url.path)
-            if let answer = HTTPURLResponse(url: url, statusCode: http.statusCode, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: data.count)) {
-                task.didReceive(answer)
-                task.didReceive(data)
-                task.didFinish()
+                let type = http.value(forHTTPHeaderField: "Content-Type") ?? Self.typeOf(url.path)
+                if let answer = HTTPURLResponse(url: url, statusCode: http.statusCode, httpVersion: "HTTP/1.1", headerFields: Self.headers(type, length: data.count)) {
+                    task.didReceive(answer)
+                    task.didReceive(data)
+                    task.didFinish()
+                } else {
+                    task.didFailWithError(URLError(.badServerResponse))
+                }
             }
         }.resume()
     }
 
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
-        lock.lock(); stopped.insert(ObjectIdentifier(urlSchemeTask)); lock.unlock()
+        // A proxied task is ours alone (Capacitor's handler never saw it); anything else is Capacitor's to stop.
+        if claim(urlSchemeTask) { return }
         inner.webView(webView, stop: urlSchemeTask)
     }
 }

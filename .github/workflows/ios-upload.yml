@@ -8,9 +8,15 @@ on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: 'build-app.yml run id whose IPA (dg-app-full-ipa-<run number>) to send to TestFlight'
+        description: 'build-app.yml run id whose IPA (dg-app-full-ipa / dg-dict-ipa / dg-uposatha-ipa -<run number>) to send to TestFlight'
         required: true
         type: string
+      app:
+        description: 'dg, dict or uposatha'
+        required: false
+        type: choice
+        options: [dg, dict, uposatha]
+        default: dg
 
 permissions:
   actions: read
@@ -20,19 +26,35 @@ jobs:
   upload:
     runs-on: macos-26
     steps:
-      - name: Which run
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: tools
+
+      - name: Which app
+        id: app
+        env:
+          APP: ${{ inputs.app }}
+        run: |
+          case "$APP" in
+            dg)       echo "prefix=dg-app-full-ipa" >> "$GITHUB_OUTPUT"; echo "check=iOS simulator checks" >> "$GITHUB_OUTPUT" ;;
+            dict)     echo "prefix=dg-dict-ipa" >> "$GITHUB_OUTPUT"; echo "check=Dictionary app (Android)" >> "$GITHUB_OUTPUT" ;;  # the bundle's browser checks
+            uposatha) echo "prefix=dg-uposatha-ipa" >> "$GITHUB_OUTPUT"; echo "check=Uposatha app (iOS simulator)" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # The same rule build-app.yml applies to its own uploads: a run that succeeded, from main or a tag,
+      # talking to https://dhamma.gift, with this app's iOS check passed (tools/check-build-run.sh).
+      - name: Is that run one a store may get?
         id: run
         env:
           RUN_ID: ${{ inputs.build_run_id }}
+          CHECK: ${{ steps.app.outputs.check }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          n=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID" --jq .run_number)
-          echo "run_number=$n" >> "$GITHUB_OUTPUT"
-          echo "build run $RUN_ID = #$n"
+        run: tools/check-build-run.sh "$RUN_ID" "$CHECK"
 
       - uses: actions/download-artifact@v4
         with:
-          name: dg-app-full-ipa-${{ steps.run.outputs.run_number }}
+          name: ${{ steps.app.outputs.prefix }}-${{ steps.run.outputs.run_number }}
           run-id: ${{ inputs.build_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ipa
@@ -53,4 +75,6 @@ jobs:
           grep -qiE "No errors uploading|UPLOAD SUCCEEDED" ios-upload.log
 
       - name: Summary
-        run: echo "### build ${{ steps.run.outputs.run_number }} -> TestFlight (processing takes 5–15 minutes)" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          N: ${{ steps.run.outputs.run_number }}
+        run: echo "### build $N -> TestFlight (processing takes 5–15 minutes)" >> "$GITHUB_STEP_SUMMARY"

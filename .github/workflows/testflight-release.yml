@@ -1,0 +1,356 @@
+name: TestFlight release
+
+# The iOS archive of build-app.yml, the same steps for all three apps (they used to be three copies,
+# and only Dhamma.Gift's kept its IPA): archive the calling run's web bundle into a signed build,
+# export the IPA and keep it as an artifact (ios-upload.yml can send it later), and — with
+# upload: true — send it to TestFlight. Production stays the owner's step in App Store Connect.
+#
+# Dormant until the account's secrets exist: every step that needs one checks first and says in the
+# job summary what is missing, rather than a green tick that reads like a release happened
+# (docs/IOS_ACCOUNT_DAY.md).
+#
+# Why TestFlight rather than an ad-hoc IPA: TestFlight installs on a phone with no Mac, no cable and
+# no registered UDID.
+#
+# The version people see is the app's version.properties (`ios`, else `version`), passed as
+# MARKETING_VERSION; the build number is the run number. The team comes from the secret.
+#
+# Signing, in the order the runs taught it (Dhamma.Gift, 2026-09):
+#   * run 156 — the Capacitor template's "iPhone Developer" in BOTH configurations made the
+#     archive ask Apple for an iOS App Development profile. Those list device UDIDs, and a fresh
+#     account has registered none, so Apple answered "Your team has no devices from which to
+#     generate a provisioning profile" and no distribution profile was ever requested.
+#   * run 160/162 — naming the distribution identity while CODE_SIGN_STYLE stayed Automatic is
+#     rejected outright ("has conflicting provisioning settings … automatically signed for
+#     development, but a conflicting code signing identity Apple Distribution has been manually
+#     specified"), whether the identity comes from the command line or from the configuration.
+#   * run 164 — with no identity anywhere, automatic signing again resolved to a development
+#     profile, i.e. an unset identity means "Apple Development" and the style does not change
+#     that for an archive.
+#   * run 167 — CODE_SIGN_STYLE = Manual with the distribution identity: "requires a provisioning
+#     profile", because Manual means a named profile and there is none.
+# Automatic signing is right; the archive step is signed for development by design and the
+# distribution profile is applied at export. What it needed was one registered device on the
+# team (Certificates, Identifiers & Profiles → Devices), so both configurations stay Automatic.
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: 'dg, dict or uposatha'
+        required: true
+        type: string
+      upload:
+        description: 'Send the IPA to TestFlight (otherwise it is only kept as an artifact)'
+        required: true
+        type: boolean
+    secrets:
+      ASC_KEY_ID:
+        required: false
+      ASC_ISSUER_ID:
+        required: false
+      ASC_KEY_P8:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - name: Checkout this repo (the app)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Which app
+        id: app
+        env:
+          APP: ${{ inputs.app }}
+        run: |
+          set -euo pipefail
+          case "$APP" in
+            dg)       dir=.;        www=www;          ipa=dg-app-full-ipa;  label=Dhamma.Gift ;;
+            dict)     dir=dict;     www=dict-www;     ipa=dg-dict-ipa;      label=Dictionary ;;
+            uposatha) dir=uposatha; www=uposatha-www; ipa=dg-uposatha-ipa;  label=Uposatha ;;
+            *) echo "::error::unknown app '$APP'"; exit 1 ;;
+          esac
+          version=$(sed -n 's/^ios=//p' "$dir/version.properties")
+          [ -n "$version" ] || version=$(sed -n 's/^version=//p' "$dir/version.properties")
+          [ -n "$version" ] || { echo "::error::$dir/version.properties has no version"; exit 1; }
+          {
+            echo "dir=$dir"
+            echo "www_artifact=$www-$GITHUB_RUN_NUMBER"
+            echo "www_path=$dir/www"
+            echo "ipa_artifact=$ipa-$GITHUB_RUN_NUMBER"
+            echo "label=$label"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+          echo "$label $version ($GITHUB_RUN_NUMBER) from $dir/"
+
+      - name: Download the web bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.app.outputs.www_artifact }}
+          path: ${{ steps.app.outputs.www_path }}
+
+      - name: Are the signing secrets there?
+        id: asc
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          LABEL: ${{ steps.app.outputs.label }}
+        run: |
+          missing=""
+          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
+          [ -n "$APPLE_TEAM_ID" ] || missing="$missing APPLE_TEAM_ID"
+          if [ -z "$missing" ]; then
+            echo "have=yes" >> "$GITHUB_OUTPUT"
+            echo "signing secrets present"
+          else
+            echo "have=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::missing secrets:$missing - nothing was archived or uploaded. See docs/IOS_ACCOUNT_DAY.md."
+            {
+              echo "### $LABEL iOS release: nothing happened"
+              echo ""
+              echo "Missing repository secrets: \`$missing\`"
+              echo ""
+              echo "No archive was made and nothing was uploaded to TestFlight. See docs/IOS_ACCOUNT_DAY.md."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Set up Node.js
+        if: steps.asc.outputs.have == 'yes'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      # Dhamma.Gift's key, shared with its ios-build / ios-ui jobs in build-app.yml (see there for what is cached and why).
+      - name: Restore npm and SwiftPM caches
+        if: steps.asc.outputs.have == 'yes' && inputs.app == 'dg'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ~/Library/Caches/org.swift.swiftpm
+            ~/Library/Developer/Xcode/DerivedData
+            ios/DerivedData/SourcePackages
+          key: ${{ runner.os }}-ios-${{ hashFiles('ios/App/CapApp-SPM/Package.swift', 'ios/App/App.xcodeproj/project.pbxproj', 'ios/**/Package.resolved', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ios-
+
+      - name: Install the app's dependencies
+        if: steps.asc.outputs.have == 'yes'
+        working-directory: ${{ steps.app.outputs.dir }}
+        env:
+          APP: ${{ inputs.app }}
+        run: |
+          if [ "$APP" = dg ]; then npm install --legacy-peer-deps --no-audit; else npm ci; fi
+
+      # A notification's sound on iOS is a file of the app in a format Apple names (Core Audio, at most 30 s), not an mp3:
+      # the same sounds as the Android app's res/raw, converted here, and shipped inside the page bundle (www/ios-sounds/).
+      - name: Make the reminders' sounds (Uposatha)
+        if: steps.asc.outputs.have == 'yes' && inputs.app == 'uposatha'
+        run: |
+          mkdir -p uposatha/www/ios-sounds
+          for f in uposatha/android/app/src/main/res/raw/*.mp3; do
+            n=$(basename "$f" .mp3)
+            afconvert -f caff -d ima4 -c 1 "$f" "uposatha/www/ios-sounds/$n.caf"
+          done
+          ls -la uposatha/www/ios-sounds
+
+      - name: Select Xcode
+        if: steps.asc.outputs.have == 'yes'
+        run: tools/select-xcode.sh
+
+      # The key is written where xcodebuild expects it and removed at the end of the job by the
+      # runner's own cleanup (RUNNER_TEMP is not cached, not uploaded, and not the workspace).
+      - name: Write the App Store Connect key
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey.p8"
+
+      # Each archive makes a new "Apple Development" certificate and Apple caps how many a team may
+      # hold — the cap is what failed TestFlight on runs 373/377 (dg-apps#40). Revoke the ones older
+      # CI runs left (only "Created via API" ones, never a person's own); the job's own is revoked
+      # after the export below.
+      - name: Free the development-certificate slots older CI runs used
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" prune
+
+      - name: Sync Capacitor
+        if: steps.asc.outputs.have == 'yes'
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npx cap sync ios
+
+      - name: What signing does Xcode resolve?
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          DIR: ${{ steps.app.outputs.dir }}
+        run: |
+          security find-identity -v -p codesigning | tail -5
+          for cfg in Release Debug; do
+            echo "--- $cfg ---"
+            xcodebuild -project "$DIR/ios/App/App.xcodeproj" -scheme App -configuration "$cfg" \
+              -destination 'generic/platform=iOS' -showBuildSettings 2>/dev/null \
+              | grep -E "^ +(CODE_SIGN_IDENTITY|CODE_SIGN_STYLE|CODE_SIGN_ENTITLEMENTS|PROVISIONING_PROFILE_SPECIFIER|DEVELOPMENT_TEAM|CONFIGURATION) " \
+              | sort -u || true
+          done
+
+      - name: Archive
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          DIR: ${{ steps.app.outputs.dir }}
+          VERSION: ${{ steps.app.outputs.version }}
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project "$DIR/ios/App/App.xcodeproj" \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$DIR/ios/build/App.xcarchive" \
+            -derivedDataPath "$DIR/ios/DerivedData" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            archive 2>&1 | tee ios-archive.log | tail -30
+
+      # app-store-connect is Xcode 15+'s name for what used to be `app-store`. destination=export writes
+      # the IPA to disk (destination=upload sends it straight away and leaves nothing, run 170): it is
+      # kept as an artifact and uploaded by the step below or later by ios-upload.yml.
+      - name: Export the IPA
+        if: steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          DIR: ${{ steps.app.outputs.dir }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$DIR/ios/build/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$DIR/ios/build/export" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee ios-export.log | tail -30
+          ls -la "$DIR"/ios/build/export/*.ipa
+
+      - name: Keep the IPA
+        if: steps.asc.outputs.have == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.app.outputs.ipa_artifact }}
+          path: ${{ steps.app.outputs.dir }}/ios/build/export/*.ipa
+          retention-days: 14
+          if-no-files-found: error
+
+      # The same altool call ios-upload.yml uses, as --validate-app: proves on every build that the IPA
+      # and the key would be accepted, without putting a build into TestFlight.
+      - name: Validate the IPA with App Store Connect (no upload)
+        if: steps.asc.outputs.have == 'yes'
+        continue-on-error: true
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          DIR: ${{ steps.app.outputs.dir }}
+        run: |
+          cp "$RUNNER_TEMP/asc/AuthKey.p8" "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8"
+          API_PRIVATE_KEYS_DIR="$RUNNER_TEMP/asc" xcrun altool --validate-app -t ios \
+            -f "$(ls "$DIR"/ios/build/export/*.ipa | head -1)" \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
+
+      # The release itself keeps the export path that has worked since run 170 (destination=upload,
+      # "Upload succeeded" in the log).
+      - name: Upload to TestFlight
+        if: steps.asc.outputs.have == 'yes' && inputs.upload
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          DIR: ${{ steps.app.outputs.dir }}
+        run: |
+          sed 's#<string>export</string>#<string>upload</string>#' "$RUNNER_TEMP/ExportOptions.plist" > "$RUNNER_TEMP/ExportUpload.plist"
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$DIR/ios/build/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportUpload.plist" \
+            -exportPath "$DIR/ios/build/upload" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee ios-upload.log | tail -30
+          grep -q "Upload succeeded" ios-upload.log
+
+      - name: Revoke this job's development certificate
+        if: always() && steps.asc.outputs.have == 'yes'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8" node "$GITHUB_WORKSPACE/tools/asc-dev-certs.js" cleanup
+
+      - name: Upload the logs on failure
+        if: failure() && steps.asc.outputs.have == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.app }}-ios-release-logs-${{ github.run_number }}
+          path: |
+            ios-archive.log
+            ios-export.log
+            ios-upload.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Say what went to TestFlight
+        if: success() && steps.asc.outputs.have == 'yes'
+        env:
+          LABEL: ${{ steps.app.outputs.label }}
+          VERSION: ${{ steps.app.outputs.version }}
+          IPA: ${{ steps.app.outputs.ipa_artifact }}
+          APP: ${{ inputs.app }}
+        run: |
+          if [ -f ios-upload.log ]; then
+            printf '### %s iOS release: uploaded\n\n%s (%s) was archived and sent to TestFlight (processing takes 5-15 minutes).\n' "$LABEL" "$VERSION" "$GITHUB_RUN_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '### %s iOS: IPA kept, not uploaded\n\nArtifact %s. To send it to TestFlight later: ios-upload.yml with this run id and app=%s.\n' "$LABEL" "$IPA" "$APP" >> "$GITHUB_STEP_SUMMARY"
+          fi

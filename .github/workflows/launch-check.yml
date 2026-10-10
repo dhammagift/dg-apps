@@ -1,0 +1,73 @@
+name: Launch check
+
+# Called by build-app.yml before a dictionary or Uposatha Play upload: the signed release APK of the
+# calling run on an Android emulator — installed, opened from the launcher, its page painted, its
+# process alive, no crash in the log (tools/emu-launch.sh). PASS/FAIL lines go to the job summary;
+# a FAIL fails the job and keeps the upload that waits for it from running.
+
+on:
+  workflow_call:
+    inputs:
+      apk_artifact:
+        description: 'The calling run''s artifact holding the release APK'
+        required: true
+        type: string
+      package:
+        description: 'The APK''s package'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.apk_artifact }}
+          path: apk
+
+      # The painted-page verdict is read out of the screenshot's own pixels (tools/edge-pixels.py).
+      - name: Python imaging
+        run: python3 -m pip install --quiet --user pillow
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Emulator
+        env:
+          PKG: ${{ inputs.package }}
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash tools/emu-launch.sh "$(ls apk/*.apk | head -1)" shots "$PKG"
+
+      - name: Verdict
+        if: always()
+        env:
+          PKG: ${{ inputs.package }}
+        run: |
+          { echo "### Launch check, $PKG"; echo '```'; cat shots/launch-result.txt 2>/dev/null || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launch-${{ inputs.package }}-${{ github.run_number }}
+          path: shots
+          retention-days: 14
+          if-no-files-found: warn

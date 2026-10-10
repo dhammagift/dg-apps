@@ -1,0 +1,89 @@
+name: Play release
+
+# The Play upload of build-app.yml, the same steps for all three apps (they used to be three copies):
+# the signed AAB the calling run already built and checked, to the CLOSED testing track (alpha) of
+# the app's package. Never production: promoting a build stays a human decision in the Play Console.
+#
+# Dormant without the service account: no secret, no upload, and a job summary that says so,
+# instead of a green tick that reads like a release happened. What the secret needs once is in
+# docs/ANDROID_RELEASE.md.
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: 'The app, as people call it (for the summary)'
+        required: true
+        type: string
+      package:
+        description: 'Its Play package'
+        required: true
+        type: string
+      aab_artifact:
+        description: 'The calling run''s artifact holding app-release.aab'
+        required: true
+        type: string
+    secrets:
+      PLAY_SERVICE_ACCOUNT_JSON:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Is the service account there?
+        id: play
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          APP: ${{ inputs.app }}
+        run: |
+          if [ -n "$PLAY_JSON" ]; then
+            echo "have=yes" >> "$GITHUB_OUTPUT"
+            echo "service account present"
+          else
+            echo "have=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::PLAY_SERVICE_ACCOUNT_JSON is not set - nothing was uploaded to Play."
+            {
+              echo "### $APP release: nothing happened"
+              echo ""
+              echo "Missing repository secret: \`PLAY_SERVICE_ACCOUNT_JSON\`."
+              echo ""
+              echo "Nothing was uploaded to Google Play. See docs/ANDROID_RELEASE.md."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # The artifact the build job uploaded, not a rebuild: the bytes that go to Play are the same
+      # ones the checks ran against.
+      - name: Download the signed AAB
+        if: steps.play.outputs.have == 'yes'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.aab_artifact }}
+          path: aab
+
+      - name: Upload to Google Play
+        if: steps.play.outputs.have == 'yes'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ inputs.package }}
+          releaseFiles: aab/app-release.aab
+          track: alpha
+          status: completed
+
+      - name: Say what went to Play
+        if: success() && steps.play.outputs.have == 'yes'
+        env:
+          APP: ${{ inputs.app }}
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          {
+            echo "### $APP uploaded"
+            echo ""
+            echo "versionCode $GITHUB_RUN_NUMBER is on the **closed testing (alpha)** track of \`$PACKAGE\`."
+            echo "Testers get it within minutes. Production needs a promote in the Play Console."
+          } >> "$GITHUB_STEP_SUMMARY"

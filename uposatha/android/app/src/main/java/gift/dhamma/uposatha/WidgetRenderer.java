@@ -25,6 +25,7 @@ import androidx.core.graphics.PathParser;
 import org.json.JSONObject;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -758,17 +759,46 @@ final class WidgetRenderer {
                 }
             }
             if (big) {
-                // the next Uposatha under the grid, between its last row and the dots
-                float ry = gt + gh + mo[4] * rowH + 6;
-                WidgetModel.Upo u = m.cur();
-                float rx = W - padL();
-                String right = m.ongoing ? tx.get("now") : tx.get("inDays").substring(0, tx.get("inDays").indexOf("{n}")) + counter(u.start.ms - m.now);
-                float rw = tr(right, rx, ry, 24, 14, f400, th.muted, 0, true);
-                moon(x, ry + 2, 20, u.nominal(), m.south);
-                float cx = x + 20 + 8;
-                float bw = t(dateLabel(u.start.ymd), cx, ry, 24, 15, f600, th.text, 0, true);
-                String em = ordinal(u.lunarDay) + " · " + phase(u);
-                t(fit(em, rx - rw - 8 - cx - bw - 8, 15, f400, 0, false), cx + bw + 8, ry, 24, 15, f400, th.text2, 0, false);
+                // Under the grid, as far as the height goes: the Uposathas that are on and next, then today (sun, moon). The widget is the
+                // biggest one: what the app shows on its home screen is here too, not an empty bottom.
+                float ry = gt + gh + mo[4] * rowH + 8;
+                float bottom = dotsCy() - 12;
+                float rx = W - padL(), step = 28, todayH = 66;
+                fill.setColor(th.border);
+                c.drawRect(x, ry - 4, rx, ry - 3, fill);
+                float room = bottom - ry;
+                boolean today = room >= todayH + step + 8;
+                int rowsN = (int) Math.max(1, Math.min(4, (room - (today ? todayH + 6 : 0)) / step));
+                List<WidgetModel.Upo> list = new ArrayList<>();
+                list.add(m.cur());
+                list.addAll(m.following(rowsN - 1));
+                for (int i = 0; i < list.size(); i++) {
+                    WidgetModel.Upo u = list.get(i);
+                    String right = i == 0 && m.ongoing ? tx.get("now") : inText(m, u);
+                    float rw = tr(right, rx, ry, 24, 14, f400, th.muted, 0, true);
+                    moon(x, ry + 1, 20, u.nominal(), m.south);
+                    float cx = x + 20 + 8;
+                    float bw = t(dateLabel(u.start.ymd), cx, ry, 24, 15, f600, th.text, 0, true);
+                    String em = ordinal(u.lunarDay) + " \u00b7 " + phase(u);
+                    t(fit(em, rx - rw - 8 - cx - bw - 8, 15, f400, 0, false), cx + bw + 8, ry, 24, 15, f400, th.text2, 0, false);
+                    ry += step;
+                }
+                if (today) {
+                    ry += 2;
+                    WidgetModel.Day d = m.dayIdx >= 0 ? m.days.get(m.dayIdx) : null;
+                    double lit = (1 - Math.cos(2 * Math.PI * m.moonNow)) / 2;
+                    boolean waxing = m.moonNow < 0.5;
+                    String ph = tx.ru() ? (waxing ? "растёт" : "убывает") : (waxing ? "waxing" : "waning");
+                    String lt = tx.ru() ? "освещено" : "lit";
+                    label(tx.ru() ? "СЕГОДНЯ" : "TODAY", x, ry);
+                    ry += lbLine() + 4;
+                    if (d != null) {
+                        String sun = tx.get("sunrise") + " " + d.sunrise.hm + "  \u00b7  " + tx.get("noon") + " " + d.noon.hm + "  \u00b7  " + tx.get("sunset") + " " + d.sunset.hm;
+                        t(fit(sun, rx - x, 14, f400, 0, true), x, ry, 20, 14, f400, th.text, 0, true);
+                        ry += 22;
+                    }
+                    t(fit(ph + " \u00b7 " + Math.round(lit * 100) + "% " + lt, rx - x, 14, f400, 0, false), x, ry, 20, 14, f400, th.text2, 0, false);
+                }
             }
         }
 

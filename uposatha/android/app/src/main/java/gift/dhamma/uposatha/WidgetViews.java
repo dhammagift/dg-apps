@@ -196,7 +196,7 @@ final class WidgetViews {
             l1 = tx.fmt("lite.from", "startDay", startDay, "startTime", u.start.hm);
             if (!m.placeSet) l1 += " · " + tx.get("noPlace.short");
         }
-        text(R.id.lbl, caps(lbl));
+        text(R.id.lbl, caps(cls == SMALL ? tx.get("layer.uposatha") : lbl));   // the small card says "now" in its date line
         text(R.id.to, to);
         show(R.id.kala, false);
         if (cls == SMALL) {
@@ -212,15 +212,17 @@ final class WidgetViews {
             // A low 2x2 (the launcher's own cell is ~110 dp): lines go in this order - kala, the second line, "to the Nth day" - before the counter shrinks.
             float av = avail(), big = hDp >= 240 ? (kalaOn ? 46 : 52) : kalaOn ? 34 : 40;   // a tall narrow widget gets a bigger counter
             boolean kalaShow = kalaOn, subShow = true, toShow = true;
-            if (28 + 15 + 15 + 1.2f * big + (kalaShow ? 22 : 0) > av) kalaShow = false;
-            if (28 + 15 + 15 + 1.2f * big + (kalaShow ? 22 : 0) > av) subShow = false;
-            if (28 + 15 + 1.2f * big > av) toShow = false;
-            big = Math.max(24, Math.min(big, (av - 28 - (toShow ? 15 : 0)) / 1.2f));
+            // the moon row is 40 dp now (the moon at the left, the label and the date beside it)
+            if (42 + 15 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) kalaShow = false;
+            if (42 + 15 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) subShow = false;
+            if (42 + 15 + 1.2f * big > av) toShow = false;
+            big = Math.max(24, Math.min(big, (av - 42 - (toShow ? 15 : 0)) / 1.2f));
+            text(R.id.dt, m.ongoing ? tx.get("now") + " · " + dayLabel(m.today) : dateLabel(u.start.ymd));
             text(R.id.sub, sub); show(R.id.sub, subShow);
             show(R.id.to, toShow);
             counter(rem, big);
             if (kalaShow) kalaLine(12, "");
-            moon(rv, R.id.moon_l, R.id.moon_d, 28, u.nominal(), m.south);
+            moon(rv, R.id.moon_l, R.id.moon_d, 40, m.moonNow, m.south);   // the moon as it is now, as in the picker
             return;
         }
         if (cls == MEDIUM) {

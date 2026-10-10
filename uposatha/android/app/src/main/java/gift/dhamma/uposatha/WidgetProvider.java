@@ -152,10 +152,9 @@ public class WidgetProvider extends AppWidgetProvider {
                 // Too much for the launcher (the update is refused: too many pictures, too big a transaction): then ONE view for the size the
                 // launcher reports - a widget that is a little less clever is better than a blank one.
                 try {
-                    boolean wide = model != null && (layer == 2 || (layer == 0 && model.detail));
                     ArrayMap<SizeF, RemoteViews> map = new ArrayMap<>();
                     WidgetViews.bitmapBytes = 0;
-                    for (int[] sz : WidgetPlan.grid(wide)) map.put(new SizeF(sz[0], sz[1]), WidgetViews.build(ctx, id, sz[0], sz[1], data, now, layer));
+                    for (int[] sz : WidgetPlan.grid()) map.put(new SizeF(sz[0], sz[1]), WidgetViews.build(ctx, id, sz[0], sz[1], data, now, layer));
                     android.util.Log.i("DgWidget", "update " + id + ": " + map.size() + " sizes, moon pictures " + (WidgetViews.bitmapBytes >> 10) + " KB");
                     mgr.updateAppWidget(id, new RemoteViews(map));
                     return;

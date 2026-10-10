@@ -18,23 +18,16 @@ final class WidgetPlan {
     }
 
     /**
-     * The sizes (width x height, dp) a widget gets its own RemoteViews for (Android 12+: the launcher picks the entry that is the largest
-     * to fit the REAL size of the widget, whatever sizes it reports in its options - some launchers report them inconsistently, and a widget
-     * resized wider got the list of a short one). Each entry is the smallest size its decisions are made for, so a widget never gets more
-     * than fits; the steps are about two list rows, rows share the height, so the gap between steps is never visible as a hole.
-     * wide: also the 350 dp width (texts that appear only on a wide card).
+     * The sizes (width x height, dp) a widget gets its own RemoteViews for (Android 12+, RemoteViews(Map<SizeF, RemoteViews>)): "a small set of
+     * layouts, each valid for a range of sizes" (Android's own guidance: two to four). Two per size class, six in all. The launcher takes the
+     * LARGEST entry that fits the REAL size of the widget, whatever sizes it reports in its options (some launchers report them inconsistently),
+     * and reflows its views to the exact size. Each entry is the smallest size its decisions are made for, so a widget never gets more than fits.
      */
-    static int[][] grid(boolean wide) {
-        int[] small = { 100, 130, 170, 250, 400 };   // one or two columns wide (the sizeClass): the counter grows with the height
-        int[] medium = { 100, 130, 160, 200 };                // wide and low (the short ones drop lines)
-        int[] large = { 240, 330, 420, 520 };            // wide and tall: more rows of the list
-        java.util.ArrayList<int[]> out = new java.util.ArrayList<>();
-        for (int h : small) out.add(new int[] { 110, h });
-        for (int w : wide ? new int[] { 230, 350 } : new int[] { 230 }) {
-            for (int h : medium) out.add(new int[] { w, h });
-            for (int h : large) out.add(new int[] { w, h });
-        }
-        return out.toArray(new int[0][]);
+    static int[][] grid() {
+        return new int[][] {
+                { 110, 110 }, { 110, 200 },     // one or two columns wide (the sizeClass): low and tall
+                { 230, 110 }, { 230, 170 },     // wide and low: short and regular (the short one drops lines)
+                { 230, 260 }, { 230, 400 } };   // wide and tall: a few rows of the list, and many
     }
 
     /** How many rows of at least rowMin dp fit into availDp, at most max (rows then share the height, so none is smaller than rowMin). */

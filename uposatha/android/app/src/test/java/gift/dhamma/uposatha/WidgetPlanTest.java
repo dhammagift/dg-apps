@@ -50,15 +50,14 @@ public class WidgetPlanTest {
     }
 
     @Test public void gridEntriesMatchTheirClass() {
-        for (boolean wide : new boolean[] { false, true }) {
-            int[][] g = WidgetPlan.grid(wide);
-            assertEquals(wide ? 5 + 2 * 8 : 5 + 8, g.length);
-            java.util.Set<String> seen = new java.util.HashSet<>();
-            for (int[] z : g) {
-                assertTrue("duplicate " + z[0] + "x" + z[1], seen.add(z[0] + "x" + z[1]));
-                int cls = WidgetPlan.sizeClass(z[0], z[1]);
-                assertEquals(z[0] < 200 ? WidgetPlan.SMALL : z[1] >= 240 ? WidgetPlan.LARGE : WidgetPlan.MEDIUM, cls);
-            }
+        int[][] g = WidgetPlan.grid();
+        assertEquals(6, g.length);
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        int[] perClass = new int[3];
+        for (int[] z : g) {
+            assertTrue("duplicate " + z[0] + "x" + z[1], seen.add(z[0] + "x" + z[1]));
+            perClass[WidgetPlan.sizeClass(z[0], z[1])]++;
         }
+        assertArrayEquals(new int[] { 2, 2, 2 }, perClass);   // two entries for each of the small, the medium and the large class
     }
 }

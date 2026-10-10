@@ -29,6 +29,14 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = widget ]; then
     adb logcat -d -s AndroidRuntime:E > "$OUT/crash-$theme.txt" 2>/dev/null
     if [ -s "$OUT/crash-$theme.txt" ] && grep -q "FATAL" "$OUT/crash-$theme.txt"; then echo "FAIL crash while drawing ($theme)" >> "$res"; else echo "PASS drawn without a crash ($theme)" >> "$res"; fi
   done
+  # scenario 6 = the picker previews (a full moon, the 15th day on, "in 28 d"), the three sizes, light
+  adb shell cmd uimode night no > /dev/null 2>&1
+  for sz in "170 170" "364 170" "364 382"; do
+    set -- $sz
+    adb shell am force-stop "$PKG"
+    adb shell am start -n "$PKG/.WidgetPreviewActivity" --ei w $1 --ei h $2 --es theme light --ei scenario 6 > "$OUT/start-pv-$1x$2.txt" 2>&1
+    sleep 6
+  done
   mkdir -p "$OUT/sheets" && adb pull /sdcard/Android/data/$PKG/files/widget-previews/. "$OUT/sheets" > /dev/null 2>&1
   ls "$OUT/sheets" | wc -l >> "$res"
   adb shell cmd uimode night no > /dev/null 2>&1

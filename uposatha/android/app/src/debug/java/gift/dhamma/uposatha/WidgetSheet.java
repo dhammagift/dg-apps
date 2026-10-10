@@ -47,6 +47,7 @@ final class WidgetSheet {
             new Scenario("en, kala off, lite", "widget-sample-en.json", "en", "sunrise", 3 * H, false, false, true, true, false),
             new Scenario("en, detail, vikala, south", "widget-sample-en.json", "en", "gen", 0, true, true, true, true, true),
             new Scenario("en, kala in the morning, detail, place set (the designer's mockup)", "widget-sample-en.json", "en", "sunrise", 3 * H, true, true, true, true, false),
+            new Scenario("the picker previews: a full moon, the 15th day on, in 28 d", "widget-preview-sample.json", "en", "sunrise", 51 * H, true, true, true, true, false),
             new Scenario("placeholders: no data, stale", null, "ru", "gen", 0, false, true, true, true, false),
     };
 

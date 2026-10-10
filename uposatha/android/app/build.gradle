@@ -1,5 +1,9 @@
 apply plugin: 'com.android.application'
 
+// The version people see comes from this app's version.properties, which CI also hands to xcodebuild: one place to raise it.
+def appVersion = new Properties()
+file('../../version.properties').withInputStream { appVersion.load(it) }
+
 android {
     namespace = "gift.dhamma.uposatha"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -10,7 +14,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode ((project.findProperty('dgVersionCode') ?: '1') as Integer)
-        versionName "1.0.0"
+        versionName appVersion.getProperty('version')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

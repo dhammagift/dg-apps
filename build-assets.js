@@ -643,10 +643,15 @@ function copyNative(name, to) {
 let stampCache = null;
 function appStamp() {
     if (stampCache) return stampCache;
-    const gradle = path.join(__dirname, 'android', 'app', 'build.gradle');
-    const text = fs.existsSync(gradle) ? fs.readFileSync(gradle, 'utf8') : '';
-    const version = (text.match(/versionName\s+"([^"]+)"/) || [])[1] || '0';
+    const version = appVersionName() || '0';
     return (stampCache = version + '.' + (process.env.DG_VERSION_CODE || 'local' + Date.now()));
+}
+
+// The version people see (versionName / MARKETING_VERSION): version.properties, the file gradle and CI read too.
+function appVersionName() {
+    const file = path.join(__dirname, 'version.properties');
+    const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    return (text.match(/^version=(.+)$/m) || [])[1]?.trim();
 }
 
 // The app's own web files. Everything else the page needs (the whole offline data layer, the
@@ -1000,12 +1005,12 @@ function coverViewportInSubpages() {
 // The installed app's version, readable by the page. Capacitor's App.getInfo() is the
 // authoritative source on a device, but the settings row has to say something even when the plugin
 // is missing or fails (and on a plain browser, where the row showed up empty — owner's report).
-// android/app/build.gradle is the single source of truth for it, so read it at build time.
+// version.properties is the single source of truth for it (android/app/build.gradle reads it too), so read it at build time.
 function writeAppVersion() {
     const gradle = path.join(__dirname, 'android', 'app', 'build.gradle');
     if (!fs.existsSync(gradle)) return null;
     const text = fs.readFileSync(gradle, 'utf8');
-    const version = (text.match(/versionName\s+"([^"]+)"/) || [])[1];
+    const version = appVersionName();
     // versionCode is `((project.findProperty('dgVersionCode') ?: '17') as Integer)` — not a bare
     // number — so match the first digits on the line, whichever form it takes. CI passes the real
     // build number in DG_VERSION_CODE (gradle gets the same one as -PdgVersionCode), which is what

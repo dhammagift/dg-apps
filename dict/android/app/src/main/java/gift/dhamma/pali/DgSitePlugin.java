@@ -39,10 +39,10 @@ import java.util.Map;
  *
  *    They are written under files/site/ and served by {@link #serve} in place of the bundled copy.
  *
- * 2. Everything the bundle does not have is the SITE'S: a word's page (/dhamma, /ru/dhamma) is made by the
- *    server, so a request for a file that is neither downloaded nor bundled goes to the site and its answer is
- *    returned under the app's own address. With no network the answer is the app's "no connection" page.
- *    Redirects are followed here (an intercepted response cannot itself be a redirect).
+ * 2. A word's page (/dhamma, /ru/dhamma) is the language's bundled page: the site answers it with that same file.
+ *    Anything else the bundle does not have is the SITE'S: a request for a file that is neither downloaded nor
+ *    bundled goes to the site and its answer is returned under the app's own address. With no network the answer
+ *    is the app's "no connection" page. Redirects are followed here (an intercepted response cannot itself be a redirect).
  *
  * Same code as the Uposatha app's plugin (uposatha/android/.../DgSitePlugin.java) apart from the package,
  * the page's aliases and this proxy.
@@ -190,8 +190,8 @@ public class DgSitePlugin extends Plugin {
 
     /**
      * The answer for a request to the app's own origin, or null to let Capacitor serve the bundled file. In order:
-     * the downloaded copy; a bundled directory's index.html (Capacitor answers /ru/ with the root page); a file
-     * the bundle has (null: Capacitor's); and anything else is the site's.
+     * the downloaded copy; a bundled directory's index.html (Capacitor answers /ru/ with the root page); a word's
+     * page, which is the language's own page; a file the bundle has (null: Capacitor's); and anything else is the site's.
      */
     static WebResourceResponse serve(Context context, Bridge bridge, WebResourceRequest request) {
         if (!"GET".equals(request.getMethod())) return null;
@@ -200,9 +200,18 @@ public class DgSitePlugin extends Plugin {
         String path = uri.getPath();
         if (path == null || path.startsWith("/_capacitor") || path.equals("/cordova.js") || path.equals("/favicon.ico")) return null;
         try {
+            // The ru page's static/ is a link to /static/ on the site: the bundle (and the updater) keep the one copy.
+            boolean moved = path.startsWith("/ru/static/");
+            if (moved) path = path.substring("/ru".length());
             // "/ru/" and "/ru" are a directory; "/dhamma" too, until the bundle turns out not to have it.
             boolean directory = path.endsWith("/") || path.substring(path.lastIndexOf('/') + 1).indexOf('.') < 0;
             String index = path.endsWith("/") ? path + "index.html" : path + "/index.html";
+            // A word's page (/dukkha, /ru/dukkha) is the language's page itself on the site too (ddg-ui .htaccess), and the page
+            // reads the word from the address: the bundled page answers it, with no network and with the bundle's own scripts.
+            if (directory && !path.endsWith("/") && !hasAsset(context, index)) {
+                if (path.matches("/ru/[^/]+")) index = "/ru/index.html";
+                else if (path.matches("/[^/]+")) index = "/index.html";
+            }
             String file = directory ? index : path;
 
             File downloaded = resolve(context, file);
@@ -213,6 +222,10 @@ public class DgSitePlugin extends Plugin {
             if (directory && hasAsset(context, index)) {
                 return new WebResourceResponse("text/html", "UTF-8", 200, "OK", defaultHeaders(),
                         injected(bridge, index, context.getAssets().open("public" + index)));
+            }
+            // Capacitor would look for the asset at the address asked for (/ru/static/...), so the moved one is answered here.
+            if (moved && hasAsset(context, path)) {
+                return new WebResourceResponse(typeOf(path), "UTF-8", 200, "OK", defaultHeaders(), context.getAssets().open("public" + path));
             }
             if (hasAsset(context, path)) return null;
             return proxy(context, bridge, request);

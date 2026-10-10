@@ -172,8 +172,9 @@ final class DgWebViewConfiguration: WKWebViewConfiguration {
     }
 }
 
-// In order: the downloaded copy; a bundled directory's index.html ("/ru/" -> "/ru/index.html"); a bundled file at
-// the literal path; anything else (a word's page, made by the site's server) is proxied from the site.
+// In order: the downloaded copy; a bundled directory's index.html ("/ru/" -> "/ru/index.html"); a word's page ("/dukkha",
+// "/ru/dukkha": the language's bundled page, as the site answers it); a bundled file at the literal path; anything else is
+// proxied from the site.
 final class DgSiteRouter: NSObject, WKURLSchemeHandler {
     private let inner: WKURLSchemeHandler
     private var stopped = Set<ObjectIdentifier>()
@@ -224,15 +225,25 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         guard let url = urlSchemeTask.request.url, urlSchemeTask.request.httpMethod == "GET", url.host == "localhost" else {
             return inner.webView(webView, start: urlSchemeTask)
         }
-        let path = url.path
+        var path = url.path
         if path.hasPrefix("/_capacitor") || path == "/cordova.js" || path == "/favicon.ico" {
             return inner.webView(webView, start: urlSchemeTask)
         }
         // "/ru/" and "/ru" are a directory (the site's own convention: an extensionless path is one); Capacitor
         // itself only knows to answer "/" that way, so "/ru" needs the same help here.
+        // The ru page's static/ is a link to /static/ on the site: the bundle (and the updater) keep the one copy.
+        if path.hasPrefix("/ru/static/") { path = String(path.dropFirst("/ru".count)) }
         let last = (path as NSString).lastPathComponent
         let isDirectory = path.hasSuffix("/") || !last.contains(".")
-        let indexPath = path.hasSuffix("/") ? path + "index.html" : path + "/index.html"
+        var indexPath = path.hasSuffix("/") ? path + "index.html" : path + "/index.html"
+        // A word's page ("/dukkha", "/ru/dukkha") is the language's page itself on the site too (ddg-ui .htaccess), and the
+        // page reads the word from the address: the bundled page answers it, with no network and with the bundle's own scripts.
+        // Not "/dukkha/" (url.path drops the slash): there the page's relative static/ would point under /dukkha/.
+        if isDirectory, !url.hasDirectoryPath, Self.bundled(indexPath) == nil {
+            let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+            if parts.count == 2, !parts[1].isEmpty { indexPath = "/index.html" }
+            else if parts.count == 3, parts[1] == "ru", !parts[2].isEmpty { indexPath = "/ru/index.html" }
+        }
         let file = isDirectory ? indexPath : path
 
         if let downloaded = DgSiteStore.file(for: file), Self.answer(url, from: downloaded, task: urlSchemeTask) { return }
@@ -241,7 +252,7 @@ final class DgSiteRouter: NSObject, WKURLSchemeHandler {
         proxy(url: url, task: urlSchemeTask, fallback: { self.inner.webView(webView, start: urlSchemeTask) })
     }
 
-    // The site's answer for a word's page (made by the site's server, not in the bundle). Offline it is a plain
+    // The site's answer for what the bundle does not have (a word's page is the bundled page, above). Offline it is a plain
     // 404: the page copes with a missing extra file, and Capacitor's handler would only say the same.
     private func proxy(url: URL, task: WKURLSchemeTask, fallback: @escaping () -> Void) {
         guard var parts = URLComponents(string: dgSite) else { return fallback() }

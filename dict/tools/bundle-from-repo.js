@@ -8,9 +8,9 @@
 //   html  src/href of every tag but <a> (an <a> leads to another page)
 //   css   url(...), relative to the stylesheet
 //   js    string literals that are paths under static/ ("./static/sutta_words.txt"), relative to the page that runs it
-// /ru/'s static/ is a symlink to ../static in the repository; /ru/static/... is copied as real files here, so neither
-// Capacitor's copy into the APK nor the native lookup has to follow a link. A file that is referenced and not in the
-// checkout fails the build. A word's own page (/dhamma) is made by the server and is not part of the bundle.
+// /ru/'s static/ is a symlink to ../static in the repository: what the ru page loads from there is bundled once, at
+// /static/..., and the app answers /ru/static/... from it (DgSitePlugin.serve, DgSiteRouter). A file that is referenced and
+// not in the checkout fails the build. A word's page (/dhamma, /ru/dhamma) is the language's page, answered by the app.
 //
 // Find on the page is Dhamma.Gift's own (loaded on demand, from the page's origin): EXTRAS are taken from the dg-node
 // checkout (DG_NODE_REF), where they live, or from tools/extra for what dg-node does not keep in git.
@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PAGES = ['/index.html', '/ru/index.html'];
-const SKIP = ['/static/sw.js', '/ru/static/sw.js'];   // no service worker in the app (src/site-no-sw.js); extra.js names it
+const SKIP = ['/static/sw.js'];   // no service worker in the app (src/site-no-sw.js); extra.js names it
 // Referenced and missing on the site too (404 there): jQuery UI's stock theme names its icon sprites, the page draws its own icons.
 const DEAD = /^(?:\/ru)?\/static\/images\/ui-icons_[0-9a-f]+_256x240\.png$/;
 const EXTRAS = [
@@ -35,7 +35,7 @@ const REFS = {
 // A reference as a path on the site, or null for what is not a file of this site.
 function urlOf(ref, base) {
     if (/^(?:[a-z]+:|\/\/|#)/i.test(ref)) return null;
-    return new URL(ref, 'http://x' + base).pathname;
+    return new URL(ref, 'http://x' + base).pathname.replace(/^\/ru\/static\//, '/static/');
 }
 
 function isFile(f) { try { return fs.statSync(f).isFile(); } catch (e) { return false; } }   // statSync follows links

@@ -24,7 +24,8 @@ function check(name, actual, expected) {
 const TYPES = { html: 'text/html', js: 'application/javascript', css: 'text/css', json: 'application/json', svg: 'image/svg+xml', woff2: 'font/woff2', png: 'image/png', txt: 'text/plain' };
 const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
-    let file = path.join(WWW, decodeURIComponent(url.pathname));
+    // /ru/static/ is answered from /static/, as the app does (DgSitePlugin.serve, DgSiteRouter).
+    let file = path.join(WWW, decodeURIComponent(url.pathname).replace(/^\/ru\/static\//, '/static/'));
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
     if (!file.startsWith(WWW) || !fs.existsSync(file)) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { 'content-type': TYPES[path.extname(file).slice(1)] || 'application/octet-stream' });

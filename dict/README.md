@@ -16,10 +16,12 @@ at the repository root (the site is ddg-ui's `public/`, static files Apache serv
 bundled file is the repository's own file), and `build.js` turns `snapshot/` into `www/` plus
 `site-manifest.json` (paths and SHA-256, which `src/site-updater.js` compares the site against). What
 goes in is what the two pages reference: their src/href, the stylesheets' url(), the scripts' `static/...`
-strings; `/ru/static/` (a symlink to `../static` in ddg-ui) is copied as real files. Find on the page is
+strings; `/ru/static/` (a symlink to `../static` in ddg-ui) is bundled once, as `/static/`, and the app answers
+`/ru/static/...` from it (`DgSitePlugin.serve`, iOS `DgSiteRouter`). Find on the page is
 Dhamma.Gift's own and comes from the dg-node checkout pinned by `DG_NODE_REF` (`tools/extra/` holds the
-one icon dg-node does not keep in git). A word's page and the dictionary's data still come from the site;
-the full offline mode is a separate, much larger project (see ddg-ui#7).
+one icon dg-node does not keep in git). A word's page (`/dukkha`, `/ru/dukkha`) is the language's bundled page,
+as on the site (ddg-ui's .htaccess serves the same file there), so it opens with no network; the short meanings
+offline are the site's offline mini-dictionary (downloaded on request), the full articles still come from the site.
 
 Until 2026-10 the page was crawled off the live site with a browser at build time (`tools/snapshot.js`):
 a build shipped whatever production served that minute, and what the crawl did not click was not in it.

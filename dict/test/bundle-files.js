@@ -4,7 +4,8 @@
 //
 // 1. bundle-from-repo.js lays both pages out from the checkouts;
 // 2. read back from the bundle itself, every local src/href of each page (but <a>) and every url() of the stylesheets
-//    resolves to a file of the bundle (relative paths as the browser resolves them: /ru/'s static/ is its own copy);
+//    resolves to a file of the bundle (relative paths as the browser resolves them; /ru/static/ is answered from /static/,
+//    as the app does), and /ru/static/ is not a second copy;
 // 3. the bundle stays small (a big file newly referenced by a script would ride into the APK unnoticed);
 // 4. a page that references a file the checkout does not have makes the build fail, naming the file.
 const fs = require('fs');
@@ -21,7 +22,8 @@ function check(name, ok, detail) {
     if (!ok) failed++;
     console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok || !detail ? '' : '\n       ' + detail}`);
 }
-const local = (ref, base) => (/^(?:[a-z]+:|\/\/|#)/i.test(ref) ? null : new URL(ref, 'http://x' + base).pathname);
+// /ru/static/ is answered from /static/ by the app (DgSitePlugin.serve, DgSiteRouter).
+const local = (ref, base) => (/^(?:[a-z]+:|\/\/|#)/i.test(ref) ? null : new URL(ref, 'http://x' + base).pathname.replace(/^\/ru\/static\//, '/static/'));
 // The same dead references bundle-from-repo.js lets through (404 on the site too): jQuery UI's stock icon sprites.
 const DEAD = /\/static\/images\/ui-icons_[0-9a-f]+_256x240\.png$/;
 
@@ -46,6 +48,7 @@ try {
         }
     }
     check('every file the pages and their stylesheets reference is in the bundle', !missing.length, missing.join(', '));
+    check('the ru page\'s static/ is not a second copy', !fs.existsSync(path.join(out, 'ru/static')));
     check('no link is left in the bundle (Capacitor and the native lookup see real files)', urls.every((u) => !fs.lstatSync(path.join(out, u)).isSymbolicLink()));
 
     const bytes = urls.reduce((s, u) => s + fs.statSync(path.join(out, u)).size, 0);

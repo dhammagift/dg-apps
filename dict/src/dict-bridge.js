@@ -405,7 +405,9 @@
     urlFor: function (path) {
       if (/^\/assets\/(js\/dg-page-find|svg\/)/.test(path)) return 'https://dhamma.gift' + path;
       return /\/index\.html$/.test(path) ? path.slice(0, -'index.html'.length) : path;
-    }
+    },
+    // The ru page's static/ is /static/ (a link on the site; the app answers /ru/static/... from /static/): checked once, there.
+    updatable: function (path) { return !/^\/ru\/static\//.test(path); }
   };
   // @site-updater (inlined from src/site-updater.js by dict/build.js)
 

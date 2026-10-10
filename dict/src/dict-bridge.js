@@ -21,6 +21,27 @@
   if (PLATFORM !== 'android' && PLATFORM !== 'ios') return;
   var IOS = PLATFORM === 'ios';   // on iOS: no Back button (no hardware back), the App Store listing instead of Play
 
+  // A Russian reader's start is the English page ("/", or "/?q=word" from Share and text selection), which the site's
+  // own script then swaps for /ru/ (extra.js, changeLanguage): two full page loads at every start. Here, at document
+  // start, before the English page has fetched anything, it goes to the address changeLanguage('ru') would.
+  function ruAtOnce() {
+    try {
+      var m = /^\/([^/.]*)$/.exec(location.pathname);   // the English page: "/" or a word's "/dukkha"
+      if (!m) return false;
+      var url = new URL(location.href);
+      if ((url.searchParams.get('lang') || localStorage.getItem('siteLanguage')) !== 'ru') return false;
+      var word = url.searchParams.get('q') || decodeURIComponent(m[1]);
+      url.searchParams.delete('q');
+      url.pathname = '/ru/' + (word.indexOf('/') < 0 ? encodeURIComponent(word) : '');
+      if (word.indexOf('/') >= 0) url.searchParams.set('q', word);
+      url.searchParams.set('lang', 'ru');
+      window.stop();   // the English page loads nothing more
+      location.replace(url.href);
+      return true;
+    } catch (e) { return false; }
+  }
+  if (ruAtOnce()) return;
+
   // The launch splash is native on Android (the animated mark of the system splash screen, res/drawable/
   // dg_splash_icon.xml), so nothing is drawn here: a web splash on top of it made the app slower to open and
   // the page under it showed a scroll strip.

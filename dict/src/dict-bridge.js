@@ -402,9 +402,12 @@
     if (!S) return;
     function go(route) {
       if (!route) return;
-      if (/^https?:/.test(route)) { location.href = route; return; }
-      try { var u = new URL(route, location.href); if (u.pathname + u.search + u.hash === location.pathname + location.search + location.hash) return; location.href = route; }
-      catch (e) { location.href = route; }
+      if (/^https:\/\//.test(route)) { location.href = route; return; }
+      if (route.charAt(0) !== '/' || route.charAt(1) === '/' || route.indexOf('\\') >= 0) return;
+      try { var u = new URL(route, location.href); if (u.origin !== location.origin || u.pathname + u.search + u.hash === location.pathname + location.search + location.hash) return; location.href = u.href; }
+      catch (e) { /* not an address */ }
+    // dhamma.gift opens in the app (allowNavigation), other sites go to Safari (Capacitor's navigation policy); a path stays on
+    // the app's own origin.
     }
     if (typeof S.addListener === 'function') S.addListener('shortcut', function (ev) { go(ev && ev.route); });
     if (typeof S.launchRoute === 'function') Promise.resolve(S.launchRoute()).then(function (r) { go(r && r.route); }).catch(function () { /* none waiting */ });

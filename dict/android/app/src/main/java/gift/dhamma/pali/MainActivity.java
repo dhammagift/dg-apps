@@ -1,5 +1,6 @@
 package gift.dhamma.pali;
 
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -26,8 +27,11 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The dictionary as a Capacitor app.
@@ -223,7 +227,7 @@ public class MainActivity extends BridgeActivity {
         String url = null;
         String route = intent.getStringExtra("route");
         if (route != null && !route.isEmpty()) {
-            url = route.startsWith("http") ? route : SITE_ORIGIN + route;
+            url = routeUrl(route);
         } else if (Intent.ACTION_SEND.equals(intent.getAction())) {
             String shared = intent.getStringExtra(Intent.EXTRA_TEXT);
             if (shared != null && !shared.isEmpty()) url = SITE_ROOT + "?q=" + Uri.encode(shared);
@@ -237,5 +241,35 @@ public class MainActivity extends BridgeActivity {
         final String finalUrl = url;
         final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
         if (webView != null) webView.post(() -> webView.loadUrl(finalUrl));
+    }
+
+    // The sites a shortcut may name that are not the app's: dhamma.gift opens in the app (server.allowNavigation, the
+    // static shortcut and Table of Contents), the two outside tools in the system browser. The activity is exported, so
+    // the route can come from any app: nothing else is loaded.
+    private static final Set<String> BROWSER_HOSTS = new HashSet<>(Arrays.asList(
+            "dharmamitra.org", "www.dharmamitra.org", "aksharamukha.com", "www.aksharamukha.com"));
+
+    /** A shortcut's route as the URL to load in the WebView, or null (handed to the browser, or refused). */
+    private String routeUrl(String route) {
+        if (route.startsWith("/")) {
+            // A path of the app's own origin, parsed rather than prefix-checked: "//host/..." or "/\host" must not leave it.
+            Uri own = Uri.parse(SITE_ORIGIN + route);
+            boolean ok = !route.startsWith("//") && route.indexOf('\\') < 0 && "https".equals(own.getScheme())
+                    && "localhost".equals(own.getHost()) && own.getPort() == -1 && own.getUserInfo() == null;
+            return ok ? own.toString() : null;
+        }
+        Uri site = Uri.parse(route);
+        String host = site.getHost() == null ? "" : site.getHost().toLowerCase();
+        if (!"https".equals(site.getScheme()) || site.getUserInfo() != null || site.getPort() != -1) return null;
+        if (host.equals("dhamma.gift") || host.endsWith(".dhamma.gift")) return site.toString();
+        if (BROWSER_HOSTS.contains(host)) {
+            // webView.loadUrl() would open it inside the dictionary (no shouldOverrideUrlLoading for a load the app starts).
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, site).addCategory(Intent.CATEGORY_BROWSABLE));
+            } catch (ActivityNotFoundException e) {
+                // No browser on the device: nothing to open it with.
+            }
+        }
+        return null;
     }
 }

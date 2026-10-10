@@ -817,32 +817,32 @@ final class WidgetRenderer {
             int day = WidgetFormat.day(ymd);
             boolean today = ymd.equals(m.today), past = ymd.compareTo(m.today) < 0;
             WidgetModel.Upo startOf = m.startingOn(ymd), dayOf = m.uposathaOn(ymd);
-            int dow = WidgetModel.column(WidgetFormat.dow(WidgetFormat.year(ymd), WidgetFormat.month(ymd), day), m.weekStart);   // the column in the week, 0 = its first day
+            int col = WidgetModel.column(WidgetFormat.dow(WidgetFormat.year(ymd), WidgetFormat.month(ymd), day), m.weekStart);   // 0 = the week's first day
             int textColor = past ? th.muted : th.text;
             Typeface tf = f400;
             RectF r = new RectF(x, y, x + colW, y + h);
-            float[] radii;
-            if (startOf != null) {
-                // solid; joined to its day on the right unless the day wraps to the next row (Sunday)
-                boolean joined = dow < 6 && WidgetFormat.daysBetween(ymd, startOf.day) == 1;
-                radii = joined ? new float[] { rad, rad, 0, 0, 0, 0, rad, rad } : new float[] { rad, rad, rad, rad, rad, rad, rad, rad };
-                fill.setColor(th.accent);
-                Path p = new Path(); p.addRoundRect(r, radii, Path.Direction.CW); c.drawPath(p, fill);
-                textColor = 0xFFFFFFFF; tf = f600;
-            } else if (dayOf != null) {
-                WidgetModel.Upo prev = dayOf.start.ymd.equals(dayOf.day) ? null : dayOf;
-                boolean joined = prev != null && dow > 0 && WidgetFormat.daysBetween(prev.start.ymd, ymd) == 1;
-                radii = joined ? new float[] { 0, 0, rad, rad, rad, rad, 0, 0 } : new float[] { rad, rad, rad, rad, rad, rad, rad, rad };
-                fill.setColor(th.mix(th.accent, .30f));
-                Path p = new Path(); p.addRoundRect(r, radii, Path.Direction.CW); c.drawPath(p, fill);
-                textColor = th.accentInk; tf = f600;
+            float[] radii = null;
+            // The strip: an evening-start cell (solid) and the day after it (light) are one band; a cell is square on the side that joins
+            // the next one, unless the row ends there. A date that is the day of one Uposatha and the start of the next (14th, 15th) is
+            // joined on both sides.
+            boolean joinRight = startOf != null && col < 6 && WidgetFormat.daysBetween(ymd, startOf.day) == 1;
+            boolean joinLeft = dayOf != null && !dayOf.start.ymd.equals(dayOf.day) && col > 0 && WidgetFormat.daysBetween(dayOf.start.ymd, ymd) == 1;
+            if (startOf != null || dayOf != null) {
+                float l = joinLeft ? 0 : rad, rr = joinRight ? 0 : rad;
+                radii = new float[] { l, l, rr, rr, rr, rr, l, l };
+                Path p = new Path(); p.addRoundRect(r, radii, Path.Direction.CW);
+                if (startOf != null) { fill.setColor(th.accent); textColor = 0xFFFFFFFF; tf = f600; }
+                else { fill.setColor(th.mix(th.accent, .30f)); textColor = th.accentInk; tf = f600; }
+                c.drawPath(p, fill);
             }
             if (today) {
                 Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
                 ring.setStyle(Paint.Style.STROKE);
                 ring.setStrokeWidth(1.5f);
                 ring.setColor(th.text);
-                c.drawRoundRect(new RectF(x + .75f, y + .75f, x + colW - .75f, y + h - .75f), rad, rad, ring);
+                // The ring is inset and fully rounded: inside a strip it does not meet the straight joins of the band.
+                float in = radii != null ? 2.2f : .75f;
+                c.drawRoundRect(new RectF(x + in, y + in, x + colW - in, y + h - in), Math.max(2, rad - in + .75f), Math.max(2, rad - in + .75f), ring);
                 tf = f700;
                 if (startOf == null && dayOf == null) textColor = th.text;
             }

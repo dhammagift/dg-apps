@@ -94,6 +94,8 @@ function capacitorStub() {
             check('Back on a tab goes to the first tab', await page.evaluate(() => document.body.getAttribute('data-app-tab')), 'home');
             await page.evaluate(() => window.__back({ canGoBack: false }));
             check('Back on the first tab leaves the app', await page.evaluate(() => window.__calls.exit), 1);
+            // The tab-change view transition must not touch any other transition (the theme reveal ghosted the page once): the names exist only while a tab changes.
+            check('no view-transition names while idle', await page.evaluate(() => [getComputedStyle(document.querySelector('main.page')).viewTransitionName, getComputedStyle(document.querySelector('.appnav')).viewTransitionName]), ['none', 'none']);
             await page.screenshot({ path: path.join(SHOTS, 'launch-upo-home-light.png') });
             await ctx.close();
         }

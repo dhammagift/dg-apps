@@ -51,6 +51,8 @@ jobs:
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # Same reason and same walk as android-apk-only.yml: download-artifact@v4 reaches another run
       # only by artifact ID, and the most recent run that HAS a bundle is not necessarily the most
@@ -102,12 +104,8 @@ jobs:
       - name: Install app dependencies
         run: npm install --legacy-peer-deps --no-audit
 
-      - name: Select the newest Xcode 26
-        run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          echo "Using $XCODE"
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
+      - name: Select Xcode
+        run: tools/select-xcode.sh
 
       # Same check as build-app.yml's ios-build job — kept here too because this is the job that
       # runs on a branch before it is merged, and an undeclared required-reason API is an App Store

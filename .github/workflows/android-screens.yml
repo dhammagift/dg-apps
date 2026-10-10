@@ -65,6 +65,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Get the APK
         uses: actions/download-artifact@v4
@@ -94,10 +96,16 @@ jobs:
         with:
           node-version: '24.20.0'
 
+      # Inputs reach the shell as environment variables, never pasted into the script text.
       - name: Profile
+        env:
+          PROFILE: ${{ inputs.profile }}
+          API_LEVEL: ${{ inputs.api_level }}
+          PKG: ${{ inputs.package }}
+          MODE: ${{ inputs.mode }}
         run: |
           mkdir -p shots
-          echo "emulator profile: ${{ inputs.profile }}, api level: ${{ inputs.api_level }}, package: ${{ inputs.package }}, mode: ${{ inputs.mode }}" | tee shots/profile.txt
+          echo "emulator profile: $PROFILE, api level: $API_LEVEL, package: $PKG, mode: $MODE" | tee shots/profile.txt
 
       - name: Enable KVM
         run: |
@@ -109,7 +117,9 @@ jobs:
         env:
           VIDEO: ${{ inputs.video && '1' || '0' }}
           TRAY_ENGINE: ${{ inputs.tray_engine }}
-        uses: reactivecircus/android-emulator-runner@v2
+          PKG: ${{ inputs.package }}
+          MODE: ${{ inputs.mode }}
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: ${{ inputs.api_level }}
           target: ${{ inputs.target }}
@@ -117,7 +127,7 @@ jobs:
           profile: ${{ inputs.profile }}
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots ${{ inputs.package }} ${{ inputs.mode }}
+          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots "$PKG" "$MODE"
 
       - name: Upload the screenshots
         if: always()

@@ -24,6 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           sparse-checkout: .github/scripts
       - name: Read the stores
         env:

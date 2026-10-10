@@ -145,7 +145,7 @@ final class WidgetRenderer {
         float d = r.getDisplayMetrics().density;
         if (cls == LARGE) {
             float top = r.getDimension(R.dimen.w_l_grid_top) / d, head = r.getDimension(R.dimen.w_l_grid_head) / d, pitch = r.getDimension(R.dimen.w_l_grid_pitch) / d;
-            float rowH = Math.min(pitch, (hDp - top - head - 54) / rows);   // 54: the "next Uposatha" line and the dots under the grid
+            float rowH = Math.min(Math.max(pitch, 46), (hDp - top - head - 54) / rows);   // 54: the "next Uposatha" line and the dots under the grid; a tall phone gets taller rows (up to 46 dp) instead of an empty bottom
             return new float[] { r.getDimension(R.dimen.w_l_grid_left) / d, top, r.getDimension(R.dimen.w_l_grid_right) / d, head, rowH };
         }
         float top = r.getDimension(R.dimen.w_m_grid_top) / d, head = r.getDimension(R.dimen.w_m_grid_head) / d;
@@ -531,7 +531,7 @@ final class WidgetRenderer {
             t(tx.get("next").toUpperCase(tx.ru() ? new Locale("ru") : Locale.US), x, y, lbLine(), lbSize(), f600, th.muted, 0.1f, false);
             y += 16 + (tight ? 6 : 8);
             // as many of the next three as fit above the dots
-            int rows = (int) Math.max(0, Math.min(3, (dotsCy() - 8 - y + 9) / 33));
+            int rows = (int) Math.max(0, Math.min(cls == LARGE ? 6 : 3, (dotsCy() - 8 - y + 9) / 33));   // a tall widget lists more of the next ones
             List<WidgetModel.Upo> next = m.following(rows);
             for (WidgetModel.Upo n : next) {
                 float rx = W - padL();
@@ -600,7 +600,9 @@ final class WidgetRenderer {
             tr(leftLine, rx, ky + ks * 1.2f + 2, kss * 1.2f, kss, f400, th.text2, 0, true);
             float lwid = maxW - rw - 12;
             float ny = top2 + (tight ? 4 : 8);
-            t(fit(name, lwid, ns, f600, 0, false), x, ny, ns * 1.1f, ns, f600, th.text, 0, false);
+            float nsz = ns;
+            while (nsz > 17 && w(name, nsz, f600, 0, false) > lwid) nsz -= 1;   // a long name first gets smaller, then cut
+            t(fit(name, lwid, nsz, f600, 0, false), x, ny, ns * 1.1f, nsz, f600, th.text, 0, false);
             t(fit(sub, lwid, ss, f400, 0, false), x, ny + ns * 1.1f + 3, ss * 1.2f, ss, f400, th.text2, 0, false);
             float bottom = ny + ns * 1.1f + 3 + ss * 1.2f;
             bottom = Math.max(bottom, ky + ks * 1.2f + 2 + kss * 1.2f);
@@ -676,6 +678,7 @@ final class WidgetRenderer {
         void partsList(WidgetModel m, WidgetModel.Day d, int cur, float x, float y, float width, float limit) {
             float rowH = 15 * 1.2f + 10;
             boolean all = y + 6 * rowH + 5 * 2 + 9 <= limit;
+            if (all) { float spare = limit - (y + 6 * (rowH + 2) + 9); if (spare > 0) rowH += Math.min(14, spare / 6); }   // the spare height goes into taller rows
             int from = all ? 0 : cur < 3 ? 0 : 3, to = all ? 6 : from + 3;
             for (int k = from; k < to; k++) {
                 String pn = tx.get("part." + d.partName[k]);
@@ -746,12 +749,12 @@ final class WidgetRenderer {
             float gl = g[0], gt = g[1], gh = g[3], rowH = g[4];
             float gw = W - gl - g[2], colW = gw / 7f;
             weekHeader(gl, gt, gw, big ? 11.5f : 10.5f, gh, m);
-            float pill = big ? Math.min(28, rowH - 4) : Math.min(rowH - 2, 20);
+            float pill = big ? Math.min(36, rowH - 4) : Math.min(rowH - 2, 20);
             for (int r = 0; r < mo[4]; r++) {
                 for (int cI = 0; cI < 7; cI++) {
                     int dd = r * 7 + cI - mo[2] + 1;
                     if (dd < 1 || dd > mo[3]) continue;
-                    cell(m, WidgetModel.ymd(mo[0], mo[1], dd), gl + cI * colW, gt + gh + r * rowH + (rowH - pill) / 2, colW, pill, big ? 15 : 12, pill / 2);
+                    cell(m, WidgetModel.ymd(mo[0], mo[1], dd), gl + cI * colW, gt + gh + r * rowH + (rowH - pill) / 2, colW, pill, big ? (rowH > 40 ? 17 : 15) : 12, pill / 2);
                 }
             }
             if (big) {

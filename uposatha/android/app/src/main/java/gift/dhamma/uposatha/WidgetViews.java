@@ -203,8 +203,8 @@ final class WidgetViews {
             l1 = tx.fmt("lite.from", "startDay", startDay, "startTime", u.start.hm);
             if (!m.placeSet) l1 += " · " + tx.get("noPlace.short");
         }
-        text(R.id.lbl, caps(cls == SMALL ? tx.get("layer.uposatha") : lbl));   // the small card says "now" in its date line
-        text(R.id.to, to);
+        if (cls != SMALL) text(R.id.lbl, caps(lbl));   // the small card has the day there
+        if (cls != SMALL) text(R.id.to, to);   // the small card has no such line (its label says it)
         show(R.id.kala, false);
         if (cls == SMALL) {
             String sub;
@@ -216,18 +216,17 @@ final class WidgetViews {
                 sub = m.detail ? phase(u) + " · " + startWd + " " + u.start.hm
                         : tx.get("lite.from").replace("{startDay}", startWd).replace("{startTime}", u.start.hm).replace(", ", " ");
             }
-            // A low 2x2 (the launcher's own cell is ~110 dp): lines go in this order - kala, the second line, "to the Nth day" - before the counter shrinks.
-            float av = avail(), big = hDp >= 240 ? (kalaOn ? 46 : 52) : kalaOn ? 34 : 40;   // a tall narrow widget gets a bigger counter
-            boolean kalaShow = kalaOn, subShow = true, toShow = true;
-            // the moon row is 40 dp now (the moon at the left, the label and the date beside it)
-            if (50 + 15 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) kalaShow = false;
-            if (50 + 15 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) subShow = false;
-            if (50 + 15 + 1.2f * big > av) toShow = false;
-            big = Math.max(24, Math.min(big, (av - 50 - (toShow ? 15 : 0)) / 1.2f));
+            // The label is the day ("to the 15th day" / "15th day - now"), not the name of the app: nobody needs to be told that this is the
+            // Uposatha. A low 2x2 (the launcher's own cell is ~110 dp) drops lines in this order - kala, the second line - before the counter shrinks.
+            float av = avail(), big = hDp >= 240 ? (kalaOn ? 46 : 52) : kalaOn ? 36 : 42;   // a tall narrow widget gets a bigger counter
+            boolean kalaShow = kalaOn, subShow = true;
+            if (50 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) kalaShow = false;
+            if (50 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) subShow = false;
+            big = Math.max(24, Math.min(big, (av - 50 - (subShow ? 15 : 0) - (kalaShow ? 20 : 0)) / 1.2f));
+            text(R.id.lbl, m.ongoing ? ordinal(u.lunarDay) + " " + dayWord() + " · " + tx.get("now") : to);
             text(R.id.dt2, moonLine()); show(R.id.dt2, m.detail);   // "with details": what the moon is doing now
             text(R.id.dt, m.ongoing ? tx.get("now") + " · " + dayLabel(m.today) : dateLabel(u.start.ymd));
             text(R.id.sub, sub); show(R.id.sub, subShow);
-            show(R.id.to, toShow);
             counter(rem, big);
             if (kalaShow) kalaLine(12, "");
             moon(rv, R.id.moon_l, R.id.moon_d, 48, m.moonNow, m.south);   // the moon as it is now, as in the picker (the picture has room for the halo)

@@ -50,7 +50,7 @@ on:
         type: string
         default: 'audio'
       mode:
-        description: 'screens, shortcuts (Dhamma.Gift launcher shortcuts test), edgetoedge (Uposatha edge-to-edge check: PASS/FAIL, red run on a failure), widget (Uposatha: the widget's renderer drawn by the debug build's WidgetPreviewActivity, light and dark; needs the DEBUG apk), or tray (the notification player: Pause / Play on the shade, DEBUG apk, red run on a failure)'
+        description: 'screens, shortcuts (Dhamma.Gift launcher shortcuts test), edgetoedge (Uposatha edge-to-edge check: PASS/FAIL, red run on a failure), widget (Uposatha: the widget renderer drawn by the debug build WidgetPreviewActivity, light and dark; needs the DEBUG apk), or tray (the notification player: Pause / Play on the shade, DEBUG apk, red run on a failure)'
         required: false
         type: string
         default: 'screens'

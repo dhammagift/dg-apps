@@ -21,7 +21,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical">
-            <FrameLayout android:layout_width="40dp" android:layout_height="40dp">
+            <FrameLayout android:layout_width="48dp" android:layout_height="48dp" android:layout_marginLeft="-4dp">
                 <ImageView
                     android:id="@+id/moon_l"
                     android:layout_width="match_parent"
@@ -40,7 +40,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginLeft="9dp">
+                android:layout_marginLeft="5dp">
                 <TextView
                     android:id="@+id/lbl"
                     style="@style/W_Label"
@@ -60,6 +60,16 @@
                     android:autoSizeTextType="uniform"
                     android:autoSizeMinTextSize="9dp"
                     android:autoSizeMaxTextSize="12dp"
+                    android:autoSizeStepGranularity="0.5dp" />
+                <TextView
+                    android:id="@+id/dt2"
+                    style="@style/W_T2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="11dp"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="8dp"
+                    android:autoSizeMaxTextSize="11dp"
                     android:autoSizeStepGranularity="0.5dp" />
             </LinearLayout>
         </LinearLayout>

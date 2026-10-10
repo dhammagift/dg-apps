@@ -114,6 +114,13 @@ final class WidgetViews {
     private String phase(WidgetModel.Upo u) { return tx.get("phase." + u.phaseName); }
     private String untilTime(String hm) { return tx.get("lite.until").replace("{endDay}, ", "").replace("{endTime}", hm); }
     private String caps(String s) { return s.toUpperCase(tx.ru() ? new Locale("ru") : Locale.US); }
+    /** "waning · 2% lit": what the moon is doing now (the moon of the data, carried on to the clock). */
+    private String moonLine() {
+        double lit = (1 - Math.cos(2 * Math.PI * m.moonNow)) / 2;
+        boolean waxing = m.moonNow < 0.5;
+        String ph = tx.ru() ? (waxing ? "растёт" : "убывает") : (waxing ? "waxing" : "waning");
+        return ph + " · " + Math.round(lit * 100) + "% " + (tx.ru() ? "освещено" : "lit");
+    }
     private String dayWord() { return tx.ru() ? "день" : "day"; }
 
     /** "через 8 д" / "in 8 d" for a later Uposatha. */
@@ -213,16 +220,17 @@ final class WidgetViews {
             float av = avail(), big = hDp >= 240 ? (kalaOn ? 46 : 52) : kalaOn ? 34 : 40;   // a tall narrow widget gets a bigger counter
             boolean kalaShow = kalaOn, subShow = true, toShow = true;
             // the moon row is 40 dp now (the moon at the left, the label and the date beside it)
-            if (42 + 15 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) kalaShow = false;
-            if (42 + 15 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) subShow = false;
-            if (42 + 15 + 1.2f * big > av) toShow = false;
-            big = Math.max(24, Math.min(big, (av - 42 - (toShow ? 15 : 0)) / 1.2f));
+            if (50 + 15 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) kalaShow = false;
+            if (50 + 15 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) subShow = false;
+            if (50 + 15 + 1.2f * big > av) toShow = false;
+            big = Math.max(24, Math.min(big, (av - 50 - (toShow ? 15 : 0)) / 1.2f));
+            text(R.id.dt2, moonLine()); show(R.id.dt2, m.detail);   // "with details": what the moon is doing now
             text(R.id.dt, m.ongoing ? tx.get("now") + " · " + dayLabel(m.today) : dateLabel(u.start.ymd));
             text(R.id.sub, sub); show(R.id.sub, subShow);
             show(R.id.to, toShow);
             counter(rem, big);
             if (kalaShow) kalaLine(12, "");
-            moon(rv, R.id.moon_l, R.id.moon_d, 40, m.moonNow, m.south);   // the moon as it is now, as in the picker
+            moon(rv, R.id.moon_l, R.id.moon_d, 48, m.moonNow, m.south);   // the moon as it is now, as in the picker (the picture has room for the halo)
             return;
         }
         if (cls == MEDIUM) {
@@ -419,14 +427,10 @@ final class WidgetViews {
         }
         if (today) {
             WidgetModel.Day d = m.dayIdx >= 0 ? m.days.get(m.dayIdx) : null;
-            double lit = (1 - Math.cos(2 * Math.PI * m.moonNow)) / 2;
-            boolean waxing = m.moonNow < 0.5;
-            String ph = tx.ru() ? (waxing ? "растёт" : "убывает") : (waxing ? "waxing" : "waning");
-            String lt = tx.ru() ? "освещено" : "lit";
             text(R.id.tlbl, tx.ru() ? "СЕГОДНЯ" : "TODAY");
             if (d != null) text(R.id.tsun, tx.get("sunrise") + " " + d.sunrise.hm + "  ·  " + tx.get("noon") + " " + d.noon.hm + "  ·  " + tx.get("sunset") + " " + d.sunset.hm);
             show(R.id.tsun, d != null);
-            text(R.id.tmoon, ph + " · " + Math.round(lit * 100) + "% " + lt);
+            text(R.id.tmoon, moonLine());
         }
     }
 

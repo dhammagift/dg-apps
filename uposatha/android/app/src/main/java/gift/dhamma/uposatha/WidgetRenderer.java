@@ -534,6 +534,8 @@ final class WidgetRenderer {
             // as many of the next three as fit above the dots
             int rows = (int) Math.max(0, Math.min(cls == LARGE ? 6 : 3, (dotsCy() - 8 - y + 9) / 33));   // a tall widget lists more of the next ones
             List<WidgetModel.Upo> next = m.following(rows);
+            float dw = 0;   // a table, not a line of words: the date, the day and the "in N d" each have a column of their own
+            for (WidgetModel.Upo n : next) dw = Math.max(dw, w(dateLabel(n.start.ymd), 16, f600, 0, true));
             for (WidgetModel.Upo n : next) {
                 float rx = W - padL();
                 String in = inText(m, n);
@@ -541,8 +543,8 @@ final class WidgetRenderer {
                 moon(x, y, 24, n.nominal(), m.south);
                 float cx = x + 24 + 8;
                 String date = dateLabel(n.start.ymd);   // the date it BEGINS on (the evening), as the app's own lists say
-                float bw = t(date, cx, y, 24, 16, f600, th.text, 0, true);
-                cx += bw + 8;
+                t(date, cx, y, 24, 16, f600, th.text, 0, true);
+                cx += dw + 14;
                 String em = ordinal(n.lunarDay) + (m.detail ? " " + (tx.ru() ? "день" : "day") : "");
                 t(fit(em, rx - rw - 8 - cx, 16, f400, 0, false), cx, y, 24, 16, f400, th.text2, 0, false);
                 y += 24 + 9;
@@ -738,11 +740,13 @@ final class WidgetRenderer {
                 label(monthName, x, y);
                 float ly = y + 14 + 10;
                 List<WidgetModel.Upo> ups = m.upos.subList(m.curIdx, Math.min(m.upos.size(), m.curIdx + 3));
+                float dw2 = 0;
+                for (WidgetModel.Upo n : ups) dw2 = Math.max(dw2, w(dayLabel(n.start.ymd), 14, f600, 0, true));
                 for (WidgetModel.Upo n : ups) {
                     moon(x, ly, 20, n.nominal(), m.south);
                     float cx = x + 20 + 8;
-                    float bw = t(dayLabel(n.start.ymd), cx, ly, 20, 14, f600, th.text, 0, true);
-                    t(fit(ordinal(n.lunarDay), 132 - 20 - 8 - bw - 8, 14, f400, 0, false), cx + bw + 8, ly, 20, 14, f400, th.text2, 0, false);
+                    t(dayLabel(n.start.ymd), cx, ly, 20, 14, f600, th.text, 0, true);
+                    t(fit(ordinal(n.lunarDay), 132 - 20 - 8 - dw2 - 8, 14, f400, 0, false), cx + dw2 + 10, ly, 20, 14, f400, th.text2, 0, false);
                     ly += 20 + 8;
                 }
             }
@@ -772,15 +776,17 @@ final class WidgetRenderer {
                 List<WidgetModel.Upo> list = new ArrayList<>();
                 list.add(m.cur());
                 list.addAll(m.following(rowsN - 1));
+                float dw3 = 0;
+                for (WidgetModel.Upo u : list) dw3 = Math.max(dw3, w(dateLabel(u.start.ymd), 15, f600, 0, true));
                 for (int i = 0; i < list.size(); i++) {
                     WidgetModel.Upo u = list.get(i);
                     String right = i == 0 && m.ongoing ? tx.get("now") : inText(m, u);
                     float rw = tr(right, rx, ry, 24, 14, f400, th.muted, 0, true);
                     moon(x, ry + 1, 20, u.nominal(), m.south);
                     float cx = x + 20 + 8;
-                    float bw = t(dateLabel(u.start.ymd), cx, ry, 24, 15, f600, th.text, 0, true);
+                    t(dateLabel(u.start.ymd), cx, ry, 24, 15, f600, th.text, 0, true);
                     String em = ordinal(u.lunarDay) + " \u00b7 " + phase(u);
-                    t(fit(em, rx - rw - 8 - cx - bw - 8, 15, f400, 0, false), cx + bw + 8, ry, 24, 15, f400, th.text2, 0, false);
+                    t(fit(em, rx - rw - 8 - cx - dw3 - 12, 15, f400, 0, false), cx + dw3 + 12, ry, 24, 15, f400, th.text2, 0, false);
                     ry += step;
                 }
                 if (today) {

@@ -42,7 +42,7 @@ final class WidgetMoon {
         String key = px + "/" + Math.round(phase * 1000) + "/" + south + "/" + dark;
         Bitmap hit = cache.get(key);
         if (hit != null) return hit;
-        if (cache.size() > 40) cache.clear();   // a handful of moons are alive at a time; the RemoteViews hold their own references
+        if (cache.size() > 160) cache.clear();   // the grid of sizes shares these (one picture per size and phase); the RemoteViews hold their own references
         Bitmap b = draw(ctx, px, sizeDp < 50, phase, south, dark);
         cache.put(key, b);
         return b;

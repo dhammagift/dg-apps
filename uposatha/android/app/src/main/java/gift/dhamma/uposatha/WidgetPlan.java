@@ -17,6 +17,26 @@ final class WidgetPlan {
         return heightDp >= 240 ? LARGE : MEDIUM;
     }
 
+    /**
+     * The sizes (width x height, dp) a widget gets its own RemoteViews for (Android 12+: the launcher picks the entry that is the largest
+     * to fit the REAL size of the widget, whatever sizes it reports in its options - some launchers report them inconsistently, and a widget
+     * resized wider got the list of a short one). Each entry is the smallest size its decisions are made for, so a widget never gets more
+     * than fits; the steps are about two list rows, rows share the height, so the gap between steps is never visible as a hole.
+     * wide: also the 350 dp width (texts that appear only on a wide card).
+     */
+    static int[][] grid(boolean wide) {
+        int[] small = { 100, 125, 165, 205, 250, 330, 430, 540 };   // one or two columns wide (the sizeClass): the counter grows with the height
+        int[] medium = { 100, 125, 150, 185, 215 };                // wide and low (the short ones drop lines)
+        int[] large = { 240, 300, 370, 440, 510, 580 };            // wide and tall: more rows of the list
+        java.util.ArrayList<int[]> out = new java.util.ArrayList<>();
+        for (int h : small) out.add(new int[] { 110, h });
+        for (int w : wide ? new int[] { 230, 350 } : new int[] { 230 }) {
+            for (int h : medium) out.add(new int[] { w, h });
+            for (int h : large) out.add(new int[] { w, h });
+        }
+        return out.toArray(new int[0][]);
+    }
+
     /** How many rows of at least rowMin dp fit into availDp, at most max (rows then share the height, so none is smaller than rowMin). */
     static int rowsThatFit(float availDp, float rowMin, int max) {
         return (int) Math.max(0, Math.min(max, Math.floor(availDp / rowMin)));

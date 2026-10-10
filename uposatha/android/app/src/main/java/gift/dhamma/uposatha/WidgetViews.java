@@ -2,6 +2,7 @@ package gift.dhamma.uposatha;
 
 import android.app.PendingIntent;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.os.Build;
 import android.util.TypedValue;
 import android.view.View;
@@ -39,6 +40,9 @@ final class WidgetViews {
     private static final int[] CELL = { R.id.c0, R.id.c1, R.id.c2, R.id.c3, R.id.c4, R.id.c5, R.id.c6 };
     private static final int[] CT = { R.id.t0, R.id.t1, R.id.t2, R.id.t3, R.id.t4, R.id.t5, R.id.t6 };
     private static final int[] CB = { R.id.b0, R.id.b1, R.id.b2, R.id.b3, R.id.b4, R.id.b5, R.id.b6 };
+
+    /** Bytes of the moon pictures handed to RemoteViews since the counter was last read (the launcher refuses an update that carries too much). */
+    static long bitmapBytes;
 
     private final Context ctx;
     private final RemoteViews rv;
@@ -89,8 +93,10 @@ final class WidgetViews {
 
     /** A moon in both themes into the pair of ImageViews id_l / id_d (the layout shows the one that fits the theme). */
     private void moon(RemoteViews r, int idL, int idD, int sizeDp, double phase, boolean south) {
-        r.setImageViewBitmap(idL, WidgetMoon.render(ctx, sizeDp, phase, south, false));
-        r.setImageViewBitmap(idD, WidgetMoon.render(ctx, sizeDp, phase, south, true));
+        Bitmap l = WidgetMoon.render(ctx, sizeDp, phase, south, false), d = WidgetMoon.render(ctx, sizeDp, phase, south, true);
+        bitmapBytes += l.getByteCount() + d.getByteCount();
+        r.setImageViewBitmap(idL, l);
+        r.setImageViewBitmap(idD, d);
     }
 
     private boolean shortMedium() { return cls == MEDIUM && hDp < 150; }

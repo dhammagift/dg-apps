@@ -3,6 +3,7 @@ package gift.dhamma.uposatha;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -46,5 +47,18 @@ public class WidgetPlanTest {
         assertEquals(500, WidgetPlan.nowMark(12 * h, 0, 24 * h));
         assertEquals(1, WidgetPlan.nowMark(-h, 0, 24 * h));
         assertEquals(1000, WidgetPlan.nowMark(30 * h, 0, 24 * h));
+    }
+
+    @Test public void gridEntriesMatchTheirClass() {
+        for (boolean wide : new boolean[] { false, true }) {
+            int[][] g = WidgetPlan.grid(wide);
+            assertEquals(wide ? 8 + 2 * 11 : 8 + 11, g.length);
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (int[] z : g) {
+                assertTrue("duplicate " + z[0] + "x" + z[1], seen.add(z[0] + "x" + z[1]));
+                int cls = WidgetPlan.sizeClass(z[0], z[1]);
+                assertEquals(z[0] < 200 ? WidgetPlan.SMALL : z[1] >= 240 ? WidgetPlan.LARGE : WidgetPlan.MEDIUM, cls);
+            }
+        }
     }
 }

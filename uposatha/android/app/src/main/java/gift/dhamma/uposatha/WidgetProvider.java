@@ -148,11 +148,14 @@ public class WidgetProvider extends AppWidgetProvider {
             WidgetModel model = WidgetModel.parse(data, now);
             int layer = model == null ? 0 : prefs(ctx).getInt("layer_" + id, 0) % WidgetViews.LAYERS;
             RemoteViews rv;
-            if (android.os.Build.VERSION.SDK_INT >= 31 && sizes.size() > 1) {
-                // One RemoteViews per size; the launcher shows the one that fits and reflows it to the real size.
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                // One RemoteViews per size of the grid; the launcher takes the largest that fits the widget's real size and reflows it.
+                boolean wide = model != null && (layer == 2 || (layer == 0 && model.detail));
                 ArrayMap<SizeF, RemoteViews> map = new ArrayMap<>();
-                for (int[] sz : sizes) map.put(new SizeF(sz[0], sz[1]), WidgetViews.build(ctx, id, sz[0], sz[1], data, now, layer));
+                for (int[] sz : WidgetPlan.grid(wide)) map.put(new SizeF(sz[0], sz[1]), WidgetViews.build(ctx, id, sz[0], sz[1], data, now, layer));
                 rv = new RemoteViews(map);
+                android.util.Log.i("DgWidget", "update " + id + ": " + map.size() + " sizes, moon pictures " + (WidgetViews.bitmapBytes >> 10) + " KB");
+                WidgetViews.bitmapBytes = 0;
             } else {
                 int[] sz = sizes.get(0);
                 rv = WidgetViews.build(ctx, id, sz[0], sz[1], data, now, layer);

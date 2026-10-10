@@ -13,19 +13,24 @@ adb install -r "$APK" || exit 1
 # very class the widget uses (WidgetRenderer) from a sample of the page's data. Needs the DEBUG apk.
 if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = widget ]; then
   res="$OUT/widget-result.txt"; : > "$res"
+  # One start per theme and size (the activity draws all of them on the UI thread: a slow emulator answered "not responding").
+  # scenario 5 = the designer's mockup state in English. The sheets (card on a flat back, caption below) are pulled at the end.
+  adb shell rm -rf /sdcard/Android/data/$PKG/files/widget-previews
   for theme in light dark; do
     adb shell cmd uimode night "$([ "$theme" = dark ] && echo yes || echo no)" > /dev/null 2>&1
-    adb shell am force-stop "$PKG"
-    adb shell am start -n "$PKG/.WidgetPreviewActivity" > "$OUT/start-$theme.txt" 2>&1
-    sleep 8
-    if ! adb shell dumpsys activity activities | grep -q "WidgetPreviewActivity"; then echo "FAIL preview activity did not start ($theme)" >> "$res"; fi
-    for i in 1 2 3 4 5 6 7 8; do
-      adb exec-out screencap -p > "$OUT/widget-$theme-$i.png" 2>/dev/null
-      adb shell input swipe 540 1900 540 500 400; sleep 1.5
+    for sz in "170 170" "364 170" "364 382" "290 430" "364 430"; do
+      set -- $sz
+      adb shell am force-stop "$PKG"
+      adb shell am start -n "$PKG/.WidgetPreviewActivity" --ei w $1 --ei h $2 --es theme $theme --ei scenario 5 > "$OUT/start-$theme-$1x$2.txt" 2>&1
+      sleep 6
+      if ! adb shell dumpsys activity activities | grep -q "WidgetPreviewActivity"; then echo "FAIL preview activity did not start ($theme $1x$2)" >> "$res"; fi
+      adb exec-out screencap -p > "$OUT/screen-$theme-$1x$2.png" 2>/dev/null
     done
     adb logcat -d -s AndroidRuntime:E > "$OUT/crash-$theme.txt" 2>/dev/null
     if [ -s "$OUT/crash-$theme.txt" ] && grep -q "FATAL" "$OUT/crash-$theme.txt"; then echo "FAIL crash while drawing ($theme)" >> "$res"; else echo "PASS drawn without a crash ($theme)" >> "$res"; fi
   done
+  mkdir -p "$OUT/sheets" && adb pull /sdcard/Android/data/$PKG/files/widget-previews/. "$OUT/sheets" > /dev/null 2>&1
+  ls "$OUT/sheets" | wc -l >> "$res"
   adb shell cmd uimode night no > /dev/null 2>&1
   cat "$res"
   grep -q "^FAIL" "$res" && exit 1

@@ -28,7 +28,7 @@ final class WidgetSheet {
     private WidgetSheet() {}
 
     /** Sizes (dp) to try: the usual 2x2 / 4x2 / 4x4, tall and narrow ones, and a deliberately odd one. */
-    static final int[][] SIZES = { { 160, 160 }, { 130, 110 }, { 170, 340 }, { 250, 110 }, { 360, 150 }, { 360, 300 }, { 300, 430 }, { 360, 430 }, { 360, 520 } };
+    static final int[][] SIZES = { { 160, 160 }, { 130, 110 }, { 170, 340 }, { 250, 110 }, { 360, 150 }, { 360, 300 }, { 300, 430 }, { 360, 430 }, { 360, 520 }, { 170, 170 }, { 364, 170 }, { 364, 382 }, { 290, 430 }, { 364, 430 } };   // the last five: the designer's three sizes, and the two sizes of a 4x4 resized narrow and wide on a phone
 
     static final class Scenario {
         final String name, file, lang, nowFrom; final long nowOffset;
@@ -46,6 +46,7 @@ final class WidgetSheet {
             new Scenario("ru, Uposatha is on, detail", "widget-sample.json", "ru", "upoStart", 5 * H, true, true, true, false, false),
             new Scenario("en, kala off, lite", "widget-sample-en.json", "en", "sunrise", 3 * H, false, false, true, true, false),
             new Scenario("en, detail, vikala, south", "widget-sample-en.json", "en", "gen", 0, true, true, true, true, true),
+            new Scenario("en, kala in the morning, detail, place set (the designer's mockup)", "widget-sample-en.json", "en", "sunrise", 3 * H, true, true, true, true, false),
             new Scenario("placeholders: no data, stale", null, "ru", "gen", 0, false, true, true, true, false),
     };
 

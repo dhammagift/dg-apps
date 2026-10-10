@@ -52,7 +52,7 @@ public class WidgetPlanTest {
     @Test public void gridEntriesMatchTheirClass() {
         for (boolean wide : new boolean[] { false, true }) {
             int[][] g = WidgetPlan.grid(wide);
-            assertEquals(wide ? 8 + 2 * 11 : 8 + 11, g.length);
+            assertEquals(wide ? 5 + 2 * 8 : 5 + 8, g.length);
             java.util.Set<String> seen = new java.util.HashSet<>();
             for (int[] z : g) {
                 assertTrue("duplicate " + z[0] + "x" + z[1], seen.add(z[0] + "x" + z[1]));

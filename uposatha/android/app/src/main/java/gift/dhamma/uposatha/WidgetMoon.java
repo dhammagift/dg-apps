@@ -37,7 +37,7 @@ final class WidgetMoon {
 
     /** A square moon for a view of about sizeDp (the picture has the screen's own pixel density, so it is never blown up). */
     static synchronized Bitmap render(Context ctx, int sizeDp, double phase, boolean south, boolean dark) {
-        float density = Math.min(ctx.getResources().getDisplayMetrics().density, 3f);
+        float density = Math.min(ctx.getResources().getDisplayMetrics().density, 2f);   // a widget picture is small; the launcher refuses an update that carries too many big ones
         int px = Math.max(16, Math.round(sizeDp * density));
         String key = px + "/" + Math.round(phase * 1000) + "/" + south + "/" + dark;
         Bitmap hit = cache.get(key);

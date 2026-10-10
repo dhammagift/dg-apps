@@ -25,9 +25,9 @@ final class WidgetPlan {
      * wide: also the 350 dp width (texts that appear only on a wide card).
      */
     static int[][] grid(boolean wide) {
-        int[] small = { 100, 125, 165, 205, 250, 330, 430, 540 };   // one or two columns wide (the sizeClass): the counter grows with the height
-        int[] medium = { 100, 125, 150, 185, 215 };                // wide and low (the short ones drop lines)
-        int[] large = { 240, 300, 370, 440, 510, 580 };            // wide and tall: more rows of the list
+        int[] small = { 100, 130, 170, 250, 400 };   // one or two columns wide (the sizeClass): the counter grows with the height
+        int[] medium = { 100, 130, 160, 200 };                // wide and low (the short ones drop lines)
+        int[] large = { 240, 330, 420, 520 };            // wide and tall: more rows of the list
         java.util.ArrayList<int[]> out = new java.util.ArrayList<>();
         for (int h : small) out.add(new int[] { 110, h });
         for (int w : wide ? new int[] { 230, 350 } : new int[] { 230 }) {

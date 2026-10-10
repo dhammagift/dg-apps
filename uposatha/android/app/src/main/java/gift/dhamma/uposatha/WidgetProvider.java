@@ -147,20 +147,24 @@ public class WidgetProvider extends AppWidgetProvider {
             long now = System.currentTimeMillis();
             WidgetModel model = WidgetModel.parse(data, now);
             int layer = model == null ? 0 : prefs(ctx).getInt("layer_" + id, 0) % WidgetViews.LAYERS;
-            RemoteViews rv;
             if (android.os.Build.VERSION.SDK_INT >= 31) {
                 // One RemoteViews per size of the grid; the launcher takes the largest that fits the widget's real size and reflows it.
-                boolean wide = model != null && (layer == 2 || (layer == 0 && model.detail));
-                ArrayMap<SizeF, RemoteViews> map = new ArrayMap<>();
-                for (int[] sz : WidgetPlan.grid(wide)) map.put(new SizeF(sz[0], sz[1]), WidgetViews.build(ctx, id, sz[0], sz[1], data, now, layer));
-                rv = new RemoteViews(map);
-                android.util.Log.i("DgWidget", "update " + id + ": " + map.size() + " sizes, moon pictures " + (WidgetViews.bitmapBytes >> 10) + " KB");
-                WidgetViews.bitmapBytes = 0;
-            } else {
-                int[] sz = sizes.get(0);
-                rv = WidgetViews.build(ctx, id, sz[0], sz[1], data, now, layer);
+                // Too much for the launcher (the update is refused: too many pictures, too big a transaction): then ONE view for the size the
+                // launcher reports - a widget that is a little less clever is better than a blank one.
+                try {
+                    boolean wide = model != null && (layer == 2 || (layer == 0 && model.detail));
+                    ArrayMap<SizeF, RemoteViews> map = new ArrayMap<>();
+                    WidgetViews.bitmapBytes = 0;
+                    for (int[] sz : WidgetPlan.grid(wide)) map.put(new SizeF(sz[0], sz[1]), WidgetViews.build(ctx, id, sz[0], sz[1], data, now, layer));
+                    android.util.Log.i("DgWidget", "update " + id + ": " + map.size() + " sizes, moon pictures " + (WidgetViews.bitmapBytes >> 10) + " KB");
+                    mgr.updateAppWidget(id, new RemoteViews(map));
+                    return;
+                } catch (RuntimeException e) {
+                    android.util.Log.w("DgWidget", "the grid of sizes was refused (" + (WidgetViews.bitmapBytes >> 10) + " KB of pictures), one size instead: " + e);
+                }
             }
-            mgr.updateAppWidget(id, rv);
+            int[] sz = sizes.get(0);
+            mgr.updateAppWidget(id, WidgetViews.build(ctx, id, sz[0], sz[1], data, now, layer));
         } catch (RuntimeException e) {
             android.util.Log.w("DgWidget", "update failed: " + e);
         }

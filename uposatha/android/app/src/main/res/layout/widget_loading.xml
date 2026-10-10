@@ -1,3 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Shown for the moment before the first real picture: the card only, nothing that could be taken for data. -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/widget_bg" />
+<!-- Shown for the moment before the first real picture: the card and the name, nothing that could be taken for data. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/widget_bg">
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="@string/widget_loading"
+        android:textColor="@color/w_text2"
+        android:textSize="13dp" />
+</FrameLayout>

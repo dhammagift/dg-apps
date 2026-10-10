@@ -949,9 +949,9 @@ jobs:
   #
   # A job of its own rather than more steps in `build`. That job exists to produce the offline
   # library — a dg-node checkout, a ~213MB database built on the runner, the TOC snapshot — and the
-  # dictionary app needs none of it: its UI IS the live site (capacitor.config.json's server.url),
-  # so there is no www/ to generate from dg-node and no database to build. Here it is `npm ci` plus
-  # the Gradle tasks, minutes instead of the better part of an hour.
+  # dictionary app needs none of it: its page is ddg-ui's static files, laid out from a shallow ddg-ui
+  # checkout (plus find on the page from dg-node), with no database to build. Here it is `npm ci`, two
+  # shallow checkouts and the Gradle tasks, minutes instead of the better part of an hour.
   #
   # versionCode comes from the run number, exactly as android-release above does it, and it must
   # climb past what the TWA last uploaded under this package id (2 — Play refuses a code it has
@@ -993,31 +993,40 @@ jobs:
         run: npm ci
 
       # The app bundles the dictionary's page (both languages): it opens with no network, and updates itself from
-      # the site when there is one. The page is taken from git, not off a running site (as Uposatha's is): ddg-ui
-      # at DDG_UI_REF (dict.dhamma.gift is its public/ served as static files) and dg-node at DG_NODE_REF (Find on
-      # the page). What is edited on the server and not committed no longer reaches an app. Fails the job when a
-      # file of the page is not in git.
-      - name: Checkout ddg-ui and dg-node (the dictionary's page)
+      # the site when there is one. The page is laid out from a ddg-ui checkout pinned by DICT_UI_REF (the site is
+      # its public/, static files), and Dhamma.Gift's find-on-page from the dg-node checkout pinned by DG_NODE_REF
+      # (dict/tools/bundle-from-repo.js) — no live site, no browser: it used to be crawled off dict.dhamma.gift, so a
+      # build shipped whatever production served that minute. Fails the job when a file a page references is missing.
+      - name: Resolve the ddg-ui and dg-node refs
+        id: pin
         run: |
-          fetch() {
-            mkdir -p "$RUNNER_TEMP/$1" && cd "$RUNNER_TEMP/$1"
-            git init -q
-            git remote add origin "https://github.com/dhammagift/$1.git"
-            git fetch --depth 1 origin "$2" -q
-            git checkout -q FETCH_HEAD
-            echo "$1@$2 = $(git rev-parse HEAD)"
-            cd "$GITHUB_WORKSPACE"
-          }
-          DDG="$(tr -d '[:space:]' < DDG_UI_REF)"
-          DGN="${{ inputs.dg_node_ref }}"
-          if [ -z "$DGN" ]; then DGN="$(tr -d '[:space:]' < DG_NODE_REF)"; fi
-          if [ -z "$DDG" ] || [ -z "$DGN" ]; then echo "::error::DDG_UI_REF or DG_NODE_REF is empty"; exit 1; fi
-          fetch ddg-ui "$DDG"
-          fetch dg-node "$DGN"
+          UI="$(tr -d '[:space:]' < DICT_UI_REF)"
+          if [ -z "$UI" ]; then echo "::error::DICT_UI_REF is empty"; exit 1; fi
+          REF="${{ inputs.dg_node_ref }}"
+          if [ -z "$REF" ]; then REF="$(tr -d '[:space:]' < DG_NODE_REF)"; fi
+          if [ -z "$REF" ]; then echo "::error::DG_NODE_REF is empty and no dg_node_ref input given"; exit 1; fi
+          echo "ui=$UI" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
 
-      - name: Lay the dictionary's page out from ddg-ui and dg-node
+      - name: Checkout ddg-ui (the dictionary's page) and dg-node (find on the page)
+        run: |
+          for pair in "ddg-ui ${{ steps.pin.outputs.ui }}" "dg-node ${{ steps.pin.outputs.ref }}"; do
+            set -- $pair
+            mkdir -p "$RUNNER_TEMP/$1"
+            git -C "$RUNNER_TEMP/$1" init -q
+            git -C "$RUNNER_TEMP/$1" remote add origin "https://github.com/dhammagift/$1.git"
+            git -C "$RUNNER_TEMP/$1" fetch --depth 1 origin "$2" -q
+            git -C "$RUNNER_TEMP/$1" checkout -q FETCH_HEAD
+            echo "$1@$2 = $(git -C "$RUNNER_TEMP/$1" rev-parse HEAD)"
+          done
+
+      - name: Lay the dictionary's page out from ddg-ui
         working-directory: dict
         run: node tools/bundle-from-repo.js "$RUNNER_TEMP/ddg-ui" "$RUNNER_TEMP/dg-node"
+
+      # Every file the two pages and their stylesheets reference is in the bundle, and a missing one fails the build.
+      - name: Bundle checks (references, size)
+        run: node dict/test/bundle-files.js "$RUNNER_TEMP/ddg-ui" "$RUNNER_TEMP/dg-node"
 
       # src/ -> www/ -> android/app/src/main/assets/public: the bundled page, dict-bridge.js and the
       # offline page where MainActivity and Capacitor read them from. Not optional: the asset sync is what
@@ -1173,6 +1182,11 @@ jobs:
       - name: Lay the calendar page out from dg-node
         working-directory: uposatha
         run: node tools/bundle-from-repo.js "$RUNNER_TEMP/dg-node"
+
+      # The list of files is dg-node's own (scripts/uposatha-files.js reads the page, its css and its scripts); this checks,
+      # from the bundle itself, that every file the page and its stylesheets reference is there, and that it stays small.
+      - name: Bundle checks (references, size)
+        run: node uposatha/test/bundle-files.js "$RUNNER_TEMP/dg-node"
 
       # The edge-to-edge check below drives the bundled page in a real browser; the snapshot step that
       # used to install it is gone.

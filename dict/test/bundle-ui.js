@@ -3,7 +3,7 @@
 // real bridge and every request to anywhere else refused. And that the updater hands DgSite exactly the file
 // the site changed. What the app's native proxy does for a word's page (Java, DgSitePlugin) cannot run here.
 //
-//   (cd dict && SITE=... node tools/snapshot.js && node build.js) first, then:  node dict/test/bundle-ui.js
+//   (cd dict && node tools/bundle-from-repo.js <ddg-ui dir> <dg-node dir> && node build.js) first, then:  node dict/test/bundle-ui.js
 const fs = require('fs');
 const path = require('path');
 const http = require('http');

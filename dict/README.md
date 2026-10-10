@@ -10,10 +10,19 @@ A thin shell. `capacitor.config.json` sets `server.url` to `https://dict.dhamma.
 IS the app's interface — the same UI a browser gets, with no second copy to keep in step. What the
 app adds is only what a web page cannot do.
 
-The home page (both languages) is bundled so the app opens with no network: the build lays it out from
-git — ddg-ui at `DDG_UI_REF` and dg-node at `DG_NODE_REF` (`tools/bundle-from-repo.js`, list in
-`tools/page-files.json`), not off the live site. A word's own page still comes from the site; the
-dictionary's full offline mode is a separate, much larger project (see ddg-ui#7).
+The page itself (both languages, and everything it loads) IS bundled, so the app opens with no network:
+`tools/bundle-from-repo.js` lays it out in `snapshot/` from a ddg-ui checkout pinned by `DICT_UI_REF`
+at the repository root (the site is ddg-ui's `public/`, static files Apache serves as they are, so a
+bundled file is the repository's own file), and `build.js` turns `snapshot/` into `www/` plus
+`site-manifest.json` (paths and SHA-256, which `src/site-updater.js` compares the site against). What
+goes in is what the two pages reference: their src/href, the stylesheets' url(), the scripts' `static/...`
+strings; `/ru/static/` (a symlink to `../static` in ddg-ui) is copied as real files. Find on the page is
+Dhamma.Gift's own and comes from the dg-node checkout pinned by `DG_NODE_REF` (`tools/extra/` holds the
+one icon dg-node does not keep in git). A word's page and the dictionary's data still come from the site;
+the full offline mode is a separate, much larger project (see ddg-ui#7).
+
+Until 2026-10 the page was crawled off the live site with a browser at build time (`tools/snapshot.js`):
+a build shipped whatever production served that minute, and what the crawl did not click was not in it.
 
 ## Why Capacitor and not the TWA
 
@@ -35,9 +44,12 @@ lookup history into the long-press menu.
 | Path | Committed | What it is |
 |---|---|---|
 | `src/` | yes | The app's own web sources: `dict-bridge.js` (see below) and the no-connection `index.html`. |
-| `www/` | no (build output) | `src/` copied here by `build.js`; `cap sync` packages it into the APK. |
+| `tools/bundle-from-repo.js` | yes | ddg-ui checkout -> `snapshot/` (the page, both languages, and what it loads). |
+| `snapshot/` | no (build output) | The bundled page, laid out as the site serves it. |
+| `www/` | no (build output) | `snapshot/` and `src/` copied here by `build.js`; `cap sync` packages it into the APK. |
 | `android/` | yes | The Capacitor Android project: `MainActivity`, `DgShortcutsPlugin`, `DgDictTileService`, the manifest, `res/xml/shortcuts.xml`, the icons carried over from the TWA. |
 | `test/bridge-ui.js` | yes | Browser check for the injected rows (see below). |
+| `test/bundle-files.js` | yes | Every file the pages and their stylesheets reference is in the bundle; a missing one fails the build. |
 
 ## App-only UI
 
@@ -129,7 +141,9 @@ Needs JDK 21 (Capacitor 8 / AGP 8.13) and the Android SDK.
 
 ```bash
 npm install
-npm run sync-android                      # src/ -> www/ -> android/.../assets/public
+node tools/bundle-from-repo.js ../../ddg-ui ../../dg-node   # ddg-ui at DICT_UI_REF, dg-node at DG_NODE_REF -> snapshot/
+node test/bundle-files.js ../../ddg-ui ../../dg-node
+npm run sync-android                      # snapshot/ + src/ -> www/ -> android/.../assets/public
 cd android
 JAVA_HOME=/path/to/jdk-21 ./gradlew assembleDebug      # adb install app-debug.apk
 JAVA_HOME=/path/to/jdk-21 ./gradlew assembleRelease    # unsigned unless ANDROID_KEYSTORE_* is set
@@ -159,10 +173,10 @@ launcher, so the APK itself still needs a real device.
 
 Two jobs in `.github/workflows/build-app.yml`, deliberately separate from Dhamma.Gift's `build`
 job: that one exists to produce the offline library (a dg-node checkout, a ~213MB database built on
-the runner, the TOC snapshot) and none of it is needed here — the dictionary's UI is the live site,
-so there is no `www/` to generate.
+the runner, the TOC snapshot) and none of it is needed here: `www/` is ddg-ui's page laid out from a
+shallow checkout (`DICT_UI_REF`) plus find on the page from dg-node (`DG_NODE_REF`).
 
-- **`dict-build`** — `npm ci`, `npm run sync-android`, then the Gradle tasks. Runs on every tag and
+- **`dict-build`** — `npm ci`, the two checkouts, `tools/bundle-from-repo.js` and `test/bundle-files.js`, `npm run sync-android`, then the Gradle tasks. Runs on every tag and
   on every manual run. Uploads three artifacts: `dg-dict-apk-<run>` (debug, installable straight
   away), `dg-dict-apk-release-<run>` and `dg-dict-aab-release-<run>`. `versionCode` is the run
   number (`-PdgVersionCode`), like Dhamma.Gift — it must only ever climb, and the TWA last

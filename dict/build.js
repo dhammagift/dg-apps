@@ -37,8 +37,8 @@ function errorPageSource() {
 }
 module.exports = { bridgeSource, errorPageSource };
 
-// The snapshot of the dictionary's page (tools/bundle-from-repo.js: the page in both languages and everything it
-// loads, laid out from ddg-ui and dg-node as the site serves it) is what the app opens with no network at all: it becomes www/ (the page
+// The snapshot of the dictionary's page (tools/bundle-from-repo.js: the page in both languages and everything it loads,
+// laid out as the site serves it) is what the app opens with no network at all: it becomes www/ (the page
 // itself is www/index.html and www/ru/index.html), with a manifest of what is in it (site-manifest.json: the
 // paths and their SHA-256) that the updater compares the site against.
 const crypto = require('crypto');

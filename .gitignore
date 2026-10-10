@@ -55,6 +55,6 @@ __pycache__/
 # of only inside a CI run's artifacts (the run keeps its own copy for 30 days).
 ios-screenshots/
 
-# The Uposatha app's snapshot of the calendar page (uposatha/tools/snapshot.js): fetched at build time.
+# The bundled pages of the Uposatha and Dictionary apps (tools/bundle-from-repo.js in each): laid out from dg-node / ddg-ui at build time.
 uposatha/snapshot/
 dict/snapshot/

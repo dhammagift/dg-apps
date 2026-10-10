@@ -120,11 +120,25 @@ or a decision someone has to make on purpose — which is the point of having th
 CI does exactly this — see `.github/workflows/build-app.yml`. Which dg-node commit it builds from
 is pinned in **`DG_NODE_REF`** (a branch name or tag); a `workflow_dispatch` run can override it.
 
+## The bundled-page apps (Uposatha, Dictionary)
+
+Both apps carry their page in the APK (it opens with no network) and refresh it from the site later
+(`src/site-updater.js`, by the SHA-256 list `site-manifest.json` that each `build.js` writes). The page is
+laid out from a pinned checkout, never crawled off a running site:
+
+| App | Source | Pinned by | Which files |
+|---|---|---|---|
+| Uposatha | dg-node | `DG_NODE_REF` | dg-node's `scripts/uposatha-files.js`: the page, its css url()s, its scripts' asset strings, resolved like dg-fastify.js |
+| Dictionary | ddg-ui (`public/`) | `DICT_UI_REF` | `dict/tools/bundle-from-repo.js`: what the two pages reference; find on the page from dg-node |
+
+`<app>/tools/bundle-from-repo.js` writes `<app>/snapshot/`, `<app>/test/bundle-files.js` fails when a referenced
+file is missing, and `<app>/tools/extra/` holds the few files the source repository does not keep in git.
+
 ## Known debt
 
 - **`build-assets.js`'s asset list is hand-maintained** — a new `<script>` on the site must be
-  added there too. Planned replacement: crawl a running dg-fastify.js and save every 200 response at
-  its own URL path. The page itself no longer has this problem (`build-page.js` generates it).
+  added there too. Planned replacement: generate it from the dg-node checkout, the way
+  `scripts/uposatha-files.js` lists the calendar's files (not a crawl of a running server). The page itself no longer has this problem (`build-page.js` generates it).
 - **Download on a real network** is what a phone release must still confirm: resume after a dropped
   connection and after the app is killed, then unpack (tested in Chromium by dg-node's
   `test/offline-resume.js`, both plain and gzip).

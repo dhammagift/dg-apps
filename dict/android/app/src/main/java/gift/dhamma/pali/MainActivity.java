@@ -33,7 +33,7 @@ import java.util.List;
  * The dictionary as a Capacitor app.
  *
  * The interface is the dictionary site's own page, bundled in the APK so the app opens with no network
- * (uposatha-style: dict/tools/snapshot.js takes it off the site at build time, DgSitePlugin keeps it up to
+ * (uposatha-style: dict/tools/bundle-from-repo.js lays it out from ddg-ui at build time, DgSitePlugin keeps it up to
  * date and answers for the site). It replaces the Trusted Web Activity, whose container was the problem.
  * What changed is the container. A TWA runs inside Chrome's Custom Tab, which is why the owner's
  * two reports existed at all — "не работает стандалон" (a Custom Tab still shows Chrome's own

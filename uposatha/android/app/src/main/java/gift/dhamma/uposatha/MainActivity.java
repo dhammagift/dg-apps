@@ -29,7 +29,7 @@ import java.util.HashSet;
  * The Uposatha calendar as a Capacitor app.
  *
  * The page is the site's own calendar page, bundled in the APK: www/ is a snapshot of it and of
- * everything it loads (uposatha/tools/snapshot.js, taken at build time), so the app opens with no network
+ * everything it loads (uposatha/tools/bundle-from-repo.js, from dg-node at build time), so the app opens with no network
  * at all. When the phone is online the bridge fetches what the site has changed since and DgSitePlugin
  * serves those files in place of the bundled ones. What this file adds is the part a web page cannot do:
  *

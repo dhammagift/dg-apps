@@ -242,9 +242,9 @@ final class WidgetRenderer {
         // ---- frame, dots, labels
 
         void card() {
+            // The card itself is the layout's background (res/drawable/widget_bg): a picture the launcher shows at another size is scaled evenly
+            // and its bars have the same colour. Only the style of the paint is set here.
             fill.setStyle(Paint.Style.FILL);
-            fill.setColor(th.surface);
-            c.drawRoundRect(0, 0, W, H, 22, 22, fill);
         }
 
         float padL() { return cls == LARGE ? 18 : cls == MEDIUM ? 16 : 14; }
@@ -311,11 +311,14 @@ final class WidgetRenderer {
             c.save();
             c.clipPath(disc);
             Paint tpnt = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+            // The photo is a grey disc; at list sizes it read as one more row of text. Brighter and a little whiter (more so the smaller it is).
+            float gain = d < 40 ? 1.55f : d < 70 ? 1.35f : 1.18f, lift = d < 40 ? 26 : 14;
+            tpnt.setColorFilter(new android.graphics.ColorMatrixColorFilter(new float[] { gain, 0, 0, 0, lift, 0, gain, 0, 0, lift, 0, 0, gain, 0, lift, 0, 0, 0, 1, 0 }));
             if (tex != null) c.drawBitmap(tex, null, new RectF(C - R - .6f, C - R - .6f, C + R + .6f, C + R + .6f), tpnt);
             else { fill.setColor(0xFF9A968E); c.drawCircle(C, C, R, fill); }
             // Edge darkening: transparent to 50 %, then a little, then 42 % black at the rim.
             Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
-            edge.setShader(new RadialGradient(C, C, R, new int[] { 0x00000000, 0x24000000, 0x6B000000 }, new float[] { .5f, .86f, 1f }, Shader.TileMode.CLAMP));
+            edge.setShader(new RadialGradient(C, C, R, d < 40 ? new int[] { 0x00000000, 0x10000000, 0x30000000 } : new int[] { 0x00000000, 0x24000000, 0x6B000000 }, new float[] { .5f, .86f, 1f }, Shader.TileMode.CLAMP));   // a small moon keeps its brightness to the rim
             c.drawCircle(C, C, R, edge);
             // The shade: a wide penumbra (blur 4.5, 50 %) under a sharp edge (blur 1.3, 80 %), navy 70 % + black.
             Path shade = PathParser.createPathFromPathData(shadePath(phase));

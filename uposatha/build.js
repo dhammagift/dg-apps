@@ -85,7 +85,9 @@ function bundleSnapshot() {
     for (const f of files) hashes[f] = crypto.createHash('sha256').update(fs.readFileSync(path.join(WWW, f))).digest('hex');
     // ids: the elements of the calendar page; a refresh from the site is applied only if the site's page has no element the bundled page lacks
     const ids = []; raw.replace(/\sid="([^"]+)"/g, (m, i) => { if (!ids.includes(i)) ids.push(i); return m; });
-    fs.writeFileSync(path.join(WWW, 'site-manifest.json'), JSON.stringify({ built: new Date().toISOString(), files, hashes, ids }));
+    // refs: the files the bundled page loads; a site whose page does not load one of them is OLDER than the bundle and must not overwrite it
+    const refs = []; raw.replace(/(?:src|href)="(\/assets\/[^"?]+)/g, (m, f) => { if (!refs.includes(f)) refs.push(f); return m; });
+    fs.writeFileSync(path.join(WWW, 'site-manifest.json'), JSON.stringify({ built: new Date().toISOString(), files, hashes, ids, refs }));
     return files.length;
 }
 

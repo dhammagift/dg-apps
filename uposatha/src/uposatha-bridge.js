@@ -89,6 +89,8 @@
         if (!html) return false;
         var site = pageIds(html), mine = {};
         manifest.ids.forEach(function (i) { mine[i] = 1; });
+        var older = (manifest.refs || []).filter(function (f) { return html.indexOf(f) < 0; });
+        if (older.length) { console.log('[dg-site] the site is older than the bundle (its page does not load ' + older[0] + '): no update'); return false; }
         for (var i in site) if (!mine[i]) { console.log('[dg-site] the site page has #' + i + ', the bundled one does not: no update'); return false; }
         return true;
       }).catch(function () { return false; });
@@ -104,12 +106,12 @@
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'up-check';
-    btn.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:4px 10px;border-radius:10px;border:1px solid currentColor;background:none;color:inherit;font:inherit;opacity:.85';
+    btn.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:6px 12px;border-radius:14px;border:1px solid var(--dg-border);background:none;color:var(--dg-text);font:inherit;font-size:.85rem';
     btn.innerHTML = '<svg viewBox="0 0 512 512" width="12" height="12" aria-hidden="true" style="flex:none"><path fill="currentColor" d="M65.9 228.5c13.3-93 93.4-164.5 190.1-164.5 53 0 101 21.5 135.8 56.2 .2 .2 .4 .4 .6 .6l7.6 7.2-47.9 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l128 0c17.7 0 32-14.3 32-32l0-128c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 53.4-11.3-10.7C390.5 28.6 326.5 0 256 0 127 0 20.3 95.4 2.6 219.5 .1 237 12.2 253.2 29.7 255.7s33.7-9.7 36.2-27.1zm443.5 64c2.5-17.5-9.7-33.7-27.1-36.2s-33.7 9.7-36.2 27.1c-13.3 93-93.4 164.5-190.1 164.5-53 0-101-21.5-135.8-56.2-.2-.2-.4-.4-.6-.6l-7.6-7.2 47.9 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 320c-8.5 0-16.7 3.4-22.7 9.5S-.1 343.7 0 352.3l1 127c.1 17.7 14.6 31.9 32.3 31.7S65.2 496.4 65 478.7l-.4-51.5 10.7 10.1c46.3 46.1 110.2 74.7 180.7 74.7 129 0 235.7-95.4 253.4-219.5z"/></svg>';
     btn.appendChild(document.createTextNode(ru ? 'проверить' : 'check'));
     var note = document.createElement('div');
     note.className = 'up-check-note';
-    note.style.cssText = 'font-size:12px;opacity:.7;padding:4px 4px 0;min-height:1em';
+    note.style.cssText = 'font-size:.85rem;color:var(--dg-text-muted);padding:0 0 8px;min-height:1em';
     row.appendChild(btn);
     row.parentNode.insertBefore(note, row.nextSibling);
     var busy = false;

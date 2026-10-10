@@ -59,7 +59,7 @@ function capacitorStub() {
             const changedBody = fs.readFileSync(path.join(WWW, changed), 'utf8') + '\n/* changed on the site */\n';
             await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => {
                 const u = new URL(route.request().url());
-                if (u.origin === 'https://dict.dhamma.gift') {
+                if (u.origin === 'https://dict.dhamma.gift' || u.origin === 'https://dhamma.gift') {   // find on the page's files come from dhamma.gift (urlFor in the bridge)
                     let p = u.pathname;
                     if (p.endsWith('/')) p += 'index.html';
                     if (p === changed) return route.fulfill({ status: 200, contentType: 'text/css', body: changedBody });

@@ -37,6 +37,14 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = widget ]; then
     adb shell am start -n "$PKG/.WidgetPreviewActivity" --ei w $1 --ei h $2 --es theme light --ei scenario 6 > "$OUT/start-pv-$1x$2.txt" 2>&1
     sleep 6
   done
+  # scenario 7 = the 2x2 without details, scenario 5 gave the one with details; both themes
+  for theme in light dark; do
+    adb shell cmd uimode night "$([ "$theme" = dark ] && echo yes || echo no)" > /dev/null 2>&1
+    adb shell am force-stop "$PKG"
+    adb shell am start -n "$PKG/.WidgetPreviewActivity" --ei w 170 --ei h 170 --es theme $theme --ei scenario 7 > "$OUT/start-lite-$theme.txt" 2>&1
+    sleep 6
+  done
+  adb shell cmd uimode night no > /dev/null 2>&1
   mkdir -p "$OUT/sheets" && adb pull /sdcard/Android/data/$PKG/files/widget-previews/. "$OUT/sheets" > /dev/null 2>&1
   ls "$OUT/sheets" | wc -l >> "$res"
   adb shell cmd uimode night no > /dev/null 2>&1

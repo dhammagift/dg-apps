@@ -15,7 +15,7 @@
         android:paddingTop="13dp"
         android:paddingRight="14dp"
         android:paddingBottom="26dp">
-        <!-- the moon first, as in the picker: the photo at the left, the label and the date beside it -->
+        <!-- the moon first: the photo at the left, the day ("15th day - coming / now") beside it (two lines when it is long) -->
         <LinearLayout
             android:orientation="horizontal"
             android:layout_width="match_parent"
@@ -35,44 +35,20 @@
                     android:scaleType="fitCenter"
                     android:alpha="@dimen/w_alpha_dark" />
             </FrameLayout>
-            <LinearLayout
-                android:orientation="vertical"
+            <TextView
+                android:id="@+id/lbl"
+                style="@style/W_Label"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginLeft="5dp">
-                <TextView
-                    android:id="@+id/lbl"
-                    style="@style/W_Label"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="12.5dp"
-                    android:letterSpacing="0"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="9dp"
-                    android:autoSizeMaxTextSize="12.5dp"
-                    android:autoSizeStepGranularity="0.5dp" />
-                <TextView
-                    android:id="@+id/dt"
-                    style="@style/W_T2"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="12dp"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="9dp"
-                    android:autoSizeMaxTextSize="12dp"
-                    android:autoSizeStepGranularity="0.5dp" />
-                <TextView
-                    android:id="@+id/dt2"
-                    style="@style/W_T2"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="11dp"
-                    android:autoSizeTextType="uniform"
-                    android:autoSizeMinTextSize="8dp"
-                    android:autoSizeMaxTextSize="11dp"
-                    android:autoSizeStepGranularity="0.5dp" />
-            </LinearLayout>
+                android:layout_marginLeft="5dp"
+                android:maxLines="2"
+                android:textSize="12.5dp"
+                android:letterSpacing="0"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="9dp"
+                android:autoSizeMaxTextSize="12.5dp"
+                android:autoSizeStepGranularity="0.5dp" />
         </LinearLayout>
         <LinearLayout
             android:orientation="vertical"
@@ -80,24 +56,66 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:gravity="center_vertical">
-                        <include
-                layout="@layout/w_counter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+            <!-- the counter at the left, the date and the time of the Uposatha at the right of it -->
+            <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="bottom">
+                <include
+                    layout="@layout/w_counter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <LinearLayout
+                    android:orientation="vertical"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginLeft="6dp"
+                    android:layout_marginBottom="4dp"
+                    android:gravity="end">
+                    <TextView
+                        android:id="@+id/dt"
+                        style="@style/W_S"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:maxLines="1"
+                        android:textSize="12dp"
+                        android:autoSizeTextType="uniform"
+                        android:autoSizeMinTextSize="8dp"
+                        android:autoSizeMaxTextSize="12dp"
+                        android:autoSizeStepGranularity="0.5dp" />
+                    <TextView
+                        android:id="@+id/sub"
+                        style="@style/W_T2"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:maxLines="1"
+                        android:textSize="11.5dp"
+                        android:autoSizeTextType="uniform"
+                        android:autoSizeMinTextSize="8dp"
+                        android:autoSizeMaxTextSize="11.5dp"
+                        android:autoSizeStepGranularity="0.5dp" />
+                </LinearLayout>
+            </LinearLayout>
+            <!-- "with details": what the moon is doing now, after the general part and before kala -->
             <TextView
-                android:id="@+id/sub"
+                android:id="@+id/dt2"
                 style="@style/W_T2"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="12.5dp"
+                android:layout_marginTop="3dp"
+                android:maxLines="1"
+                android:textSize="11.5dp"
                 android:autoSizeTextType="uniform"
-                android:autoSizeMinTextSize="9dp"
-                android:autoSizeMaxTextSize="12.5dp"
-                android:autoSizeStepGranularity="0.5dp"
-                android:layout_marginTop="2dp" />
+                android:autoSizeMinTextSize="8dp"
+                android:autoSizeMaxTextSize="11.5dp"
+                android:autoSizeStepGranularity="0.5dp" />
             <include
                 layout="@layout/w_kala"
-                android:layout_marginTop="7dp"
+                android:layout_marginTop="9dp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
         </LinearLayout>

@@ -121,6 +121,11 @@ final class WidgetViews {
         String ph = tx.ru() ? (waxing ? "растёт" : "убывает") : (waxing ? "waxing" : "waning");
         return ph + " · " + Math.round(lit * 100) + "% " + (tx.ru() ? "освещено" : "lit");
     }
+    /** "new moon · 3% lit": the phase of the Uposatha and how much of the moon is lit now. */
+    private String litLine(WidgetModel.Upo u) {
+        double lit = (1 - Math.cos(2 * Math.PI * m.moonNow)) / 2;
+        return phase(u) + " · " + Math.round(lit * 100) + "% " + (tx.ru() ? "освещено" : "lit");
+    }
     private String dayWord() { return tx.ru() ? "день" : "day"; }
 
     /** "через 8 д" / "in 8 d" for a later Uposatha. */
@@ -207,28 +212,21 @@ final class WidgetViews {
         if (cls != SMALL) text(R.id.to, to);   // the small card has no such line (its label says it)
         show(R.id.kala, false);
         if (cls == SMALL) {
-            String sub;
-            String startWd = wd(u.start.ymd), endWd = wd(u.end.ymd);
-            if (m.ongoing) {
-                sub = m.detail ? phase(u) + " · " + untilTime(u.end.hm)
-                        : tx.get("lite.until").replace("{endDay}", endWd).replace("{endTime}", u.end.hm).replace(", ", " ");
-            } else {
-                sub = m.detail ? phase(u) + " · " + startWd + " " + u.start.hm
-                        : tx.get("lite.from").replace("{startDay}", startWd).replace("{startTime}", u.start.hm).replace(", ", " ");
-            }
-            // The label is the day ("15th day - coming" / "15th day - now"), not the name of the app: nobody needs to be told that this is the
-            // Uposatha. A low 2x2 (the launcher's own cell is ~110 dp) drops lines in this order - kala, the second line - before the counter shrinks.
-            float av = avail(), big = hDp >= 240 ? (kalaOn ? 46 : 52) : kalaOn ? 36 : 42;   // a tall narrow widget gets a bigger counter
-            boolean kalaShow = kalaOn, subShow = true;
-            if (50 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) kalaShow = false;
-            if (50 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) subShow = false;
-            big = Math.max(24, Math.min(big, (av - 50 - (subShow ? 15 : 0) - (kalaShow ? 20 : 0)) / 1.2f));
+            // The small card: the day beside the moon, the counter with the date and the time of the Uposatha at its right, with details the
+            // moon line after them, kala at the bottom with a gap. A low 2x2 (the launcher's own cell is ~110 dp) drops the moon line first,
+            // then kala, before the counter shrinks.
+            String time = m.ongoing ? untilTime(u.end.hm) : tx.get("lite.from").replace("{startDay}, ", "").replace("{startTime}", u.start.hm);
+            float av = avail(), big = hDp >= 240 ? (kalaOn ? 46 : 52) : kalaOn ? (m.detail ? 32 : 36) : 42;   // a tall narrow widget gets a bigger counter
+            boolean moonShow = m.detail, kalaShow = kalaOn;
+            if (50 + 1.2f * big + (moonShow ? 15 : 0) + (kalaShow ? 26 : 0) > av) moonShow = false;
+            if (50 + 1.2f * big + (kalaShow ? 26 : 0) > av) kalaShow = false;
+            big = Math.max(24, Math.min(big, (av - 50 - (moonShow ? 15 : 0) - (kalaShow ? 26 : 0)) / 1.2f));
             text(R.id.lbl, ordinal(u.lunarDay) + " " + dayWord() + " · " + (m.ongoing ? tx.get("now") : tx.ru() ? "скоро" : "coming"));   // the day first: what the card is about
-            text(R.id.dt2, moonLine()); show(R.id.dt2, m.detail);   // "with details": what the moon is doing now
-            text(R.id.dt, m.ongoing ? tx.get("now") + " · " + dayLabel(m.today) : dateLabel(u.start.ymd));
-            text(R.id.sub, sub); show(R.id.sub, subShow);
+            text(R.id.dt, dateLabel(m.ongoing ? m.today : u.start.ymd));
+            text(R.id.sub, time);
+            text(R.id.dt2, litLine(u)); show(R.id.dt2, moonShow);
             counter(rem, big);
-            if (kalaShow) kalaLine(12, "");
+            if (kalaShow) kalaLine(13, "");
             moon(rv, R.id.moon_l, R.id.moon_d, 48, m.moonNow, m.south);   // the moon as it is now, as in the picker (the picture has room for the halo)
             return;
         }

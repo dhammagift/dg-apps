@@ -14,16 +14,23 @@
 //   node tools/asc-dev-certs.js prune     before the archive: revoke CI certificates older than 3 h
 //                                         (older runs; a parallel job keeps its own) and note the
 //                                         ones left in $ASC_KEY_PATH.seen
-//   node tools/asc-dev-certs.js cleanup   after the export: revoke CI certificates that were not
-//                                         there before — this job's own. (By id, not by date: Apple
-//                                         only gives the expiry, and creation = expiry − 1 year was
-//                                         ~10 min off, so run 383's own certificate survived.)
+//   node tools/asc-dev-certs.js cleanup   after the export: revoke this job's own certificate — one
+//                                         that was not there at prune time AND whose private key is
+//                                         in this runner's keychain. (By id, not by date: Apple only
+//                                         gives the expiry, and creation = expiry − 1 year was ~10 min
+//                                         off, so run 383's own certificate survived. And by keychain,
+//                                         not only by "new since prune": two signing jobs running at
+//                                         once — two manual runs, or a tag — each saw the other's new
+//                                         certificate as its own and revoked it mid-archive. A
+//                                         certificate this cannot match stays, and the next prune
+//                                         takes it once it is 3 h old.)
 //
 // Env: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH (the .p8). Never fails the job: a problem here is
 // printed as a warning and the archive either works anyway or fails with Apple's own message.
 'use strict';
 const crypto = require('crypto');
 const fs = require('fs');
+const { execFileSync } = require('child_process');
 
 const API = 'https://api.appstoreconnect.apple.com/v1';
 const YEAR_MS = 365 * 24 * 3600 * 1000;   // development certificates live one year
@@ -39,11 +46,22 @@ function token() {
     return head + '.' + body + '.' + b64url(sig);
 }
 
+// SHA-1 fingerprints of the signing identities in this runner's keychain (a private key is here only for
+// the certificate this job's archive created).
+function localIdentities() {
+    const out = execFileSync('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
+    return new Set((out.match(/\b[0-9A-F]{40}\b/g) || []));
+}
+
+const sha1 = (b64) => crypto.createHash('sha1').update(Buffer.from(b64 || '', 'base64')).digest('hex').toUpperCase();
+
 async function main() {
     const mode = process.argv[2];
     if (mode !== 'prune' && mode !== 'cleanup') throw new Error('usage: prune | cleanup');
     const seenFile = process.env.ASC_KEY_PATH + '.seen';
     const seen = mode === 'cleanup' ? JSON.parse(fs.readFileSync(seenFile, 'utf8')) : [];
+    const mine = mode === 'cleanup' ? localIdentities() : new Set();
+    if (mode === 'cleanup') console.log(`${mine.size} signing identit${mine.size === 1 ? 'y' : 'ies'} in this runner's keychain`);
     const left = [];
     const auth = { Authorization: 'Bearer ' + token() };
     const res = await fetch(API + '/certificates?filter[certificateType]=DEVELOPMENT,IOS_DEVELOPMENT&limit=200', { headers: auth });
@@ -55,7 +73,8 @@ async function main() {
         const label = a.name || a.displayName || '';
         const created = Date.parse(a.expirationDate) - YEAR_MS;
         const fromCi = /created via api/i.test(label + ' ' + (a.displayName || ''));
-        const revoke = fromCi && (mode === 'prune' ? now - created > KEEP_MS : !seen.includes(c.id));
+        const revoke = fromCi && (mode === 'prune' ? now - created > KEEP_MS
+            : !seen.includes(c.id) && mine.has(sha1(a.certificateContent)));
         if (!revoke) left.push(c.id);
         console.log(`${revoke ? 'revoke' : 'keep  '}  ${label}  (created ~${new Date(created).toISOString().slice(0, 16)})`);
         if (!revoke) continue;

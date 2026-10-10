@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The kala / vikala line in coloured pieces: the word and the time take the accent (green, or the vikala red: set by WidgetViews with a colour resource), the rest the text colours; the last piece is cut first when the line is long. -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="horizontal"
+    android:id="@+id/kala"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:baselineAligned="false">
+    <TextView
+        android:id="@+id/k_word"
+        style="@style/W_B"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="13dp" />
+    <TextView
+        android:id="@+id/k_mid"
+        style="@style/W_T"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="13dp" />
+    <TextView
+        android:id="@+id/k_time"
+        style="@style/W_S"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="13dp"
+        android:fontFeatureSettings="tnum" />
+    <TextView
+        android:id="@+id/k_extra"
+        style="@style/W_T2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textSize="13dp"
+        android:fontFeatureSettings="tnum"
+        android:layout_weight="1" />
+</LinearLayout>

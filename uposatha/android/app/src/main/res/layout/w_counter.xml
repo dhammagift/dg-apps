@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The big counter "1 d 7 h": digits big (size set per layout class), the unit small, aligned on the baseline. Included by layer 1. -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="horizontal"
+    android:id="@+id/cnt"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:gravity="bottom"
+    android:baselineAligned="true">
+    <TextView
+        android:id="@+id/c_dn"
+        style="@style/W_S"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="38dp"
+        android:fontFeatureSettings="tnum"
+        android:letterSpacing="-0.01" />
+    <TextView
+        android:id="@+id/c_du"
+        style="@style/W_T"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="16dp"
+        android:layout_marginLeft="3dp"
+        android:layout_marginRight="8dp" />
+    <TextView
+        android:id="@+id/c_hn"
+        style="@style/W_S"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="38dp"
+        android:fontFeatureSettings="tnum"
+        android:letterSpacing="-0.01" />
+    <TextView
+        android:id="@+id/c_hu"
+        style="@style/W_T"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="16dp"
+        android:layout_marginLeft="3dp" />
+</LinearLayout>

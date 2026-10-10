@@ -32,7 +32,8 @@ public class WidgetFlowTest {
     // The big moon of the Summary section (fractions of the screen), tuned on the first runs.
     private static final float MOON_X = 0.5f, MOON_Y = 0.23f;
     private static final Pattern DOTS = Pattern.compile(".*:id/w_dots_next");
-    private static final Pattern CELL = Pattern.compile(".*:id/c[0-9][0-9]");
+    private static final Pattern CELL = Pattern.compile(".*:id/c[0-6]");
+    private static final Pattern ROOT = Pattern.compile(".*:id/w_root");
 
     private UiDevice dev;
     private Context ctx;
@@ -78,6 +79,42 @@ public class WidgetFlowTest {
         });
         try { done.await(5, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
         return out[0];
+    }
+
+    /** Long-presses the widget, drags one edge handle of the launcher's resize frame by a fraction of the widget's size, leaves the resize mode. */
+    private void resize(String edge, float fx, float fy) {
+        UiObject2 w = dev.findObject(By.res(ROOT));
+        if (w == null) { Log.w(TAG, "no widget to resize"); return; }
+        Rect b = w.getVisibleBounds();
+        w.longClick();
+        sleep(2000);
+        UiObject2 h = dev.findObject(By.res(Pattern.compile(".*:id/widget_resize_" + edge + "_handle")));
+        Log.i(TAG, "resize " + edge + " handle " + h + " widget " + b);
+        if (h != null) {
+            android.graphics.Point c = h.getVisibleCenter();
+            h.drag(new android.graphics.Point(c.x + Math.round(b.width() * fx), c.y + Math.round(b.height() * fy)), 300);
+            sleep(2500);
+        } else dump("no-handle-" + edge);
+        UiObject2 w2 = dev.findObject(By.res(ROOT));
+        Log.i(TAG, "widget after resize: " + (w2 == null ? "gone" : w2.getVisibleBounds().toString()));
+        shot("resized-" + edge);
+        dev.pressBack();
+        sleep(2000);
+    }
+
+    /** The three layers of the widget as it is now: shot, tap the dots (next layer), three times. */
+    private void shootLayers(String tag) {
+        for (int i = 0; i < 3; i++) {
+            final int n = i;
+            step("layer-" + tag + "-" + n, () -> {
+                UiObject2 w = dev.findObject(By.res(ROOT));
+                Log.i(TAG, tag + " widget size " + (w == null ? "?" : w.getVisibleBounds().toString()));
+                sleep(800);
+            });
+            UiObject2 d = dev.findObject(By.res(DOTS));
+            if (d != null) d.click(); else Log.w(TAG, "no dots strip to tap");
+            sleep(2200);
+        }
     }
 
     @Test
@@ -193,36 +230,22 @@ public class WidgetFlowTest {
             });
         }
         dump("widget-month");
-        // The default 2x2 month layer has one tap area only: widen the widget (long press, drag the right handle) to get the day cells.
-        step("widget-resize", () -> {
-            UiObject2 w = dev.findObject(By.res(Pattern.compile(".*:id/w_tap")));
-            if (w == null) { Log.w(TAG, "no widget to resize"); return; }
-            Rect b = w.getVisibleBounds();
-            if (b.width() > dev.getDisplayWidth() * 0.6) { Log.i(TAG, "widget is wide already"); return; }
-            w.longClick();
-            sleep(2000);
-            dump("resize-frame");
-            // Launcher3/Pixel launcher: the resize frame has handles with ids widget_resize_*_handle. Without them (other launchers) skip.
-            UiObject2 h = dev.findObject(By.res(Pattern.compile(".*:id/widget_resize_right_handle")));
-            Log.i(TAG, "right handle: " + h);
-            if (h != null) {
-                h.drag(new android.graphics.Point(dev.getDisplayWidth() - 40, h.getVisibleCenter().y), 300);
-                sleep(2000);
-                UiObject2 w2 = dev.findObject(By.res(Pattern.compile(".*:id/w_tap")));
-                Log.i(TAG, "widget width after resize: " + (w2 == null ? -1 : w2.getVisibleBounds().width()) + " (was " + b.width() + ")");
-            }
-            shot("widget-resized");
-            dev.click(dev.getDisplayWidth() / 2, dev.getDisplayHeight() * 2 / 3);   // leave the resize mode
-            sleep(2500);
-        });
-        dump("widget-month-wide");
+        // The real launcher's resize handles: the widget (real views now) must reflow to every new size by itself. After each resize the three
+        // layers are shot at once (the dots cycle them), so a squeezed moon, clipped text or an empty bottom shows in the Test Lab pictures.
+        step("resize-shorter", () -> resize("bottom", 0, -0.40f));
+        shootLayers("short");
+        step("resize-narrower", () -> resize("right", -0.50f, 0));
+        shootLayers("narrow");
+        step("resize-wider-taller", () -> { resize("right", 0.60f, 0); resize("bottom", 0, 0.80f); });
+        shootLayers("tall");
+        dump("widget-month-tall");
         step("widget-day-tap", () -> {
             java.util.List<UiObject2> cells = dev.findObjects(By.res(CELL).clickable(true));
             Log.i(TAG, "day cells: " + cells.size());
             UiObject2 c = null;
             for (UiObject2 x : cells) if (x.getResourceName().endsWith("c22")) c = x;   // row 3, Wednesday
             if (c == null && !cells.isEmpty()) c = cells.get(cells.size() / 2);
-            if (c == null) c = dev.findObject(By.res(Pattern.compile(".*:id/w_tap")));   // 2x2: one tap area for the whole month layer
+            if (c == null) c = dev.findObject(By.res(ROOT));   // 2x2: one tap area for the whole month layer
             Log.i(TAG, "day cell: " + c + (c != null ? " " + c.getVisibleBounds() : ""));
             if (c != null) c.click();
             dev.wait(Until.hasObject(By.pkg(PKG).depth(0)), 8000);

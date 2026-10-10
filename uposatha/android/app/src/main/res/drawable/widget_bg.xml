@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The card behind the widget's picture. It is NOT part of the picture: a picture shown at another size than it was drawn for (the
-     launcher resizes before the new picture is ready) is only scaled evenly (fitCenter) and the bars at its sides are this same colour. -->
+<!-- The card behind the widget (the launcher resizes it itself; the colour follows the system theme through @color/w_surface). -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#FFFFFF" />
+    <solid android:color="@color/w_surface" />
     <corners android:radius="22dp" />
 </shape>

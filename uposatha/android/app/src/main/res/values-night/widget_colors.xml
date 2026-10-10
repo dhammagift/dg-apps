@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="w_surface">#191919</color>
+    <color name="w_text">#DDDDDD</color>
+    <color name="w_text2">#A8A8A8</color>
+    <color name="w_muted">#7C7C7C</color>
+    <color name="w_accent">#136857</color>
+    <color name="w_accent_ink">#09967A</color>
+    <color name="w_border">#2C2C2C</color>
+    <color name="w_border_strong">#3B3B3B</color>
+    <color name="w_navy_ink">#A9C4DC</color>
+    <color name="w_vik">#D8546B</color>
+    <color name="w_on_accent">#FFFFFF</color>
+    <color name="w_part_day">#172F2A</color>
+    <color name="w_part_night">#444C54</color>
+    <color name="w_plate">#393F44</color>
+    <color name="w_band">#17312C</color>
+    <item name="w_alpha_light" format="float" type="dimen">0</item>
+    <item name="w_alpha_dark" format="float" type="dimen">1</item>
+</resources>

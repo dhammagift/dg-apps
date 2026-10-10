@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A row of layer 1's "Next" table: moon, date, day, "in 8 d" (columns by weight, so they line up in every row). Added by WidgetViews with RemoteViews.addView. -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="horizontal"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:gravity="center_vertical"
+    android:baselineAligned="false">
+    <FrameLayout android:layout_width="32dp" android:layout_height="match_parent">
+        <ImageView
+            android:id="@+id/r_moon_l"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:alpha="@dimen/w_alpha_light" />
+        <ImageView
+            android:id="@+id/r_moon_d"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:alpha="@dimen/w_alpha_dark" />
+    </FrameLayout>
+    <TextView
+        android:id="@+id/r_date"
+        style="@style/W_S"
+        android:layout_width="104dp"
+        android:layout_height="wrap_content"
+        android:textSize="16dp"
+        android:fontFeatureSettings="tnum"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="12dp"
+        android:autoSizeMaxTextSize="16dp"
+        android:autoSizeStepGranularity="0.5dp"
+        android:layout_marginLeft="8dp" />
+    <TextView
+        android:id="@+id/r_day"
+        style="@style/W_T2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textSize="16dp"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="11dp"
+        android:autoSizeMaxTextSize="16dp"
+        android:autoSizeStepGranularity="0.5dp"
+        android:layout_weight="1"
+        android:layout_marginLeft="4dp" />
+    <TextView
+        android:id="@+id/r_in"
+        style="@style/W_TM"
+        android:layout_width="76dp"
+        android:layout_height="wrap_content"
+        android:textSize="14dp"
+        android:fontFeatureSettings="tnum"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="10dp"
+        android:autoSizeMaxTextSize="14dp"
+        android:autoSizeStepGranularity="0.5dp"
+        android:gravity="end|center_vertical" />
+</LinearLayout>

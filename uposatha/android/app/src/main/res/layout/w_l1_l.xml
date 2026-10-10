@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Layer 1 (Uposatha + kala), large 4x4: hero, kala line, the table of the next Uposathas (rows are added with addView and share the height). -->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg">
+    <LinearLayout
+        android:orientation="vertical"
+        android:id="@+id/w_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingLeft="18dp"
+        android:paddingTop="18dp"
+        android:paddingRight="18dp"
+        android:paddingBottom="30dp">
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical">
+            <TextView
+                android:id="@+id/lbl"
+                style="@style/W_Label"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:textSize="12.5dp"
+                android:autoSizeTextType="uniform"
+                android:autoSizeMinTextSize="10dp"
+                android:autoSizeMaxTextSize="12.5dp"
+                android:autoSizeStepGranularity="0.5dp"
+                android:layout_weight="1" />
+            <TextView
+                android:id="@+id/mode"
+                style="@style/W_SM"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13.5dp"
+                android:letterSpacing="0.04"
+                android:layout_marginLeft="8dp" />
+        </LinearLayout>
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+            <LinearLayout
+                android:orientation="vertical"
+                android:layout_width="0dp"
+                android:layout_weight="1.25"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:layout_marginRight="10dp">
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
+                    <ImageView
+                        android:id="@+id/moon_l"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="fitCenter"
+                        android:alpha="@dimen/w_alpha_light" />
+                    <ImageView
+                        android:id="@+id/moon_d"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="fitCenter"
+                        android:alpha="@dimen/w_alpha_dark" />
+                </FrameLayout>
+            </LinearLayout>
+            <LinearLayout
+                android:orientation="vertical"
+                android:layout_width="0dp"
+                android:layout_weight="2.6"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+                <TextView
+                    android:id="@+id/to"
+                    style="@style/W_S2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="15dp"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="11dp"
+                    android:autoSizeMaxTextSize="15dp"
+                    android:autoSizeStepGranularity="0.5dp" />
+                <include
+                    layout="@layout/w_counter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <TextView
+                    android:id="@+id/l1"
+                    style="@style/W_S"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="15dp"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="11dp"
+                    android:autoSizeMaxTextSize="15dp"
+                    android:autoSizeStepGranularity="0.5dp"
+                    android:layout_marginTop="4dp" />
+                <TextView
+                    android:id="@+id/l2"
+                    style="@style/W_T2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="13.5dp"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="10dp"
+                    android:autoSizeMaxTextSize="13.5dp"
+                    android:autoSizeStepGranularity="0.5dp"
+                    android:layout_marginTop="3dp" />
+            </LinearLayout>
+        </LinearLayout>
+        <include
+            layout="@layout/w_kala"
+            android:layout_marginTop="10dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/w_border"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
+            android:id="@+id/div" />
+        <TextView
+            android:id="@+id/next"
+            style="@style/W_SM"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12.5dp"
+            android:letterSpacing="0.1" />
+        <LinearLayout
+            android:orientation="vertical"
+            android:id="@+id/list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="8dp" />
+    </LinearLayout>
+    <include
+        layout="@layout/w_dots"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom" />
+</FrameLayout>

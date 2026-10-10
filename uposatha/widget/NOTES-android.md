@@ -1,5 +1,7 @@
 # Android widget: what was built (uposatha/android)
 
+> The picture pipeline described in "Files" and "Decisions" below (WidgetRenderer, widget_images, w_img_*, Lato in assets) was REPLACED by real views, see the last section "Native views rewrite". What still holds from the old text: the data flow, the plan/alarms, the size lists, the texts, the Uposatha cell colouring rules.
+
 Package `gift.dhamma.uposatha`. Not committed, no CI. Builds: `:app:assembleDebug` and `:app:assembleRelease` both green, `:app:testDebugUnitTest` green.
 APKs: `uposatha/android/app/build/outputs/apk/debug/app-debug.apk` (9.6 MB), `.../release/app-release-unsigned.apk` (6.2 MB).
 
@@ -42,3 +44,39 @@ Backups: `~/claudeBak/uposatha-MainActivity.java`, `uposatha-AndroidManifest.xml
 - `previewLayout`/`previewImage` are a simple static card (not a render of the real thing).
 - Month day tap on an Uposatha day opens `&day=` only (the page decides about "details"); the page must read `?day=`.
 - The data must come from `window.__upoWidgetData()` as in WIDGET.md; `aruna` is used for kala/vikala (falls back to sunrise if missing).
+
+
+## Native views rewrite (2026-10-10)
+
+Why: the widget was one bitmap per size drawn by `WidgetRenderer` (Canvas). On a resize the launcher stretched the old picture (squeezed moon, squeezed text) until the new one arrived. Now everything is real views, which the launcher reflows to ANY size by itself; only the moon is a picture (and a square one, `fitCenter`, so it can never be distorted).
+
+### What changed
+- Deleted: `WidgetRenderer.java` (Painter, fonts from assets), `layout/widget_{s,m,l}.xml`, `widget_images.xml` (+ `layout-night`), `widget_grid.xml`, `w_img_*`, `values/widget_dimens.xml`, `assets/widget/lato-*.ttf`, `drawable-night/widget_bg.xml`, the old Robolectric `WidgetRenderTest`/`sheet.py`.
+- New code (`java/gift/dhamma/uposatha/`): `WidgetViews` (builds the RemoteViews: texts, which rows exist, taps), `WidgetMoon` (the moon bitmap: photo + shade + rim, halo in the dark theme, square, disc = 80 % of the side for the halo), `WidgetPlan` (pure decisions: size class, rows that fit, cell shape, day-bar numbers; JVM-tested in `WidgetPlanTest`). `WidgetProvider` keeps the plan/alarms/CYCLE/size lists and calls `WidgetViews.build(...)` for every size of `OPTION_APPWIDGET_SIZES` (own decisions per size).
+- Layouts (`res/layout/w_*.xml`, generated once, now plain XML): `w_l{1,2,3}_{s,m,l}` = layer x size class (9), `w_ph_{s,h}` (placeholder), includes `w_dots`, `w_counter`, `w_kala`, `w_daybar`, rows added with `RemoteViews.addView`: `w_row_next`, `w_row_upo`, `w_row_upo_s`, `w_row_part(_cur)`, `w_row_div`, `w_row_month_{s,st,m,l}` (a week of 7 cells). Allowed classes only (FrameLayout, LinearLayout, TextView, ImageView, ProgressBar).
+- Resources: `values{,-night}/widget_colors.xml` (exact `Theme.th.*` values + the mixes), `values/widget_styles.xml`, `res/font/lato_{regular,semibold,bold}.ttf` (referenced directly with `android:fontFamily`), `drawable/w_cell_*` (month cells: solid/band x round/square-left/square-right/square, + today ring), `w_bar_*` (day bar), `w_dot_*`, `w_chev_*`, `w_plate`, `widget_bg` (now `@color/w_surface`).
+- Size class changed: width < 200 dp = small (a 2- or 1-column widget, any height), else height >= 240 dp = large, else medium (so 3x2 and a 3x3 get the medium/large layouts instead of a cramped small one).
+
+### Decisions
+- Geometry is weights; `WidgetViews` only decides WHAT exists for the height the launcher reports (`avail()`): which detail lines/rows are shown (next Uposathas 1..6 rows of >= 33 dp, parts 6 or the 3 of the current half, month list rows, "today" block, ticks), and the counter's size. Rows from `addView` share the height (weight 1), so a tall widget gets taller rows, not an empty bottom (except a narrow tall small one, see below).
+- Text sizes are dp (as before, not sp: the font scale does not enter; lines that can be long are `autoSizeText` single-line with an ellipsis as the last resort). Lato works in RemoteViews (checked on the Test Lab emulator, real home screen): the fonts are app resources, inflated in the launcher with the app's resources.
+- Colours: text colours of dynamic things (kala green / vikala red, month cell text) go through `RemoteViews.setColor(id, "setTextColor", @ColorRes)` (API 31+), which the launcher resolves itself, so the system light/dark switch needs no update. Below API 31 the colour of the moment is used (a theme switch shows after the next update). Backgrounds (`setBackgroundResource`) and all static colours are resolved by the launcher. The kala line is therefore 4 TextViews (word, middle, time, "left"), not one span string (spans would be frozen in one theme).
+- The moon: two bitmaps (light, with halo-less rim; dark, with halo) in two stacked ImageViews whose `android:alpha` is `@dimen/w_alpha_light/dark` (1/0 in `values`, 0/1 in `values-night`): the theme picks the visible one, no layout-night duplicates. Moon sizes: hero 96 (medium) / 112 (large) dp, list 28-32 dp, at the screen's density (cap 3).
+- Day bar (no weights are settable on a RemoteViews at run time): six stacked ProgressBars `bar0..5` (bar k = filled from the left to the END of part k, as a share of the day, `setProgressBar`), the later ones lie over the earlier, so each part shows with its own proportional width; the 2 dp gap is the last 2 dp of each bar's drawable (`ScaleDrawable` so it moves with the level). The current part swaps its bar for `barc k` (solid accent). `bar_now` = the 2 dp "now" mark. All proportional to any width.
+- Month: a week = a `RemoteViews` row of 7 cells (`c0..c6`, each its own `PendingIntent` to the calendar on that day), added with `addView`; weeks share the height; the pill is the cell's background drawable (max height 17/20/36 dp, centred). Week start from `WidgetModel.weekStart`.
+- Not done: the "N h M min left" line is text refreshed by the existing 15 minute plan (a Chronometer cannot show "1 h 34 min" with the unit words).
+- A fixed-width date column (92-104 dp) in the tables, the day / "in N d" columns take the rest (at < 340 dp the word "day" and the phase name are dropped from rows).
+
+### How to test
+- Build: `export QEMU_LD_PREFIX=/usr/x86_64-linux-gnu ANDROID_HOME=/opt/android-sdk JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64; cd uposatha && node build.js && npx cap sync android && cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --no-daemon -q`.
+- On a device: debug `WidgetPreviewActivity` (`adb shell am start -n gift.dhamma.uposatha/.WidgetPreviewActivity`, extras `--ei w 360 --ei h 430 --es theme dark --ei layer 1 --ei scenario 2`): the REAL RemoteViews (`WidgetViews.build` -> `RemoteViews.apply`, as a launcher does) in frames of fixed dp sizes (160x160, 130x110, 170x340, 250x110, 360x150, 360x300, 300x430, 360x430, 360x520), light and dark (a night configuration context), 6 scenarios; PNGs in `.../files/widget-previews/`.
+- Test Lab (virtual, e.g. `MediumPhone.arm` API 34): `androidTest` has two tests in one run: `WidgetSheetTest` (the same frames as PNGs `sheet-*.png`, no launcher needed) and `WidgetFlowTest` (the real pinned widget on the launcher: layers, the launcher's resize handles - shorter, narrower, wider + taller - with all three layers shot after each resize, day tap). Command in `NOTES-testlab.md`; pull `/sdcard/Android/data/gift.dhamma.uposatha/files/shots`.
+- Without a phone: `widget/android-render/` (`WidgetRoboTest.java.txt`, `init.gradle.txt`, `run.sh.txt`): Robolectric (native graphics) renders the same sheets locally; it needs the x86_64 JDK 21 under qemu (see the old notes above) and is not in the build (an init script adds robolectric and a source dir). `WIDGET_ONLY='sheet-s1-L2-.*-dark'` filters; ~10 s a picture. It matched the emulator in every layer (fonts too).
+- Unit tests: `WidgetFormatTest`, `WidgetPlanTest`.
+
+### Known gaps
+- A narrow TALL small widget (2x4: < 200 x 400 dp) is only filled for the month layer (the whole month); layers 1 and 2 keep their stack centred, so there is empty space above and below (a bigger moon would need `setViewLayoutWidth`, API 31+).
+- Month cell rows get thin on a 4x2 of ~110 dp (6 weeks in 80 dp); text stays readable, the pill is 13-15 dp.
+- Below API 31 text colours do not follow a theme switch until the next update (<= 15 min).
+- Tested on the emulator launcher only (Pixel launcher): real Motorola / Samsung launchers may report other size lists; the layouts do not depend on exact sizes.
+- Verification status: ONE Test Lab virtual run (MediumPhone.arm API 34, dark; `gs://test-lab-nr56tiywzh2yc-kz084y8hszdu6/2026-10-10_03:45:45.303463_VKRj/`): the real pinned widget on the Pixel launcher, all three layers, resized shorter / narrower / wider+taller with the launcher's handles (nothing stretched, text stays text), plus 238 `sheet-*.png`. The second run was refused (TEST_QUOTA_EXCEEDED, shared daily quota). The later changes (low 2x2 / 4x2 degradation, narrower dots strip, smaller numbers on a low month grid, size class < 200 dp) were checked only with the local Robolectric sheets (same output as the emulator in the earlier comparison), not on the launcher.

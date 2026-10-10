@@ -66,9 +66,20 @@
         if (window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android') return prepareAndroid(D, fresh);
         return Promise.resolve(fresh ? null : D.existing()).then(function (onDisk) {
             if (onDisk && onDisk.path) return true;
-            return Promise.resolve(D.start({ url: REMOTE_BASE + '/' + ARCHIVE }))
-                .then(function (file) { return !!(file && file.path); });
+            // The manifest's sha256 (of the unpacked database): the plugin checks it before the file replaces the library,
+            // as Android's service does.
+            return readManifest().then(function (m) {
+                return D.start({ url: REMOTE_BASE + '/' + ARCHIVE, sha256: (m && m.sha256) || '' });
+            }).then(function (file) { return !!(file && file.path); });
         }).catch(function () { return false; });   // refused, offline, plugin unhappy: the worker's own path
+    }
+
+    // The card's x (dg-node app.js, dgCancelOfflineDownload): the native transfer stops and drops its partial file, and the
+    // waiting start() is refused - app.js then imports nothing.
+    function cancelArchive() {
+        var D = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DgDownload;
+        if (!D || typeof D.cancel !== 'function') return Promise.resolve(false);
+        return Promise.resolve(D.cancel()).then(function () { return true; }, function () { return false; });
     }
 
     // Android: DgDownloadPlugin.java downloads the archive and the manifest in a foreground service into the app's files
@@ -80,9 +91,8 @@
     function prepareAndroid(D, fresh) {
         if (!androidProgressWired && typeof D.addListener === 'function') {
             androidProgressWired = true;
-            D.addListener('progress', function (e) {
-                window.dispatchEvent(new CustomEvent('dg:dl-progress', { detail: { loaded: e.loaded, total: e.total, phase: 'download' } }));
-            });
+            // The plugin's "progress" events reach the page through native-bridge.js (bridgeNativeDownloadProgress): a
+            // second listener here made every event two, and the card redrew twice as often.
             // The archive is only needed until the worker has imported it: the finished download frees ~200 MB.
             window.addEventListener('dg:dl-progress', function (e) {
                 if (e.detail && e.detail.done && typeof D.clear === 'function') { try { D.clear(); } catch (x) { /* nothing to clear */ } }
@@ -103,6 +113,7 @@
         distBase: window.DG_DIST_BASE || REMOTE_BASE,
         onlineBase: ONLINE_ORIGIN,
         prepareArchive: prepareArchive,
+        cancelArchive: cancelArchive,
         // Set by the iOS shell (DgSharedLibrary.userScript): SQL runs natively at this path on the
         // page's own origin, and db-worker.js takes its native branch. Undefined on Android.
         nativeSql: window.DG_NATIVE_SQL || null,

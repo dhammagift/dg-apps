@@ -94,13 +94,15 @@ public class DgProgressPlugin extends Plugin {
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, built);
             // Claim the foreground slot with the same notification, so the WebView process is not
-            // treated as idle while 509MB are still crossing the connection. Starting it on every
-            // update is harmless (onStartCommand just re-posts) and means no separate "download
-            // started" signal is needed from the page — the first progress event is that signal.
-            Intent service = new Intent(context, DgDownloadService.class);
-            service.putExtra(DgDownloadService.EXTRA_NOTIFICATION, built);
-            if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(service);
-            else context.startService(service);
+            // treated as idle while 509MB are still crossing the connection. The first progress event
+            // is that signal; once the service holds the slot, an update is only the notify() above
+            // (starting the service on every event was needless work for the system).
+            if (!DgDownloadService.foreground) {
+                Intent service = new Intent(context, DgDownloadService.class);
+                service.putExtra(DgDownloadService.EXTRA_NOTIFICATION, built);
+                if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(service);
+                else context.startService(service);
+            }
             JSObject result = new JSObject();
             result.put("shown", true);
             call.resolve(result);

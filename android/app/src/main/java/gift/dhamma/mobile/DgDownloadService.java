@@ -67,6 +67,7 @@ public class DgDownloadService extends Service {
     static volatile boolean cancelled = false;
     static volatile long lastLoaded = 0, lastTotal = 0;
     static volatile boolean transferred = false;   // bytes really crossed the network in this run (not an archive already in place)
+    static volatile boolean foreground = false;    // the service holds the foreground slot (DgProgressPlugin then only notifies)
 
     static File libraryDir(android.content.Context context) {
         File dir = new File(context.getFilesDir(), LIBRARY_DIR);
@@ -105,6 +106,7 @@ public class DgDownloadService extends Service {
             // только выключается экран — останавливается"). A partial wake lock is the platform's
             // answer for exactly this: screen may go off, the CPU and the network read loop stay up.
             acquireLocks();
+            foreground = true;
         } catch (Exception e) {
             // Foreground services are refused in a few states (permission revoked, background
             // start restrictions after the app was killed). Not fatal: the download continues.
@@ -120,6 +122,7 @@ public class DgDownloadService extends Service {
             if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
             else startForeground(NOTIFICATION_ID, first);
             acquireLocks();
+            foreground = true;
         } catch (Exception e) {
             finish("could not start the foreground service: " + e.getMessage());
             return;
@@ -294,8 +297,19 @@ public class DgDownloadService extends Service {
     @Override
     public void onDestroy() {
         if (running) cancelled = true;   // stopped from outside (the page cancelled the download)
+        foreground = false;
         releaseLocks();
         super.onDestroy();
+    }
+
+    // Android 15+: a dataSync foreground service has 6 hours a day. When they are used up the system calls this and the app
+    // must stop the service at once, or it is killed with an error. Only a very slow network gets here.
+    @Override
+    public void onTimeout(int startId, int fgsType) {
+        cancelled = true;
+        foreground = false;
+        stopForeground(true);
+        stopSelf();
     }
 
     @Nullable

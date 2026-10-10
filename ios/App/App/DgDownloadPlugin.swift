@@ -1,5 +1,6 @@
 import Foundation
 import Compression
+import CryptoKit
 import Capacitor
 
 // The library download, moved off the WebView and onto the system's background transfer service.
@@ -10,11 +11,13 @@ import Capacitor
 // foreground service (DgDownloadService); iOS's answer is a background URLSession, which the system
 // keeps running, and relaunches the app for when it finishes.
 //
-//   start({url})  -> {path} once dg.db is unpacked in the App Group container (DgSharedLibrary);
+//   start({url, sha256}) -> {path} once dg.db is unpacked in the App Group container (DgSharedLibrary);
 //                    "progress" events {loaded, total} while the archive downloads, "unpack"
-//                    events {loaded, total} while it is being unpacked
+//                    events {loaded, total} while it is being unpacked. sha256 (db-manifest.json's, of
+//                    the unpacked database) is checked before the file replaces the library, as on Android.
 //   existing()    -> {path} or {path: null} if no library is on disk
-//   cancel()      -> stops the transfer; the partial file is discarded (the caller can start again)
+//   cancel()      -> stops the transfer; the partial file is discarded and a waiting start() is refused
+//                    (the caller can start again)
 //
 // The archive is unpacked here and deleted at once: the worker reads dg.db in place through
 // /dg-sql (DgSharedLibrary.swift), so the file is the library — there is no import into OPFS and
@@ -67,29 +70,55 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
         }
     }
 
+    // The sha256 the unpacked database must have, kept across launches: the transfer may end while the app is not running,
+    // and existing() unpacks the archive at the next launch.
+    private static let expectedShaKey = "dgLibrarySha256"
+
     @objc func start(_ call: CAPPluginCall) {
         guard let raw = call.getString("url"), let url = URL(string: raw) else {
             call.reject("no url")
             return
         }
+        UserDefaults.standard.set(call.getString("sha256") ?? "", forKey: Self.expectedShaKey)
         // A second start while one is running joins the running transfer instead of racing it: the
-        // page can be reloaded (or the app relaunched) mid-download.
+        // page can be reloaded (or the app relaunched) mid-download. After a relaunch the plugin is new
+        // (task == nil) while the system's background session may still be carrying the previous run's
+        // transfer: that one is joined too, never a second 216 MB download beside it.
         if task != nil {
             waiting.append(call)
             return
         }
-        waiting = [call]
-        unpackError = nil
-        let newTask = session.downloadTask(with: url)
-        task = newTask
-        newTask.resume()
+        session.getAllTasks { tasks in
+            DispatchQueue.main.async {
+                if self.task != nil {
+                    self.waiting.append(call)
+                    return
+                }
+                self.waiting = [call]
+                self.unpackError = nil
+                if let running = tasks.compactMap({ $0 as? URLSessionDownloadTask })
+                    .first(where: { $0.state == .running || $0.state == .suspended }) {
+                    self.task = running
+                    running.resume()
+                    return
+                }
+                let newTask = self.session.downloadTask(with: url)
+                self.task = newTask
+                newTask.resume()
+            }
+        }
     }
 
     @objc func cancel(_ call: CAPPluginCall) {
-        task?.cancel()
-        task = nil
-        waiting = []
-        call.resolve()
+        DispatchQueue.main.async {
+            let calls = self.waiting
+            self.waiting = []
+            self.task = nil
+            // Every transfer of the session, also one a previous run of the app started.
+            self.session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
+            calls.forEach { $0.reject("cancelled") }
+            call.resolve()
+        }
     }
 
     private func finish(error: Error?) {
@@ -128,8 +157,19 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
         let fm = FileManager.default
         let tmp = DgLibrary.dbURL.appendingPathExtension("tmp")
         try? fm.removeItem(at: tmp)
-        try Self.gunzip(archive, to: tmp) { loaded in
+        var hasher = SHA256()
+        try Self.gunzip(archive, to: tmp, progress: { loaded in
             self.notifyListeners("unpack", data: ["loaded": loaded, "total": expectedBytes])
+        }, output: { hasher.update(data: $0) })
+        // The manifest's checksum, before anything replaces the working library (an archive an older build left has none).
+        let expected = UserDefaults.standard.string(forKey: Self.expectedShaKey) ?? ""
+        if !expected.isEmpty {
+            let actual = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+            if actual.lowercased() != expected.lowercased() {
+                try? fm.removeItem(at: tmp)
+                try? fm.removeItem(at: archive)
+                throw DgSqlError("the downloaded library is damaged (checksum)")
+            }
         }
         // Replace, not remove-then-move: a reader (or the extension) holding the old file keeps
         // reading it, and there is never a moment without a library.
@@ -148,7 +188,7 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
     // gzip = a 10-byte header (+ optional fields), a raw deflate stream, an 8-byte trailer. The
     // Compression framework decodes raw deflate (COMPRESSION_ZLIB); the header is skipped here
     // and the trailer is never reached — the stream ends at the deflate end marker.
-    private static func gunzip(_ source: URL, to destination: URL, progress: (Int64) -> Void) throws {
+    private static func gunzip(_ source: URL, to destination: URL, progress: (Int64) -> Void, output emit: (Data) -> Void) throws {
         let input = try FileHandle(forReadingFrom: source)
         defer { try? input.close() }
         let header = input.readData(ofLength: 10)
@@ -204,7 +244,11 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
                 return result
             }
             let produced = bufferSize - stream.pointee.dst_size
-            if produced > 0 { output.write(Data(bytesNoCopy: out, count: produced, deallocator: .none)) }
+            if produced > 0 {
+                let piece = Data(bytesNoCopy: out, count: produced, deallocator: .none)
+                output.write(piece)
+                emit(piece)
+            }
             progress(consumed)
             if status == COMPRESSION_STATUS_END { return }
             guard status == COMPRESSION_STATUS_OK else { throw DgSqlError("the archive is damaged") }
@@ -244,7 +288,11 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        finish(error: error)
+        DispatchQueue.main.async {
+            // A cancelled transfer reports here after the next one may have started: it must not settle that one.
+            if let current = self.task, current.taskIdentifier != task.taskIdentifier { return }
+            self.finish(error: error)
+        }
     }
 
     // The system's own "you may go back to sleep" signal for a background session, and the reason

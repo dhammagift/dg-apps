@@ -216,14 +216,14 @@ final class WidgetViews {
                 sub = m.detail ? phase(u) + " · " + startWd + " " + u.start.hm
                         : tx.get("lite.from").replace("{startDay}", startWd).replace("{startTime}", u.start.hm).replace(", ", " ");
             }
-            // The label is the day ("to the 15th day" / "15th day - now"), not the name of the app: nobody needs to be told that this is the
+            // The label is the day ("15th day - coming" / "15th day - now"), not the name of the app: nobody needs to be told that this is the
             // Uposatha. A low 2x2 (the launcher's own cell is ~110 dp) drops lines in this order - kala, the second line - before the counter shrinks.
             float av = avail(), big = hDp >= 240 ? (kalaOn ? 46 : 52) : kalaOn ? 36 : 42;   // a tall narrow widget gets a bigger counter
             boolean kalaShow = kalaOn, subShow = true;
             if (50 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) kalaShow = false;
             if (50 + 15 + 1.2f * big + (kalaShow ? 20 : 0) > av) subShow = false;
             big = Math.max(24, Math.min(big, (av - 50 - (subShow ? 15 : 0) - (kalaShow ? 20 : 0)) / 1.2f));
-            text(R.id.lbl, m.ongoing ? ordinal(u.lunarDay) + " " + dayWord() + " · " + tx.get("now") : to);
+            text(R.id.lbl, ordinal(u.lunarDay) + " " + dayWord() + " · " + (m.ongoing ? tx.get("now") : tx.ru() ? "скоро" : "coming"));   // the day first: what the card is about
             text(R.id.dt2, moonLine()); show(R.id.dt2, m.detail);   // "with details": what the moon is doing now
             text(R.id.dt, m.ongoing ? tx.get("now") + " · " + dayLabel(m.today) : dateLabel(u.start.ymd));
             text(R.id.sub, sub); show(R.id.sub, subShow);

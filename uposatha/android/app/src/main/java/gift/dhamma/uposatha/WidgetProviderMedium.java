@@ -1,5 +1,5 @@
 package gift.dhamma.uposatha;
 
-/** The widget picker lists three entries (2x2, 4x2, 4x4): the same widget, offered at the size the person wants it, not only as a 2x2 to pull larger. */
+/** A picker entry of its own: Uposatha 4x2 (see WidgetProvider.PROVIDERS; the class keeps the name of the first version, so a widget that is on a screen stays). All the code is in WidgetProvider. */
 public class WidgetProviderMedium extends WidgetProvider {
 }

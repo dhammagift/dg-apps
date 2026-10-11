@@ -20,6 +20,30 @@
   if (PLATFORM !== 'android' && PLATFORM !== 'ios') return;
   var IOS = PLATFORM === 'ios';   // on iOS: no Back button, no notification channels or streams, no launcher icon change
 
+  // Boot marks in the device log ("[dg-boot] load +812 ms"): when the page reached each step of showing itself. It is hidden until
+  // window.__upoReveal (index.html's head: after load + fonts, or a safety timer of 3.5 s), so a slow step here is a blank screen
+  // after the splash. Cheap, and the only way to see from a log why a launch was slow on somebody's phone.
+  (function () {
+    var t0 = Date.now(), boot = false;
+    function mark(what) { try { console.log('[dg-boot] ' + what + ' +' + (Date.now() - t0) + ' ms'); } catch (e) { /* no console */ } }
+    mark('start');
+    document.addEventListener('DOMContentLoaded', function () { mark('DOMContentLoaded'); });
+    window.addEventListener('load', function () {
+      mark('load');
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { mark('fonts ready'); });
+      requestAnimationFrame(function () { mark('a frame after load'); });
+    });
+    document.addEventListener('upo:painted', function first() { document.removeEventListener('upo:painted', first); mark('painted'); });
+    try {
+      new MutationObserver(function (list, o) {
+        var r = document.documentElement;
+        if (!r) return;
+        if (r.classList.contains('up-boot')) boot = true;
+        else if (boot) { mark('revealed'); o.disconnect(); }
+      }).observe(document, { attributes: true, subtree: true, attributeFilter: ['class'] });
+    } catch (e) { /* no observer: no "revealed" mark */ }
+  })();
+
   // The launch splash is native on Android (the animated mark of the system splash screen, res/drawable/
   // dg_splash_icon.xml), so nothing is drawn here: a web splash on top of it made the app slower to open and
   // the page under it showed a scroll strip.
@@ -616,7 +640,33 @@
     btn.disabled = false;
   }
 
+  // Android may hold this app's alarms back: "Restricted" in the app's battery settings (the person's choice, or a phone's battery
+  // saver). Then no reminder comes until the app is opened, and nothing says so. A warning in the reminders' settings, with the way
+  // to the system page - only while that is the case (owner, 2026-10-11: another calendar app has such a row, ours had nothing).
+  var bgRestricted = false;
+  function refreshBackground() {
+    var DS = Cap.Plugins && Cap.Plugins.DgSound;
+    if (!DS || typeof DS.background !== 'function') return;
+    DS.background().then(function (r) { bgRestricted = !!(r && r.restricted); paintBgRow(); }).catch(function () { /* an older shell: no row */ });
+  }
+  function paintBgRow() {
+    var row = document.getElementById('dg-bg-row'), anchor = document.getElementById('rem-note');
+    if (!bgRestricted) { if (row) row.remove(); return; }
+    if (row || !anchor) return;
+    var ru = isRu();
+    row = document.createElement('div');
+    row.id = 'dg-bg-row';
+    row.innerHTML = '<p class="dg-drawer-subtitle" style="color:var(--dg-match,#a8341c)"></p><button type="button" class="pillbtn" id="dg-bg-btn"></button>'
+      + '<p class="dg-drawer-subtitle" style="font-weight:400;opacity:.75;margin-top:6px"></p>';
+    var p = row.querySelectorAll('p');
+    p[0].textContent = ru ? 'Android ограничил работу приложения в фоне: напоминания могут не прийти.' : 'Android restricts this app in the background: reminders may not arrive.';
+    row.querySelector('button').textContent = ru ? 'Открыть настройки приложения' : 'Open the app\'s settings';
+    p[1].textContent = ru ? 'Там: Батарея → «Без ограничений» или «Оптимизировано».' : 'There: Battery → Unrestricted or Optimized.';
+    anchor.parentNode.insertBefore(row, anchor);
+  }
+
   function ensureStreamRow() {
+    paintBgRow();
     var anchor = document.getElementById('rem-sound-row');
     if (!anchor || document.getElementById('dg-stream-row')) return;
     var stream = streamRow();
@@ -636,10 +686,12 @@
       var b = e.target && e.target.closest && e.target.closest('#dg-dnd-btn');
       var DS = Cap.Plugins && Cap.Plugins.DgSound;
       if (b && DS && typeof DS.requestDndAccess === 'function') DS.requestDndAccess();
+      if (e.target && e.target.closest && e.target.closest('#dg-bg-btn') && DS && typeof DS.openBackground === 'function') DS.openBackground();
     }, true);
     // Back from the system's settings page: has the access been given?
-    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') refreshDnd(); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { refreshDnd(); refreshBackground(); } });
     refreshDnd();
+    refreshBackground();
     ensureStreamRow();
     new MutationObserver(ensureStreamRow).observe(document.documentElement, { childList: true, subtree: true });
   }
@@ -1039,7 +1091,13 @@
       last = json;
       W.put({ json: json }).catch(function (e) { last = ''; console.log('[dg-widget] put failed:', (e && e.message) || e); });
     }
-    document.addEventListener('upo:painted', function () { clearTimeout(timer); timer = setTimeout(push, 1500); });
+    // Working the data out takes the page's thread for up to a second on a phone: when the page is idle, not at a fixed moment
+    // right after it appeared (a tap just then waited for it).
+    var idle = window.requestIdleCallback ? function () { window.requestIdleCallback(push, { timeout: 4000 }); } : push;
+    document.addEventListener('upo:painted', function () { clearTimeout(timer); timer = setTimeout(idle, 1500); });
+    // A WebView without document-start scripts (before Chrome 105) gets this bridge after the page has loaded and painted: that event
+    // is over, and the widgets stayed "Open Uposatha" until something made the page paint again (Android 11, Test Lab, 2026-10-11).
+    if (document.readyState === 'complete') timer = setTimeout(idle, 1500);
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') push(); });
     // A tap in the widget opens the app on a tab (deep link ?tab=home|parts|cal, see the widget's click intents); the page reads it itself.
   }

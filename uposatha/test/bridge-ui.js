@@ -123,7 +123,42 @@ function capacitorStub() {
             await ctx.close();
         }
 
-        // 2. A shortcut's tab: ?tab=cal opens the calendar tab from a cold start.
+        // 1c. The widget's data reaches the app after the page has painted: with the bridge in from the start (document-start script),
+        // and with the bridge put in AFTER the load, as a WebView without document-start scripts does it (before Chrome 105: the
+        // "painted" event is over by then; on Android 11 in Test Lab every widget stayed "Open Uposatha").
+        for (const late of [false, true]) {
+            const ctx = await ctxOf('light', 'en');
+            await ctx.addInitScript(capacitorStub);
+            await ctx.addInitScript(() => { window.Capacitor.Plugins.DgWidget = { put: (o) => { (window.__puts = window.__puts || []).push(o.json); return Promise.resolve(); } }; });
+            if (!late) await ctx.addInitScript(BRIDGE);
+            const page = await ctx.newPage();
+            await page.goto(PAGE, { waitUntil: 'load' });
+            if (late) { await page.waitForTimeout(800); await page.evaluate(BRIDGE); }
+            await page.waitForTimeout(7000);
+            const puts = await page.evaluate(() => (window.__puts || []).map((j) => { const d = JSON.parse(j); return [d.days.length, d.uposathas.length > 5, !!(d.moons && d.moons.lit)]; }));
+            check(`widget data is handed over ${late ? 'with the bridge put in after the load (old WebViews)' : 'after the first paint'}: once, 31 days, Uposathas, the moon's percent`, puts, [[31, true, true]]);
+            await ctx.close();
+        }
+
+        // 1d. "Restricted" background use (Android keeps such an app's alarms until it is opened): a warning with the way to the system
+        // page appears in the reminders' settings, and goes when the restriction is taken off.
+        {
+            const ctx = await ctxOf('light', 'en');
+            await ctx.addInitScript(capacitorStub);
+            await ctx.addInitScript(() => { window.__bg = true; const S = window.Capacitor.Plugins.DgSound; S.background = () => Promise.resolve({ restricted: window.__bg }); S.openBackground = () => { window.__bgOpened = (window.__bgOpened || 0) + 1; return Promise.resolve(); }; });
+            await ctx.addInitScript(BRIDGE);
+            const page = await ctx.newPage();
+            await page.goto(PAGE, { waitUntil: 'load' });
+            await page.waitForTimeout(2500);
+            check('restricted in the background: the warning is in the reminders settings, once', await page.evaluate(() => { const r = document.querySelectorAll('#dg-bg-row'); return [r.length, r[0] && r[0].nextElementSibling && r[0].nextElementSibling.id]; }), [1, 'rem-note']);
+            await page.evaluate(() => document.getElementById('dg-bg-btn').click());
+            check('its button opens the system page', await page.evaluate(() => window.__bgOpened), 1);
+            await page.evaluate(() => { window.__bg = false; document.dispatchEvent(new Event('visibilitychange')); });
+            await page.waitForTimeout(500);
+            check('the restriction is off: the warning is gone', await page.evaluate(() => document.querySelectorAll('#dg-bg-row').length), 0);
+            await ctx.close();
+        }
+
         {
             const ctx = await ctxOf('dark', 'en');
             await ctx.addInitScript(capacitorStub);

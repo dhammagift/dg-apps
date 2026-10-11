@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A picker entry of the Uposatha widgets (WidgetProvider.PROVIDERS). The design is scaled to whatever size the launcher gives; the
+     smallest size it can be resized to is the smallest one the design is still readable at. The gear opens WidgetConfigActivity. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="40dp"
+    android:minHeight="40dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:initialLayout="@layout/widget_loading"
+    android:configure="gift.dhamma.uposatha.WidgetConfigActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional"
+    android:previewImage="@drawable/widget_preview_moon"
+    android:previewLayout="@layout/widget_preview_moon"
+    android:description="@string/widget_description_moon" />

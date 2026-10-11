@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_label">Uposatha</string>
-    <string name="widget_description">Ближайшая упосатха, kala и луна на главном экране</string>
-    <string name="widget_cd">Виджет Uposatha</string>
-    <string name="widget_label_s">Uposatha 2×2</string>
-    <string name="widget_label_m">Uposatha 4×2</string>
-    <string name="widget_label_l">Uposatha 4×4</string>
-    <string name="widget_loading">Uposatha</string>
+    <string name="widget_label_moon">Луна</string>
+    <string name="widget_description_moon">Луна сейчас и сколько её освещено</string>
+    <string name="widget_label_moonupo">Луна и упосатха</string>
+    <string name="widget_description_moonupo">Луна и время до ближайшей упосатхи</string>
+    <string name="widget_label_s">Упосатха 2×2</string>
+    <string name="widget_description_s">Ближайшая упосатха, время до неё, kala и луна</string>
+    <string name="widget_label_strip">Упосатха 4×1</string>
+    <string name="widget_description_strip">Ближайшая упосатха одной строкой</string>
+    <string name="widget_label_m">Упосатха 4×2</string>
+    <string name="widget_description_m">Ближайшая упосатха, луна, kala</string>
+    <string name="widget_label_day">День и ночь</string>
+    <string name="widget_description_day">Часть суток, kala и vikala, от рассвета до рассвета</string>
+    <string name="widget_label_l">Календарь</string>
+    <string name="widget_description_l">Месяц с упосатхами и луной</string>
 </resources>

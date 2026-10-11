@@ -107,6 +107,36 @@ public class DgSoundPlugin extends Plugin {
         call.resolve(out);
     }
 
+    /**
+     * Whether Android holds this app back in the background: "Restricted" in the app's battery settings (set by the person, or by a
+     * phone's battery saver). Alarms of such an app are kept until it is opened, so no reminder arrives, and nothing tells the person.
+     * (The "restricted" standby bucket cannot be asked about here: an app that is on the screen is always "active".)
+     */
+    @PluginMethod
+    public void background(PluginCall call) {
+        JSObject out = new JSObject();
+        boolean restricted = false;
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            android.app.ActivityManager am = getContext().getSystemService(android.app.ActivityManager.class);
+            restricted = am != null && am.isBackgroundRestricted();
+        }
+        out.put("restricted", restricted);
+        call.resolve(out);
+    }
+
+    /** The app's own page in the system settings: its "Battery" row is where "Restricted" is taken off. */
+    @PluginMethod
+    public void openBackground(PluginCall call) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + getContext().getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (RuntimeException e) {
+            call.reject("no settings page: " + e.getMessage());
+        }
+    }
+
     @PluginMethod
     public void requestDndAccess(PluginCall call) {
         try {

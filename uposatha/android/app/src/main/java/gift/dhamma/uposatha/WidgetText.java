@@ -49,6 +49,12 @@ final class WidgetText {
         return a != null ? a.optString(dow, "") : "";
     }
 
+    /** An entry of a list of texts ("w.weekdaysLong", "w.monthsOf"). */
+    String item(String key, int i) {
+        JSONArray a = t.optJSONArray(key);
+        return a != null ? a.optString(i, "") : "";
+    }
+
     boolean ru() { return "ru".equals(lang); }
 
     /** Phone-wide short month ("окт" / "Oct"), 1..12. */

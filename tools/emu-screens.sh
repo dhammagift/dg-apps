@@ -8,46 +8,32 @@ APK=$1; OUT=$2; PKG=${3:-gift.dhamma.mobile}
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$OUT"
 adb install -r "$APK" || exit 1
-# Widget (Uposatha): the home-screen widget's renderer, looked at on a real Android. A launcher cannot be driven reliably
-# from adb, so the debug build carries WidgetPreviewActivity, which draws every layer in every size, light and dark, with the
-# very class the widget uses (WidgetRenderer) from a sample of the page's data. Needs the DEBUG apk.
+# Widgets (Uposatha): the home-screen widgets, looked at on a real Android. A launcher cannot be driven reliably from adb, so the
+# debug build carries WidgetPreviewActivity, which draws the REAL widgets (WidgetViews -> RemoteViews.apply, as a launcher does)
+# for every case of WidgetSheet.cases(): each of the seven widgets at real cell sizes, a few scenarios and settings, light and
+# dark, from a sample of the page's data. Needs the DEBUG apk.
 if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = widget ]; then
   res="$OUT/widget-result.txt"; : > "$res"
-  # One start per theme and size (the activity draws all of them on the UI thread: a slow emulator answered "not responding").
-  # scenario 5 = the designer's mockup state in English. The sheets (card on a flat back, caption below) are pulled at the end.
+  # One start per theme and group of cases (the activity draws them on the UI thread: a slow emulator answered "not responding"
+  # to everything at once). The sheets (the card on a flat back, the case's name below) are pulled at the end.
   adb shell rm -rf /sdcard/Android/data/$PKG/files/widget-previews
   for theme in light dark; do
     adb shell cmd uimode night "$([ "$theme" = dark ] && echo yes || echo no)" > /dev/null 2>&1
-    for sz in "170 170" "364 170" "364 382" "290 430" "364 430"; do
-      set -- $sz
+    for only in 'moon.*' 'upo-.*' 'strip.*' 'upom.*' 'day.*' 'cal-298.*' 'cal-376.*' 'cal-276.*'; do
+      name=$(echo "$only" | tr -cd 'a-z0-9')
       adb shell am force-stop "$PKG"
-      adb shell am start -n "$PKG/.WidgetPreviewActivity" --ei w $1 --ei h $2 --es theme $theme --ei scenario 5 > "$OUT/start-$theme-$1x$2.txt" 2>&1
-      sleep 6
-      if ! adb shell dumpsys activity activities | grep -q "WidgetPreviewActivity"; then echo "FAIL preview activity did not start ($theme $1x$2)" >> "$res"; fi
-      adb exec-out screencap -p > "$OUT/screen-$theme-$1x$2.png" 2>/dev/null
+      adb shell am start -n "$PKG/.WidgetPreviewActivity" --es theme $theme --es only "'$only'" > "$OUT/start-$theme-$name.txt" 2>&1
+      sleep 12
+      if ! adb shell dumpsys activity activities | grep -q "WidgetPreviewActivity"; then echo "FAIL preview activity did not start ($theme $only)" >> "$res"; fi
+      adb exec-out screencap -p > "$OUT/screen-$theme-$name.png" 2>/dev/null
     done
-    adb logcat -d -s AndroidRuntime:E > "$OUT/crash-$theme.txt" 2>/dev/null
-    if [ -s "$OUT/crash-$theme.txt" ] && grep -q "FATAL" "$OUT/crash-$theme.txt"; then echo "FAIL crash while drawing ($theme)" >> "$res"; else echo "PASS drawn without a crash ($theme)" >> "$res"; fi
-  done
-  # scenario 6 = the picker previews (a full moon, the 15th day on, "in 28 d"), the three sizes, light
-  adb shell cmd uimode night no > /dev/null 2>&1
-  for sz in "170 170" "364 170" "364 382"; do
-    set -- $sz
-    adb shell am force-stop "$PKG"
-    adb shell am start -n "$PKG/.WidgetPreviewActivity" --ei w $1 --ei h $2 --es theme light --ei scenario 6 > "$OUT/start-pv-$1x$2.txt" 2>&1
-    sleep 6
-  done
-  # scenario 7 = the 2x2 without details, scenario 5 gave the one with details; both themes
-  for theme in light dark; do
-    adb shell cmd uimode night "$([ "$theme" = dark ] && echo yes || echo no)" > /dev/null 2>&1
-    adb shell am force-stop "$PKG"
-    adb shell am start -n "$PKG/.WidgetPreviewActivity" --ei w 170 --ei h 170 --es theme $theme --ei scenario 7 > "$OUT/start-lite-$theme.txt" 2>&1
-    sleep 6
+    adb logcat -d -s AndroidRuntime:E DgWidgetPreview:E > "$OUT/crash-$theme.txt" 2>/dev/null
+    if [ -s "$OUT/crash-$theme.txt" ] && grep -q "FATAL\|render failed" "$OUT/crash-$theme.txt"; then echo "FAIL crash or a failed render while drawing ($theme)" >> "$res"; else echo "PASS drawn without a crash ($theme)" >> "$res"; fi
   done
   adb shell cmd uimode night no > /dev/null 2>&1
   mkdir -p "$OUT/sheets" && adb pull /sdcard/Android/data/$PKG/files/widget-previews/. "$OUT/sheets" > /dev/null 2>&1
-  ls "$OUT/sheets" | wc -l >> "$res"
-  adb shell cmd uimode night no > /dev/null 2>&1
+  n=$(ls "$OUT/sheets" | wc -l); echo "$n sheets" >> "$res"
+  [ "$n" -lt 100 ] && echo "FAIL too few sheets ($n): some cases were not drawn" >> "$res"
   cat "$res"
   grep -q "^FAIL" "$res" && exit 1
   exit 0

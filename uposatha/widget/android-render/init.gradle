@@ -1,0 +1,20 @@
+// Not part of the build: a Gradle init script that lets the widget's own unit-test task draw the real widgets without a device
+// (Robolectric, native graphics). See run.sh beside it.
+def here = new File(System.getenv('WIDGET_ROBO_DIR'))
+allprojects {
+    afterEvaluate { p ->
+        if (p.plugins.hasPlugin('com.android.application')) {
+            p.dependencies { testImplementation 'org.robolectric:robolectric:4.14.1' }
+            p.android.testOptions.unitTests.includeAndroidResources = true
+            p.android.sourceSets.test.java.srcDir new File(here, 'src')
+        }
+        p.tasks.withType(Test).configureEach {
+            if (System.getenv('WIDGET_ROBO_JAVA')) executable = System.getenv('WIDGET_ROBO_JAVA')   // a JDK whose native libraries run here (arm64 hosts)
+            maxParallelForks = 1
+            jvmArgs("-Xshare:off", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-Xmx3g", "-Dwidget.out=" + (System.getenv('WIDGET_OUT') ?: new File(here, 'out').path))
+            testLogging { showStandardStreams = true }
+            outputs.upToDateWhen { false }
+            filter { includeTestsMatching "gift.dhamma.uposatha.WidgetRoboTest" }
+        }
+    }
+}

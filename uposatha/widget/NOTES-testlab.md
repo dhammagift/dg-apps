@@ -54,3 +54,20 @@ A=app/build/outputs/apk
 ```
 `theme=light|dark` is optional. Videos/screenshots land in the bucket printed by gcloud (video.mp4, logcat, artifacts/sdcard/...). Device ids: `gcloud firebase test android models list`.
 Encode: `ffmpeg -i video.mp4 -vf scale=720:-2 -c:v libx264 -crf 26 -pix_fmt yuv420p -movflags +faststart -an out.mp4`.
+
+## Night 2026-10-10 -> 11: the runs (bucket folders are UTC; `WidgetFlowTest` with its checks, see NOTES-android.md "Lessons of the night")
+| UTC | device | result | what it showed |
+|---|---|---|---|
+| 18:14 | virtual MediumPhone.arm, API 34 | FAILED (2 checks) | icons still fetched from the site; the Moon's percent not shown after it was turned on (reapply); 4 copies of the slides' switch in one widget |
+| 18:41 | same | passed | those three fixed |
+| 18:52 | REAL motorola razr plus 2024 (arcfox), API 34 | passed, but by eye: everything small | the launcher reports 82x68 for a cell that is 82x115; page revealed 549 ms after start ([dg-boot]) |
+| 19:06 | virtual API 34 | passed | several heights in one RemoteViews: the launcher takes its own; a Pixel 4x4 "440" is 464 dp |
+| 19:14 | REAL arcfox | passed | the Motorola launcher takes the view for the real height (4x4: drawn for 480, on the screen 507); 9 sizes cost 0.2-0.7 s |
+| 19:25 | virtual API 34 | passed | taps on the switch / the arrows draw 2 sizes (33-78 ms) instead of 10 |
+| 19:36 | virtual API 30 (Android 11, WebView 91) | FAILED (6) | the page died on `timeZoneName: 'shortOffset'` (unused value): no data, placeholders |
+| 19:44 | same | FAILED (6) | page alive; the bridge comes after the load on WebViews without document-start scripts and missed "painted": still no data. (The test's "Theme" also matched the app's own page: Back closed the app.) |
+| 19:56 | same | passed | widgets with data on Android 11: calendar, slides, percent, tap without a reload |
+| 20:05 | REAL Galaxy S24 SC-51E (docomo), API 36 | FAILED, no widgets | a carrier model with two launchers and no default: "Select a Home app", nothing was pinned. Do not use SC-* / SCG* models. Page revealed in 0.36-0.52 s |
+| 20:14 | REAL Galaxy S24 e1q (US), API 36, One UI 8 | 8 checks "failed", by eye all right | One UI shows the whole widget 1.2 times smaller than it lays it out (drawn for 376x427, on the screen 313x356: the same factor both ways), so nothing is cut and the design is whole; the size check compared the wrong things (now it compares the two directions with each other). The last pin (4x2) found no dialog: the page was full. The resize frame and the edit button have other ids there: those steps did nothing |
+Used that day: 10 of 10 virtual, 4 of 5 real. Not run: a tablet, landscape, the release build (R8) itself - only the debug one was on devices.
+On Android 11 with its stock WebView 91 the app's page is light while the system is dark (old WebViews do not report the dark scheme): not looked into.

@@ -81,7 +81,9 @@ public class MainActivity extends BridgeActivity {
         // was not going to spend loading anyway.
         SplashScreen splash = SplashScreen.installSplashScreen(this);
         final long shownAt = SystemClock.uptimeMillis();
-        splash.setKeepOnScreenCondition(() -> SystemClock.uptimeMillis() - shownAt < SPLASH_HOLD_MS);
+        // A tap on a widget is on its way to a screen of the app: it is not made to wait for the mark's animation.
+        final boolean fromWidget = WidgetOpenActivity.waiting();
+        splash.setKeepOnScreenCondition(() -> !fromWidget && SystemClock.uptimeMillis() - shownAt < SPLASH_HOLD_MS);
         super.onCreate(savedInstanceState);
 
         serveUpdatedFiles();
@@ -187,17 +189,34 @@ public class MainActivity extends BridgeActivity {
      * turned into a URL and loaded into the WebView. A route starting with "/" is on the app's own
      * (bundled) page; a full URL is used as it is.
      */
+    /** A tap on a widget left a route (WidgetOpenActivity): the app is in front now, go there. */
+    @Override
+    public void onResume() {
+        super.onResume();
+        openRoute(WidgetOpenActivity.take());
+    }
+
     private void handleIntent(Intent intent) {
-        if (intent == null) return;
-        String route = intent.getStringExtra("route");
+        if (intent != null) openRoute(intent.getStringExtra("route"));
+    }
+
+    private void openRoute(String route) {
         if (route == null || route.isEmpty()) return;
-        String url = route;
-        if (!route.startsWith("http")) {
-            if (getBridge() == null) return;
-            url = getBridge().getLocalUrl() + route;   // the bundled page
-        }
-        final String finalUrl = url;
-        final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
-        if (webView != null) webView.post(() -> webView.loadUrl(finalUrl));
+        // Only a path of the app's own page. This activity is the launcher's, so any app can start it with any extra: an
+        // address ("http...", "//host") used to be loaded into this window as it came - somebody else's page in Uposatha's frame.
+        if (!WidgetPlan.ownPath(route)) { android.util.Log.w("DgWidget", "route refused: not a path of the page"); return; }
+        if (getBridge() == null) return;
+        final String finalUrl = getBridge().getLocalUrl() + route;   // the bundled page
+        final WebView webView = getBridge().getWebView();
+        if (webView == null) return;
+        // The page that is already open goes there itself (window.__upoRoute, uposatha-calendar.js). Loading the address
+        // again showed the page, then an empty WebView, then the page once more (owner, 2026-10-10: a tap on a widget
+        // "opens, goes black, opens again"). At a cold start, or with a page that has no __upoRoute, it is loaded as before.
+        final String ask = "(function(){try{if(typeof window.__upoRoute==='function'){window.__upoRoute(" + JSONObject.quote(route)
+                + ");return 1}}catch(e){}return 0})()";
+        webView.post(() -> webView.evaluateJavascript(ask, done -> {
+            android.util.Log.i("DgWidget", "1".equals(done) ? "route: the open page went there" : "route: the page is loaded");
+            if (!"1".equals(done)) webView.loadUrl(finalUrl);
+        }));
     }
 }

@@ -11,6 +11,7 @@ out = os.path.join(os.path.dirname(root), 'ios', 'App', 'UposathaWidget', 'Widge
 EXTRA = {
     'ru': {
         'until': 'до {time}',
+        'unit.min': 'мин',
         'kalaShort': 'kala до {time}',
         'vikalaShort': 'vikala до {time}',
         'dayN': '{n}-й день',
@@ -25,6 +26,7 @@ EXTRA = {
     },
     'en': {
         'until': 'until {time}',
+        'unit.min': 'min',
         'kalaShort': 'kala until {time}',
         'vikalaShort': 'vikala until {time}',
         'dayN': '{n}th day',

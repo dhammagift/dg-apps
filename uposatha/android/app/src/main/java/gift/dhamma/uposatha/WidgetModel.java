@@ -14,10 +14,10 @@ import java.util.TimeZone;
  * What the page handed over (uposatha/widget/WIDGET.md), read once and placed against "now":
  * which Uposatha is current or next, kala or vikala, which part of the day. No moon, sun or Uposatha
  * maths here: every moment comes from the data; this only compares them with the clock.
- * parse() returns null when there is nothing safe to show (no data, older than 14 days, today not covered).
+ * parse() returns null when there is nothing safe to show (no data, older than 30 days, today not covered).
  */
 final class WidgetModel {
-    static final long STALE_MS = 14L * WidgetFormat.DAY;
+    static final long STALE_MS = 30L * WidgetFormat.DAY;   // the page gives 31 days of sun and 30 of the moon's percent
     static final int NONE = 0, KALA = 1, VIKALA = 2;
 
     static final class Mo {
@@ -47,12 +47,16 @@ final class WidgetModel {
     final long now;
     final TimeZone tz;
     final String lang;
-    final boolean bySuttas, detail, showKala, placeSet, south;
-    final double moonNow;                     // the real phase of the moon now (0 new .. 0.5 full), carried on from when the data was made
+    final boolean bySuttas, detail, showKala, placeSet, south, allMoons;
+    final boolean tzAuto;                     // the page follows the phone's time zone (none was chosen there)
+    final double moonNow;                     // the real phase of the moon now (0 new .. 0.5 full): between two middays of the page's table, else carried on from when the data was made
     final int weekStart;                      // 0: the week starts on Sunday, 1: on Monday (the app's own setting)
     final String today;                       // YYYY-MM-DD in the place's zone
     final List<Day> days = new ArrayList<>();
     final List<Upo> upos = new ArrayList<>();
+    private String moonsFrom;                 // the moon of every day at midday, from this date (the page's own numbers)
+    private double[] moons;
+    final double litNow;                      // the lit percent of the moon now, as the page shows it (its own table, read between two points)
 
     int curIdx = -1;                          // the Uposatha running now, else the next one
     boolean ongoing;
@@ -72,12 +76,14 @@ final class WidgetModel {
         showKala = st.optBoolean("showKala", true);
         placeSet = st.optBoolean("placeSet", true);
         south = st.optBoolean("south", false);
+        allMoons = st.optBoolean("allMoons", false);
+        tzAuto = st.optBoolean("tzAuto", false);
         weekStart = st.optInt("weekStart", "ru".equals(st.optString("lang")) ? 1 : 0) == 0 ? 0 : 1;
         long gen0 = parseIso(root.optString("generatedAt", ""));
         JSONObject td = root.optJSONObject("today");
         double mf = td == null ? 0 : td.optDouble("moon", 0);
         if (Double.isNaN(mf)) mf = 0;
-        moonNow = ((mf + (gen0 > 0 ? (now - gen0) / (29.530588853 * 86400000.0) : 0)) % 1 + 1) % 1;   // the moon moves about 0.034 of a cycle a day
+        double mn = ((mf + (gen0 > 0 ? (now - gen0) / (29.530588853 * 86400000.0) : 0)) % 1 + 1) % 1;   // the moon moves about 0.034 of a cycle a day
         String tzid = root.optString("tz", "");
         TimeZone z = tzid.isEmpty() ? TimeZone.getDefault() : TimeZone.getTimeZone(tzid);
         tz = z;
@@ -124,6 +130,48 @@ final class WidgetModel {
             u.phase = o.optDouble("phase", 0);
             upos.add(u);
         }
+        JSONObject mo = root.optJSONObject("moons");
+        JSONArray mp = mo == null ? null : mo.optJSONArray("phase");
+        if (mp != null && mo.optString("from", "").length() == 10) {
+            moonsFrom = mo.optString("from");
+            moons = new double[mp.length()];
+            for (int i = 0; i < moons.length; i++) moons[i] = mp.optDouble(i, 0);
+        }
+        // The phase now: between the two middays around now. The mean speed alone is half a day off after two weeks (the moon's orbit
+        // is not a circle), and a widget lives a month on one set of data.
+        if (moons != null) {
+            int j = (int) WidgetFormat.daysBetween(moonsFrom, today);
+            if (now < at(today, 0, 720)) j--;
+            if (j >= 0 && j + 1 < moons.length) {
+                long t0 = at(moonsFrom, j, 720), t1 = at(moonsFrom, j + 1, 720);
+                mn = WidgetPlan.phaseBetween(moons[j], moons[j + 1], (now - t0) / (double) (t1 - t0));
+            }
+        }
+        moonNow = mn;
+        // The lit percent now: between two points of the page's table; with no table (older data) or past its end, the cosine of the phase.
+        double lit = (1 - Math.cos(2 * Math.PI * moonNow)) / 2 * 100;
+        JSONObject lt = mo == null ? null : mo.optJSONObject("lit");
+        JSONArray lp = lt == null ? null : lt.optJSONArray("pct");
+        long step = lt == null ? 0 : lt.optLong("step", 0);
+        if (lp != null && step > 0) {
+            double x = (now - lt.optLong("from", 0)) / (double) step;
+            int i = (int) Math.floor(x);
+            if (i >= 0 && i + 1 < lp.length()) lit = lp.optDouble(i, lit) + (lp.optDouble(i + 1, lit) - lp.optDouble(i, lit)) * (x - i);
+        }
+        litNow = lit;
+    }
+
+    /**
+     * The moon of a day (its phase at midday, 0..1): the page's own number when it sent one (settings.allMoons data), else today's moon
+     * carried to that date at the mean speed of the moon (a few percent off at most, on a picture of a dozen dp).
+     */
+    double phaseOn(String ymd) {
+        if (moons != null) {
+            long i = WidgetFormat.daysBetween(moonsFrom, ymd);
+            if (i >= 0 && i < moons.length) return moons[(int) i];
+        }
+        double days = WidgetFormat.daysBetween(today, ymd) + 0.5 - ((now + tz.getOffset(now)) % WidgetFormat.DAY) / (double) WidgetFormat.DAY;
+        return ((moonNow + days / 29.530588853) % 1 + 1) % 1;
     }
 
     /** The place's wall-clock date (YYYY-MM-DD) + dayOff days at minutes-of-day, as epoch ms. */
@@ -152,6 +200,9 @@ final class WidgetModel {
             long gen = parseIso(root.optString("generatedAt", ""));
             if (gen > 0 && now - gen > STALE_MS) return null;
             WidgetModel m = new WidgetModel(root, now);
+            // The page followed the phone's zone and the phone is in another one now (a flight): the dawn, the midday and "today" are
+            // the old place's. Nothing true to show until the app is opened there.
+            if (m.tzAuto && TimeZone.getDefault().getOffset(now) != m.tz.getOffset(now)) return null;
             return m.place() ? m : null;
         } catch (Exception e) {
             return null;

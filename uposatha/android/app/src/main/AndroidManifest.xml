@@ -35,11 +35,11 @@
             </intent-filter>
         </receiver>
 
-        <!-- The home-screen widget (WidgetProvider): three layers, three sizes, drawn from the data DgWidgetPlugin keeps. Not exported: the
-             system sends its own broadcasts to it; the taps are PendingIntents of this app. The extra actions re-plan the redraws after a
+        <!-- The home-screen widgets (WidgetProvider): seven separate widgets, drawn from the data DgWidgetPlugin keeps. Not exported: the
+             system sends its own broadcasts to them; the taps are PendingIntents of this app. The extra actions re-plan the redraws after a
              reboot, an update of the app, or a change of the clock or the zone (the counter runs on the clock). The reminders'
              receiver above is separate and untouched. -->
-        <!-- WidgetProvider is the base of the three widgets below: it receives the taps on the dots (CYCLE), the redraw alarm (TICK) and the
+        <!-- WidgetProvider is the base of the widgets below: it receives the calendar's month arrows (NAV), the redraw alarm (TICK) and the
              system's boot / update / clock broadcasts; it is not itself in the picker. -->
         <receiver android:name=".WidgetProvider" android:exported="false">
             <intent-filter>
@@ -49,11 +49,29 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+        <receiver android:name=".WidgetProviderMoon" android:label="@string/widget_label_moon" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_moon" />
+        </receiver>
+        <receiver android:name=".WidgetProviderMoonUpo" android:label="@string/widget_label_moonupo" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_moonupo" />
+        </receiver>
         <receiver android:name=".WidgetProviderSmall" android:label="@string/widget_label_s" android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_s" />
+        </receiver>
+        <receiver android:name=".WidgetProviderStrip" android:label="@string/widget_label_strip" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_strip" />
         </receiver>
         <receiver android:name=".WidgetProviderMedium" android:label="@string/widget_label_m" android:exported="false">
             <intent-filter>
@@ -61,12 +79,27 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_m" />
         </receiver>
+        <receiver android:name=".WidgetProviderDay" android:label="@string/widget_label_day" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_day" />
+        </receiver>
         <receiver android:name=".WidgetProviderLarge" android:label="@string/widget_label_l" android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_l" />
         </receiver>
+        <!-- A tap on a widget: shows nothing, leaves the route for MainActivity and opens the app as its icon does (see the class). -->
+        <activity android:name=".WidgetOpenActivity" android:exported="false" android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true" android:taskAffinity="" android:noHistory="true" />
+        <!-- The settings of one widget: opened by the launcher (the gear of a widget; on Android 11 and older also when it is added). -->
+        <activity android:name=".WidgetConfigActivity" android:exported="true" android:theme="@style/WidgetConfigTheme" android:excludeFromRecents="true" android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
 
         <!-- DgSound: the sound the reader picked for the reminders. The file is copied into the app's
              own files/sounds/ and handed to the system UI (which plays a notification channel's

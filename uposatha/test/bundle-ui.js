@@ -24,10 +24,16 @@ function check(name, actual, expected) {
 
 // Capacitor's asset server: a file if there is one, else the app's index.html (its SPA fallback).
 const TYPES = { html: 'text/html', js: 'application/javascript', css: 'text/css', json: 'application/json', svg: 'image/svg+xml', woff2: 'font/woff2', png: 'image/png', wasm: 'application/wasm' };
+// A FILE (a path with an extension) that is not in the bundle is not served here. In the app such a request goes to dhamma.gift
+// (DgSitePlugin.proxy): the page waits for the network at every launch, and offline the file is not there at all. Answering it with
+// index.html and 200, as this server did, hid seven missing fonts (2026-10: a blank screen after the splash on a phone).
+const absent = [];
 const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     let file = path.join(WWW, decodeURIComponent(url.pathname));
-    if (!file.startsWith(WWW) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(WWW, 'index.html');
+    const there = file.startsWith(WWW) && fs.existsSync(file) && !fs.statSync(file).isDirectory();
+    if (!there && /\.[a-z0-9]{2,5}$/i.test(url.pathname)) { absent.push(url.pathname); res.writeHead(404); res.end(); return; }
+    if (!there) file = path.join(WWW, 'index.html');
     const ext = path.extname(file).slice(1);
     res.writeHead(200, { 'content-type': TYPES[ext] || 'application/octet-stream' });
     fs.createReadStream(file).pipe(res);
@@ -61,6 +67,7 @@ function capacitorStub() {
             await ctx.addInitScript(BRIDGE);
             const page = await ctx.newPage();
             const refused = [], bad = [], errors = [];
+            absent.length = 0;
             // Offline: nothing outside the app's own origin is reachable, except the "site" we stand in for below.
             const changed = '/assets/js/uposatha-quotes.json';   // a text: only the json follows the site, the code is the build's
             const changedBody = fs.readFileSync(path.join(WWW, changed), 'utf8') + '\n\n';
@@ -89,6 +96,7 @@ function capacitorStub() {
             check(`${lang}/${theme}: the page draws no splash of its own (Android's is native)`, await page.evaluate(() => !document.getElementById('up-splash')), true);
             check(`${lang}/${theme}: no script errors offline`, errors, []);
             check(`${lang}/${theme}: nothing of the app's own is missing (no 4xx)`, bad, []);
+            check(`${lang}/${theme}: every file the page asks for is in the bundle`, [...new Set(absent)], []);
             if (theme === 'light') {
                 console.log('       requests refused (the site chrome asking for the network):', JSON.stringify([...new Set(refused)].slice(0, 6)));
             }

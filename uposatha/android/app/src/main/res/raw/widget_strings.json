@@ -33,6 +33,17 @@
     "weekdays": ["пн","вт","ср","чт","пт","сб","вс"],
     "lock.rect": "До {n}-го дня · {count}",
     "lock.inline": "{n}-й день через {count} · kala до {time}",
+    "w.dayN": "{n}-й день", "w.ord": "{n}-й", "w.coming": "скоро", "w.from": "с {time}", "w.until": "до {time}",
+    "w.kala": "Kala", "w.vikala": "Vikala", "w.untilMid": " до ", "w.ends": "конец {day}, {time}", "w.next": "Дальше: {n} · {day}",
+    "w.upoDay": "День упосатхи", "w.lunarDay": "лунный день {n}",
+    "w.ph0": "новолуние", "w.ph1": "растущий серп", "w.ph2": "первая четверть", "w.ph3": "растущая луна", "w.ph4": "полнолуние", "w.ph5": "убывающая луна", "w.ph6": "последняя четверть", "w.ph7": "убывающий серп",
+    "w.weekdaysLong": ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"],
+    "w.monthsOf": ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"],
+    "w.open": "Откройте Uposatha", "w.noData": "Нужны данные для виджета", "w.stale": "Данные устарели",
+    "cfg.title": "Настройки виджета", "cfg.theme": "Тема", "cfg.system": "Системная", "cfg.light": "Светлая", "cfg.dark": "Тёмная",
+    "cfg.transparency": "Прозрачность фона", "cfg.details": "Подробно", "cfg.app": "Как в приложении", "cfg.on": "Вкл", "cfg.off": "Выкл",
+    "cfg.kala": "Строка kala / vikala", "cfg.show": "Показать", "cfg.hide": "Скрыть",
+    "cfg.pct": "Процент освещённости", "cfg.slides": "Три слайда: упосатха · день и ночь · календарь", "cfg.moons": "Луна каждого дня", "cfg.next": "Список следующих упосатх", "cfg.done": "Готово", "cfg.saved": "Сохранено",
     "open.calendarDay": "Календарь → {day}"
   },
   "en": {
@@ -68,6 +79,17 @@
     "weekdays": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
     "lock.rect": "{n}th day in {count}",
     "lock.inline": "{n}th day in {count} · kala until {time}",
+    "w.dayN": "{n}th day", "w.ord": "{n}th", "w.coming": "coming", "w.from": "from {time}", "w.until": "until {time}",
+    "w.kala": "Kala", "w.vikala": "Vikala", "w.untilMid": " until ", "w.ends": "ends {day}, {time}", "w.next": "Next: {n} · {day}",
+    "w.upoDay": "Uposatha day", "w.lunarDay": "lunar day {n}",
+    "w.ph0": "new moon", "w.ph1": "waxing crescent", "w.ph2": "first quarter", "w.ph3": "waxing gibbous", "w.ph4": "full moon", "w.ph5": "waning gibbous", "w.ph6": "last quarter", "w.ph7": "waning crescent",
+    "w.weekdaysLong": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+    "w.monthsOf": ["January","February","March","April","May","June","July","August","September","October","November","December"],
+    "w.open": "Open Uposatha", "w.noData": "To set up the widget", "w.stale": "The data is out of date",
+    "cfg.title": "Widget settings", "cfg.theme": "Theme", "cfg.system": "System", "cfg.light": "Light", "cfg.dark": "Dark",
+    "cfg.transparency": "Background transparency", "cfg.details": "Details", "cfg.app": "As in the app", "cfg.on": "On", "cfg.off": "Off",
+    "cfg.kala": "Kala / vikala line", "cfg.show": "Show", "cfg.hide": "Hide",
+    "cfg.pct": "Lit percent", "cfg.slides": "Three slides: Uposatha · Day & night · Calendar", "cfg.moons": "Moon of every day", "cfg.next": "List of the next Uposathas", "cfg.done": "Done", "cfg.saved": "Saved",
     "open.calendarDay": "Calendar → {day}"
   }
 }

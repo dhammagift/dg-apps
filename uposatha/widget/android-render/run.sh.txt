@@ -1,5 +1,0 @@
-#!/bin/bash
-# usage: run.sh <regex of sheet names>
-export QEMU_LD_PREFIX=/usr/x86_64-linux-gnu ANDROID_HOME=/opt/android-sdk JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64
-export WIDGET_ONLY="$1"
-cd /var/www/dg-apps/uposatha/android && ./gradlew -I /tmp/claude-0/s/robo/init.gradle :app:testDebugUnitTest --no-daemon --offline -q 2>&1 | grep -v "^\s*at " | grep -i "FAILED\|error\|exception" | head -20

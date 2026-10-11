@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- A picker entry of the Uposatha widgets (WidgetProvider.PROVIDERS). The design is scaled to whatever size the launcher gives; the
+     smallest size it can be resized to is the smallest one the design is still readable at. The gear opens WidgetConfigActivity. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="110dp"
     android:minHeight="110dp"
@@ -10,6 +12,8 @@
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen"
     android:initialLayout="@layout/widget_loading"
+    android:configure="gift.dhamma.uposatha.WidgetConfigActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional"
     android:previewImage="@drawable/widget_preview_s"
     android:previewLayout="@layout/widget_preview_s"
-    android:description="@string/widget_description" />
+    android:description="@string/widget_description_s" />

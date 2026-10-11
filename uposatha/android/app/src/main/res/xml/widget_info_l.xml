@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- A picker entry of the Uposatha widgets (WidgetProvider.PROVIDERS). The design is scaled to whatever size the launcher gives; the
+     smallest size it can be resized to is the smallest one the design is still readable at. NOTE: the launcher takes targetCell* only when it is
+     not below the smallest size IN EVERY ORIENTATION (landscape cells are about 66 dp high): a minResizeHeight of 300 dp made a 4x4 come out 3x4. The gear opens WidgetConfigActivity. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
     android:minHeight="250dp"
-    android:minResizeWidth="110dp"
-    android:minResizeHeight="110dp"
+    android:minResizeWidth="245dp"
+    android:minResizeHeight="245dp"
     android:targetCellWidth="4"
     android:targetCellHeight="4"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen"
     android:initialLayout="@layout/widget_loading"
+    android:configure="gift.dhamma.uposatha.WidgetConfigActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional"
     android:previewImage="@drawable/widget_preview_l"
     android:previewLayout="@layout/widget_preview_l"
-    android:description="@string/widget_description" />
+    android:description="@string/widget_description_l" />

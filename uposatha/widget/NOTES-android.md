@@ -1,3 +1,124 @@
+# Android widgets: v2 (2026-10-10) - seven widgets, each one design scaled to its cell
+
+> This section is the current state. Everything below "Android widget: what was built" is the history of the first version (three sizes x three layers,
+> WidgetRenderer, then w_l*_* layouts); its data flow, alarms and texts-from-strings.json parts still hold, its layouts and size classes are gone.
+
+Mock-ups the owner approved: https://test.dhamma.gift/assets/shots/uposatha-widget-v2/index.html (source index.html in /var/www/html/assets/shots/uposatha-widget-v2/).
+Why v2 (owner, 2026-10-10): the first version put three designs into one "super responsive" widget, the text differed between sizes, lines were cut with "...",
+and a big cell showed small text on a white card. Reference the owner likes: Daff Moon (separate widgets, a widget stays itself when stretched).
+
+## What it is
+- Seven picker entries = `WidgetProvider.PROVIDERS` (WidgetPlan.MOON .. CAL): Moon 1x1, Moon + Uposatha 2x1, Uposatha 2x2 (`WidgetProviderSmall`), Uposatha 4x1,
+  Uposatha 4x2 (`WidgetProviderMedium`), Day & night (2x2 by default), Calendar 4x4 (`WidgetProviderLarge`). Small/Medium/Large keep their class names: a widget
+  of the first version that is on a screen stays and becomes the new one.
+- Small widgets are one thing. The two big ones (4x2, 4x4) have three slides (Uposatha / Day & night / Calendar) with the switch strip at the bottom
+  (left half back, right half forward; `layer_<id>` in the prefs; the 4x2 opens on Uposatha, the 4x4 on the calendar). Slides can be switched off per widget.
+- ONE design per widget, written in "base dp" in `WidgetViews` (the sizes of the smallest cell it is meant for). For the cell the launcher gives, every line
+  is measured with the real font (Lato via ResourcesCompat, `mw()`), the design's width and height are summed, and the whole design is scaled by
+  `k = WidgetPlan.scale(...)`: text sizes, paddings, the moon. A bigger cell = the same widget, bigger; nothing is cut; spare height goes into the gaps (`WidgetPlan.gap`).
+  The 2x2 has three arrangements of the SAME lines, chosen by what fits at k >= 1: the agreed wide one (1A / 1B: needs about 186 dp), stacked with date + time in
+  one line, stacked in two lines (the owner's phone: a 5-column grid, a 2x2 is 145 x 215 dp).
+- Real sizes come from the launcher (`OPTION_APPWIDGET_SIZES`, one RemoteViews per size; one size when the launcher refuses the map). No grid of guessed sizes any more.
+- Layouts `res/layout/w2_*.xml` hold only the structure and are GENERATED: `python3 widget/tools/gen_android_res.py` (also the drawables in three colour sets and
+  `widget_colors.xml`). Do not edit them by hand.
+- Colours: theme "system" = colour resources with night variants, resolved by the launcher (instant on a theme switch; API 31+ also for run-time colours through
+  `RemoteViews.setColor`); a forced theme (the widget's own setting) = fixed colours from `WidgetConfig.LIGHT_C / DARK_C` and the `_lt` / `_dk` drawables.
+  The card is an ImageView (`w_bg`): its alpha is the widget's opacity, its colour filter the forced surface colour.
+- Pictures: only the moon (`WidgetMoon`: earthshine night side instead of a black disc, the bitmap carries its own density so `wrap_content` shows it at the asked
+  dp; hero pair light / dark by the alpha-dimen trick, `moon_x` for a forced theme; ONE neutral mini-moon for lists and calendar cells) and the day bar (`WidgetBar`).
+- The widget's own settings: `WidgetConfigActivity` (`android:configure`, `reconfigurable|configuration_optional`: the launcher's gear; on Android 11 and older also
+  when the widget is added). Theme, transparency of the card (slider), details and the kala line ("as in the app" / on / off), slides, the calendar's moon of every
+  day and "next" list. Kept per widget id in the `dg_widget` prefs (`WidgetConfig`), removed in onDeleted. The real widget is shown on top and follows every choice.
+- Calendar: tiles as in the app; an Uposatha's evening date = the number in a filled circle, its day = a light tile, today = the gold frame; mini-moons under
+  Uposatha days (under every day with "moon of every day"; phases from the data's `moons`); the card of today; "Next" rows as the height allows
+  (`WidgetPlan.cal`); the arrows turn the month inside the widget (0..+2 months, back to today the next day); a day opens the app's calendar on it.
+- Wording: `design/strings.json` keys `w.*` (copied to `res/raw/widget_strings.json`); settings screen `cfg.*`.
+
+## Lessons of the night (2026-10-10 / 11): what the owner found by hand and why nobody had seen it
+
+Every one of these was on the owner's phone and in none of the "it passed" reports. The checks that find them now exist; run them.
+
+- **A launcher redraws ONTO the views it has** (`RemoteViews.reapply`, when the layout id is the same). So whatever one state hides,
+  colours or adds, the other state must set back. Three real bugs of this kind: the Moon's percent stayed hidden after it was turned on
+  ("the percent does not work"); a forced theme left its background filter, its moon and its day bar after "System" was chosen again;
+  and `addView` of the slides' switch into the card left ONE MORE COPY of the switch in the launcher on every redraw (4 copies after a
+  minute of the flow test, ~100 a day). Now: `frame()` always sets the filter and the alpha, the switch goes into its own `sw_host`
+  that is emptied first, `moon()` / `bar()` / the Moon set visibility both ways.
+  Check without a phone: `widget/android-render/run.sh --reapply` (a redraw onto existing views must give the same picture and the
+  same number of switches as a fresh widget, for a list of setting changes). On a device: `WidgetFlowTest` (`oneSwitchEach`, the Moon's percent).
+- **The blank screen at launch** was the page waiting for fonts from the network. The page stays hidden until `load` + `fonts.ready`
+  (`html.up-boot`, app-refresh.js); a file that is not in the bundle is fetched from dhamma.gift (`DgSitePlugin.proxy`). The site split
+  Lato into per-script files, `tools/page-files.json` is a recording and did not follow: seven fonts came from the site on every launch
+  (fast on a Test Lab emulator, a blank second or three on a phone on mobile data). Now `tools/bundle-from-repo.js` also copies what the
+  bundled css (`url(...)`) and html (`href` / `src`) name, and fails if such a file is not in dg-node. Check on a device:
+  `WidgetFlowTest` "launch: nothing is asked from the site" (reads logcat for requests to dhamma.gift).
+- **A launcher may report a size the widget does not have.** A Motorola razr (owner's phone; razr plus 2024 in Test Lab) reports the
+  cells of its OTHER screen: a 1 x 1 widget "82 x 68 dp" is 82 x 115 on the screen, a 4 x 4 "378 x 323" is 379 x 507. Every design was
+  scaled for a cell 1.6-1.7 times lower than the real one: small in the middle of its card, no moons and no list in the calendar "although
+  there is a lot of room". A Pixel is a little off too (a 4 x 4 "440" is 464: the gaps between the rows are left out).
+  So on Android 12+ a widget is drawn for the reported size AND for taller ones (`WidgetPlan.TALLER`, 9 views in one
+  `RemoteViews(Map<SizeF, RemoteViews>)`), and the launcher takes the biggest that fits the view it really has (it measures it itself).
+  Costs 0.2-0.7 s per redraw on a razr, off the main thread. A tap on the slides' switch or a month arrow is answered faster: each
+  size has its own intents (the data URI carries the height), so the tap says which size is on the screen, and only that one and the
+  reported one are drawn; the next tick draws all again.
+  The low wide arrangement of the strip (`w2_strip_w`) was made for the phantom "391 x 75" and stays for cells that really are low.
+  Samsung One UI 8 (Galaxy S24, Android 16) is another case and needs nothing: it lays the widget out at the size it reports and
+  shows the whole view 1.2 times smaller (the same factor both ways), so the design is whole, only smaller.
+  Check on a device: `WidgetFlowTest.drawnForItsSize` (a debug build names the size on each widget: `sw_host`'s content description
+  "drawn for WxH", compared with the view's real bounds). Numbers of any phone: the line at the bottom of the widget's settings screen
+  (`size ... min ... max ... screen ... density ... font`) - but these are the REPORTED ones; the real size is only in a view dump.
+- **The calendar: every date of an Uposatha looks the same, neighbours are one capsule** (owner, 2026-10-11; the page, the widget and
+  the iOS code alike). The evening it begins on and its day used to differ (a filled circle / a dim tile) and read as two kinds of
+  days. Now: a filled circle on each, and a band from the middle of a date to the middle of the next one through the edge of the cell;
+  over a row break the band stops flat at the edge and goes on from the edge of the next row. Widget: `w2_cal_week` has the tile as its
+  own layer (`g`), two halves behind the number (`hl`, `hr`, the same box and height as the circle) and today's translucent gold
+  plaque with its frame on top (`o`, `w2_ring`). Page: the band is the two pseudo-elements of the chip `.n` (as date-range pickers
+  do it), `data-up / data-pl / data-pr` on the cells, `.hl` = the plaque of today / of the chosen day over the capsule.
+  The render samples (`debug/assets/widget-sample*.json`) are regenerated from the current builder: the old ones had no two-date
+  Uposathas, no `lit`, 14 days.
+- **Settings are applied the moment they are chosen** ("Saved" appears, the widget on the home screen is redrawn); Done only closes.
+  He changed a setting, went back, and nothing had changed.
+- **`WidgetFlowTest` can fail now.** It used to swallow every exception and pass; "the flow passed" said nothing. Steps that throw
+  and `check(...)`s that do not hold are collected and the test fails with the list at the end.
+- The widget's data: 31 days of sun (was 14), the moon's phase now is read between two middays of the page's daily table (the mean
+  speed is half a day off after two weeks), data older than 30 days or of another time zone than the phone's (when the page follows the
+  phone's zone, `settings.tzAuto`) is the "Open Uposatha" placeholder. The bridge hands the data over when the page is idle
+  (`requestIdleCallback`): working it out takes the page's thread for up to a second on a phone.
+- A route (`MainActivity`, extra `route`) is only a path of the app's own page (`WidgetPlan.ownPath`): the activity is exported and an
+  address in the extra used to be loaded into the app's window.
+
+## Lessons of the owner's phone (2026-10-10, evening)
+- **One view per orientation, not a map of sizes.** `RemoteViews(landscape, portrait)`; the sizes are the classic options (portrait = min width x max
+  height, landscape = max width x min height). With `RemoteViews(Map<SizeF, ..>)` the launcher takes "the biggest that fits" and, when none fits by
+  its own measure, the smallest: a tall 5 x 6 widget was drawn with the view built for the low landscape cell (no moons, one row of the list, cut text).
+- **A tap opens the app through `WidgetOpenActivity`** (Theme.NoDisplay): it leaves the route in a static and starts the launcher's own intent;
+  MainActivity takes the route in onResume. An intent with an extra makes Android refuse the task snapshot and show a splash screen over the running
+  app at every tap (ActivityRecord.allowTaskSnapshot): a white splash over the dark page.
+- **The open page is not loaded again**: MainActivity asks `window.__upoRoute(route)` (uposatha-calendar.js) and loads the address only when the page
+  has no such function (a cold start, an older bundle). Loading showed as "open - blank - open".
+- **Widgets are drawn off the main thread**: `onReceive` goes `goAsync()` to one worker thread; `update()` is under one lock (the page's plugin
+  thread and the settings screen draw too). Seven widgets x two orientations on the main thread held up the app's own start.
+- **The Moon 1x1 is just the moon**; the percent is a setting of the widget (`cfg_pct_`).
+- A release build made here is signed with this server's debug key: it installs over the debug build, and Play Protect warns about an unknown developer.
+
+## How to look at it without a phone
+`widget/android-render/` (see run.sh.txt): Robolectric renders `WidgetSheet.cases()` (debug source set: every widget x real cell sizes x scenarios x settings,
+light and dark) to PNGs; about 6 s a picture on this box. The picker previews (`res/drawable-nodpi/widget_preview_*.png`) are written by the same run
+(WIDGET_PREVIEW=1), i.e. they are the real render, not hand-made pictures.
+On a device: debug `WidgetPreviewActivity` (`--es only '<regex>'`), androidTest `WidgetSheetTest` (the same PNGs) and `WidgetFlowTest` (the launcher: pin the big
+widget, three slides, resize, day tap, the settings screen, then the other six widgets).
+Unit tests: `WidgetPlanTest` (scale, arrangement, calendar rows, phase names), `WidgetFormatTest`.
+
+## Not verified yet (2026-10-10)
+- Verified on ONE virtual device (Test Lab MediumPhone.arm, API 34, Pixel launcher, 2026-10-10, two runs): WidgetFlowTest end to end (pin, slides, month arrows,
+  the launcher's resize in all directions, the settings from the launcher's edit button, day tap, the other six widgets). Videos per case:
+  https://test.dhamma.gift/assets/shots/uposatha-widget-v2/video/ . Lesson of the first run: `minResizeHeight` 300 dp made the launcher ignore the 4x4 target
+  (it must not exceed the target in ANY orientation: landscape cells are ~66 dp) and place a 3x4; it is 245 dp now.
+- Not on real phones yet (Samsung One UI, Motorola), not below API 31.
+- `OPTION_APPWIDGET_SIZES` on Samsung / Motorola launchers; the scale is computed from what they report.
+- Below API 31: a system theme switch shows after the next update (<= 15 min); the moon pair still follows at once.
+- Android 15 generated previews (`setWidgetPreview`) are not used; the PNG previews are.
+
 # Android widget: what was built (uposatha/android)
 
 > The picture pipeline described in "Files" and "Decisions" below (WidgetRenderer, widget_images, w_img_*, Lato in assets) was REPLACED by real views, see the last section "Native views rewrite". What still holds from the old text: the data flow, the plan/alarms, the size lists, the texts, the Uposatha cell colouring rules.
@@ -71,7 +192,7 @@ Why: the widget was one bitmap per size drawn by `WidgetRenderer` (Canvas). On a
 - Build: `export QEMU_LD_PREFIX=/usr/x86_64-linux-gnu ANDROID_HOME=/opt/android-sdk JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64; cd uposatha && node build.js && npx cap sync android && cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --no-daemon -q`.
 - On a device: debug `WidgetPreviewActivity` (`adb shell am start -n gift.dhamma.uposatha/.WidgetPreviewActivity`, extras `--ei w 360 --ei h 430 --es theme dark --ei layer 1 --ei scenario 2`): the REAL RemoteViews (`WidgetViews.build` -> `RemoteViews.apply`, as a launcher does) in frames of fixed dp sizes (160x160, 130x110, 170x340, 250x110, 360x150, 360x300, 300x430, 360x430, 360x520), light and dark (a night configuration context), 6 scenarios; PNGs in `.../files/widget-previews/`.
 - Test Lab (virtual, e.g. `MediumPhone.arm` API 34): `androidTest` has two tests in one run: `WidgetSheetTest` (the same frames as PNGs `sheet-*.png`, no launcher needed) and `WidgetFlowTest` (the real pinned widget on the launcher: layers, the launcher's resize handles - shorter, narrower, wider + taller - with all three layers shot after each resize, day tap). Command in `NOTES-testlab.md`; pull `/sdcard/Android/data/gift.dhamma.uposatha/files/shots`.
-- Without a phone: `widget/android-render/` (`WidgetRoboTest.java.txt`, `init.gradle.txt`, `run.sh.txt`): Robolectric (native graphics) renders the same sheets locally; it needs the x86_64 JDK 21 under qemu (see the old notes above) and is not in the build (an init script adds robolectric and a source dir). `WIDGET_ONLY='sheet-s1-L2-.*-dark'` filters; ~10 s a picture. It matched the emulator in every layer (fonts too).
+- (Older text; now `widget/android-render/run.sh`, see "Lessons of the night" above.) Without a phone: `widget/android-render/` (`WidgetRoboTest.java.txt`, `init.gradle.txt`, `run.sh.txt`): Robolectric (native graphics) renders the same sheets locally; it needs the x86_64 JDK 21 under qemu (see the old notes above) and is not in the build (an init script adds robolectric and a source dir). `WIDGET_ONLY='sheet-s1-L2-.*-dark'` filters; ~10 s a picture. It matched the emulator in every layer (fonts too).
 - Unit tests: `WidgetFormatTest`, `WidgetPlanTest`.
 
 ### Known gaps

@@ -354,8 +354,26 @@ if [ "${4:-}" = shortcuts ]; then
   ok() { echo "PASS $*" >> "$res"; }; ko() { echo "FAIL $*" >> "$res"; fail=1; }
   # The page is a WebView: uiautomator sees no text inside a release build, so the screen is read with OCR.
   screen_has() { adb exec-out screencap -p > "$OUT/ocr.png"; tesseract "$OUT/ocr.png" - 2>/dev/null | tee -a "$OUT/ocr.txt" | grep -qiE "$1"; }
+  # Start the app and wait until its window has the focus. Run 565: the cold start right after the launcher's
+  # long-press menu left the launcher in front, the blind "Not now" tap below then opened Google's search, and
+  # its "search history" text passed the Favorites & History check while every check after it failed.
+  start_app() {
+    local i s
+    for i in 1 2 3; do
+      adb shell am start -W "$@" > /dev/null
+      for s in 1 2 3 4 5 6; do
+        sleep 2; adb shell dumpsys window | grep -E "mCurrentFocus=.*$PKG/" > /dev/null && return 0
+      done
+    done
+    return 1
+  }
+  # The universal APK (gift.dhamma.twa) asks for notifications once the library download posts its progress
+  # (DgProgressPlugin); the system dialog then covered the history rows and the reader (run 565). The
+  # notification player scenario grants it the same way.
+  adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1
   adb logcat -c
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 15
+  adb exec-out screencap -p > "$OUT/first-launch.png"
   adb shell input tap 309 2184; sleep 2
   for r in mn8 metta sn56.11 dukkha dn22; do adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/$r" "$PKG" > /dev/null; sleep 10; done
   adb shell run-as "$PKG" true 2>/dev/null && echo "(debuggable)" >> "$res"
@@ -397,21 +415,24 @@ PY
     adb shell uiautomator dump /sdcard/m.xml > /dev/null 2>&1; adb shell cat /sdcard/m.xml > "$OUT/launcher-menu.xml"
     grep -qiE 'text="(dukkha|metta)' "$OUT/launcher-menu.xml" && ok "launcher menu shows a recent search" || ko "launcher menu: no recent search"
     grep -qi 'text="Favorites' "$OUT/launcher-menu.xml" && ok "launcher menu shows Favorites & History" || ko "launcher menu: no Favorites & History"
-    adb shell input keyevent KEYCODE_BACK; adb shell input keyevent KEYCODE_HOME
+    adb shell input keyevent KEYCODE_BACK; sleep 1; adb shell input keyevent KEYCODE_HOME; sleep 3
   else
     ko "launcher: app icon not found in the drawer"
   fi
   # Launch them the way the launcher does: the static one (MAIN + route extra), one recent text (SHORTCUT action).
   adb shell am force-stop "$PKG"
-  adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as > /dev/null; sleep 12
+  start_app -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as || ko "static shortcut: the app did not come to the front"
+  sleep 8
   adb shell input tap 309 2184; sleep 2   # "Not now" on the offline-library sheet a force-stop brings back
   adb exec-out screencap -p > "$OUT/shortcut-static.png"
-  screen_has "Favorites|History" && ok "static shortcut opens Favorites & History" || ko "static shortcut: Favorites & History not on screen"
+  # Words of the app's own window only: Google's search page says "search history" too (run 565).
+  screen_has "Subscriptions|All history|No favorites" && ok "static shortcut opens Favorites & History" || ko "static shortcut: Favorites & History not on screen"
   cp "$OUT/ocr.png" "$OUT/history.png"; tesseract "$OUT/history.png" - 2>/dev/null > "$OUT/history.txt"
   # Searches (not only texts) must be in the history too (owner, 2026-09-30: "поиски не сохраняются в историю").
   for q in metta dukkha; do grep -qi "$q" "$OUT/history.txt" && ok "search '$q' is in the history" || ko "search '$q' missing from the history"; done
   adb shell am force-stop "$PKG"
-  adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a gift.dhamma.mobile.SHORTCUT --es route /sn56.11 > /dev/null; sleep 12
+  start_app -n "$PKG/gift.dhamma.mobile.MainActivity" -a gift.dhamma.mobile.SHORTCUT --es route /sn56.11 || ko "recent-text shortcut: the app did not come to the front"
+  sleep 8
   adb shell input tap 309 2184; sleep 2
   adb exec-out screencap -p > "$OUT/shortcut-recent.png"
   screen_has "sn56.11|Samyutta|Saṁyutta" && ok "recent-text shortcut opens sn56.11" || ko "recent-text shortcut: sn56.11 not on screen"
@@ -423,7 +444,8 @@ PY
   for r in mn7 mn9 mn10 mn11 mn12; do adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/$r" "$PKG" > /dev/null; sleep 8; done
   open_quick() {
     adb shell am force-stop "$PKG"
-    adb shell am start -W -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as > /dev/null; sleep 10
+    start_app -n "$PKG/gift.dhamma.mobile.MainActivity" -a android.intent.action.MAIN --es route /4as || echo "quick window: the app did not come to the front" >> "$res"
+    sleep 6
     adb shell input tap 309 2184; sleep 2
   }
   # A history row's star sits at the right edge; its height is found with OCR (the page is a WebView,

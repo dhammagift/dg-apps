@@ -76,8 +76,10 @@ jobs:
           WAIT: ${{ inputs.wait }}
         run: |
           set -uo pipefail
-          APP=$(find app -name App.app -maxdepth 3 | head -1)
-          [ -n "$APP" ] || { find app -maxdepth 3; exit 1; }
+          # The artifact is the App.app bundle's CONTENTS in a folder named after the artifact: give it the .app name.
+          SRC=$(ls -d app/dg-app-ios-simulator-* | head -1)
+          [ -f "$SRC/Info.plist" ] || { find app -maxdepth 2; exit 1; }
+          mv "$SRC" app/App.app; APP=app/App.app
           UDID=$(xcrun simctl list devices booted | grep -o '[0-9A-F-]\{36\}' | head -1)
           xcrun simctl terminate "$UDID" com.apple.mobilesafari || true
           xcrun simctl install "$UDID" "$APP"

@@ -1,0 +1,44 @@
+name: Uposatha widget on Windows 11 (Widgets Board)
+
+# A probe, started by hand: a Windows 11 runner installs the Uposatha PWA into Edge by policy, opens the Widgets Board and tries to
+# add the widget (uposatha/test/windows/widget-board.ps1). Screenshots and the element trees of every step are the result; the job
+# itself fails nothing. Nothing is built or uploaded: the PWA is the live page.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'The page to install as an app'
+        required: false
+        type: string
+        default: 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa'
+
+concurrency:
+  group: uposatha-widget-windows
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  board:
+    name: Widgets Board
+    runs-on: windows-11-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install the PWA, open the board, add the widget
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./uposatha/test/windows/widget-board.ps1 -Url '${{ inputs.url }}' -Out win-shots
+
+      - name: Upload the screenshots and the trees
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uposatha-widget-windows-${{ github.run_number }}
+          path: win-shots
+          retention-days: 14
+          if-no-files-found: ignore

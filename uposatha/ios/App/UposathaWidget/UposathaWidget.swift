@@ -231,7 +231,7 @@ struct ProbePlain: Widget {
     var body: some WidgetConfiguration { probe("ProbePlain") { Text("plain").foregroundColor(Color.white) } }
 }
 struct ProbeLato: Widget {
-    var body: some WidgetConfiguration { probe("ProbeLato") { Text("Lato").font(dgFont(28, .bold)).foregroundColor(Color.white) } }
+    var body: some WidgetConfiguration { probe("ProbeLato") { Text(DgFonts.ready ? "Lato" : "NO LATO").font(dgFont(28, .bold)).foregroundColor(Color.white) } }
 }
 struct ProbeColor: Widget {
     var body: some WidgetConfiguration { probe("ProbeColor", Color.dgSurface) { Text("colour").foregroundColor(Color.dgAccent) } }

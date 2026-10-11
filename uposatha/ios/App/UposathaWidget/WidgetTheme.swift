@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import CoreText
 
 // The widget's palette: the same table as Android's (WidgetConfig.LIGHT_C / DARK_C, widget/tools/gen_android_res.py PALETTE),
 // as dynamic colours, so the widget follows the system theme. The card is the app's card tint, not white / black.
@@ -54,15 +53,6 @@ enum DgWeight {
         }
     }
 
-    // The data set in Assets.xcassets that holds the TTF
-    var asset: String {
-        switch self {
-        case .regular: return "lato_regular"
-        case .semibold: return "lato_semibold"
-        case .bold: return "lato_bold"
-        }
-    }
-
     var system: UIFont.Weight {
         switch self {
         case .regular: return UIFont.Weight.regular
@@ -80,26 +70,16 @@ enum DgWeight {
     }
 }
 
-// Lato lives in the asset catalogue as data sets (no UIAppFonts entry, no project change): it is registered once per process.
+// Lato is three files in the extension's bundle, named in its Info.plist (UIAppFonts): the system registers them itself, in the
+// extension AND in the process that draws the widget from its archive. Registering them by hand from data (CTFontManagerRegisterGraphicsFont)
+// worked in the extension only: the archive named a font the drawing process did not have, and it refused the WHOLE widget -
+// every size came out black, on a real iPhone and on the simulator (owner, TestFlight 561; uposatha/test/ios-sim/widget-gallery.sh).
 enum DgFonts {
     // True when all three faces answer by their PostScript names; false: the widget draws and measures with the system font.
-    static let ready: Bool = DgFonts.registerAll()
-
-    private static func registerAll() -> Bool {
-        var ok = true
+    static let ready: Bool = {
         let faces: [DgWeight] = [.regular, .semibold, .bold]
-        for face in faces {
-            if UIFont(name: face.psName, size: 12) != nil { continue }   // already registered in this process
-            if let asset = NSDataAsset(name: face.asset),
-               let provider = CGDataProvider(data: asset.data as CFData),
-               let font = CGFont(provider) {
-                // false also means "already registered": the check below is what counts
-                _ = CTFontManagerRegisterGraphicsFont(font, nil)
-            }
-            if UIFont(name: face.psName, size: 12) == nil { ok = false }
-        }
-        return ok
-    }
+        return faces.allSatisfy { UIFont(name: $0.psName, size: 12) != nil }
+    }()
 }
 
 // A fixed size (no Dynamic Type): every design is measured with the same font and scaled to its widget.

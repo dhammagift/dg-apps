@@ -3,8 +3,9 @@ import XCTest
 // The Uposatha widgets as the system shows them (owner, 2026-10-11: on a real iPhone every preview in the gallery and the widget
 // on the Home Screen were black). Nothing but SpringBoard draws a widget, so the test drives SpringBoard: Home Screen -> edit mode
 // -> Add Widget -> search "Uposatha" -> every page of the previews -> Add Widget -> the Home Screen with it.
-// It asserts nothing about the pictures: the shell side (widget-gallery.sh) measures them and collects the extension's log and
-// crash reports. Every step leaves a screenshot, and SpringBoard's element tree where a step can miss (the labels differ by iOS).
+// A widget the system refuses to draw is a pure black card (what the owner saw): the previews of the real widgets and the widget
+// on the Home Screen must not be one. The shell side (widget-gallery.sh) collects the extension's log and crash reports. Every
+// step leaves a screenshot, and SpringBoard's element tree where a step can miss (the labels differ by iOS).
 final class WidgetGalleryTests: XCTestCase {
     private let board = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     // The simulator's processes see the Mac's file system: the shell reads the pictures from here
@@ -15,6 +16,22 @@ final class WidgetGalleryTests: XCTestCase {
         n += 1
         let file = out.appendingPathComponent(String(format: "%02d-%@.png", n, name))
         do { try XCUIScreen.main.screenshot().pngRepresentation.write(to: file) } catch { print("shot \(name): \(error)") }
+    }
+
+    // The share of pure black in a box of the screen (centre and size as shares of the screen)
+    private func black(_ cx: CGFloat, _ cy: CGFloat, _ w: CGFloat, _ h: CGFloat) -> Double {
+        guard let full = XCUIScreen.main.screenshot().image.cgImage else { return 0 }
+        let W = CGFloat(full.width), H = CGFloat(full.height)
+        let box = CGRect(x: (cx - w / 2) * W, y: (cy - h / 2) * H, width: w * W, height: h * H).integral
+        guard let part = full.cropping(to: box) else { return 0 }
+        let pw = part.width, ph = part.height
+        var px = [UInt8](repeating: 0, count: pw * ph * 4)
+        guard let ctx = CGContext(data: &px, width: pw, height: ph, bitsPerComponent: 8, bytesPerRow: pw * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return 0 }
+        ctx.draw(part, in: CGRect(x: 0, y: 0, width: pw, height: ph))
+        var dark = 0
+        for i in stride(from: 0, to: px.count, by: 4) where px[i] < 6 && px[i + 1] < 6 && px[i + 2] < 6 { dark += 1 }
+        return Double(dark) / Double(pw * ph)
     }
 
     private func tree(_ name: String) {
@@ -78,13 +95,22 @@ final class WidgetGalleryTests: XCTestCase {
         let pages = 13
         for page in 1...pages {
             shot("preview-\(page)")
+            // the five real widgets: the middle of the preview (every size covers it) is the card, not a black hole
+            if page <= 5 {
+                let share = black(0.5, 0.61, 0.16, 0.06)   // measured on the black run: 1.00 for all five, 0.00 for a drawn card
+                XCTAssertLessThan(share, 0.9, "preview \(page) is a black card: the system did not draw the widget")
+            }
             if page < pages {
                 board.swipeLeft()
                 sleep(2)
             }
         }
-        board.swipeRight()
-        sleep(2)
+        // back to the first one (the small Uposatha): that is the one put on the Home Screen
+        for _ in 1..<pages {
+            board.swipeRight()
+            sleep(1)
+        }
+        sleep(1)
         shot("preview-to-add")
 
         let put = board.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Add Widget'")).firstMatch
@@ -96,5 +122,7 @@ final class WidgetGalleryTests: XCTestCase {
         sleep(6)
         shot("home-with-widget")
         tree("tree-6-home")
+        // the new widget takes the first place of the page: its middle
+        XCTAssertLessThan(black(0.29, 0.21, 0.20, 0.06), 0.9, "the widget on the Home Screen is a black card")
     }
 }

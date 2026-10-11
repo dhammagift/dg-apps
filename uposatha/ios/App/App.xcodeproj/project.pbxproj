@@ -17,6 +17,9 @@
 		E7B1D0F1000000100072D4E8 /* SwitchLayerIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000080072D4E8 /* SwitchLayerIntent.swift */; };
 		E7B1D0F1000000120072D4E8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000110072D4E8 /* Assets.xcassets */; };
 		E7B1D0F1000000140072D4E8 /* widget-sample.json in Resources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000130072D4E8 /* widget-sample.json */; };
+		E7B1D0F1000000250072D4E8 /* lato_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000240072D4E8 /* lato_regular.ttf */; };
+		E7B1D0F1000000270072D4E8 /* lato_semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000260072D4E8 /* lato_semibold.ttf */; };
+		E7B1D0F1000000290072D4E8 /* lato_bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000280072D4E8 /* lato_bold.ttf */; };
 		E7B1D0F1000000180072D4E8 /* UposathaWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000170072D4E8 /* UposathaWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D6A0C0DE2FEA00050072D4E8 /* DgSelfTestPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A0C0DE2FEA00040072D4E8 /* DgSelfTestPlugin.swift */; };
 		D6A0C0DE2FEA00020072D4E8 /* DgApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A0C0DE2FEA00010072D4E8 /* DgApp.swift */; };
@@ -66,6 +69,9 @@
 		E7B1D0F1000000080072D4E8 /* SwitchLayerIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchLayerIntent.swift; sourceTree = "<group>"; };
 		E7B1D0F1000000110072D4E8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E7B1D0F1000000130072D4E8 /* widget-sample.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "widget-sample.json"; sourceTree = "<group>"; };
+		E7B1D0F1000000240072D4E8 /* lato_regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = lato_regular.ttf; sourceTree = "<group>"; };
+		E7B1D0F1000000260072D4E8 /* lato_semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = lato_semibold.ttf; sourceTree = "<group>"; };
+		E7B1D0F1000000280072D4E8 /* lato_bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = lato_bold.ttf; sourceTree = "<group>"; };
 		E7B1D0F1000000150072D4E8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E7B1D0F1000000160072D4E8 /* UposathaWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = UposathaWidget.entitlements; sourceTree = "<group>"; };
 		E7B1D0F1000000170072D4E8 /* UposathaWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UposathaWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -155,6 +161,9 @@
 				E7B1D0F1000000080072D4E8 /* SwitchLayerIntent.swift */,
 				E7B1D0F1000000110072D4E8 /* Assets.xcassets */,
 				E7B1D0F1000000130072D4E8 /* widget-sample.json */,
+				E7B1D0F1000000240072D4E8 /* lato_regular.ttf */,
+				E7B1D0F1000000260072D4E8 /* lato_semibold.ttf */,
+				E7B1D0F1000000280072D4E8 /* lato_bold.ttf */,
 				E7B1D0F1000000150072D4E8 /* Info.plist */,
 				E7B1D0F1000000160072D4E8 /* UposathaWidget.entitlements */,
 			);
@@ -265,6 +274,9 @@
 			files = (
 				E7B1D0F1000000120072D4E8 /* Assets.xcassets in Resources */,
 				E7B1D0F1000000140072D4E8 /* widget-sample.json in Resources */,
+				E7B1D0F1000000250072D4E8 /* lato_regular.ttf in Resources */,
+				E7B1D0F1000000270072D4E8 /* lato_semibold.ttf in Resources */,
+				E7B1D0F1000000290072D4E8 /* lato_bold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

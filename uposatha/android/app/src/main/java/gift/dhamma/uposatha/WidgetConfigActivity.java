@@ -114,7 +114,7 @@ public class WidgetConfigActivity extends Activity {
             col.addView(label(tx.get("cfg.pct")));
             col.addView(seg(new String[] { tx.get("cfg.on"), tx.get("cfg.off") }, cfg.pct ? 0 : 1, v -> cfg.pct = v == 0));
         }
-        if (kind == WidgetPlan.UPO_M || kind == WidgetPlan.CAL) {
+        if (kind == WidgetPlan.UPO_M || kind == WidgetPlan.CAL || kind == WidgetPlan.STRIP) {
             col.addView(label(tx.get("cfg.slides")));
             col.addView(seg(new String[] { tx.get("cfg.on"), tx.get("cfg.off") }, cfg.slides ? 0 : 1, v -> cfg.slides = v == 0));
         }

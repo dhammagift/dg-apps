@@ -173,6 +173,11 @@ def layouts():
         lin('grid', 'vertical', [], 'android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"'),
         card,
         lin('nx', 'vertical', [tv('nlab', 'W_TM', 'android:textAllCaps="true" android:letterSpacing="0.09"'), lin('nlist', 'vertical', [], ROWW)], ROWW)], MATCH)))
+    # The calendar slide of the 4x1 strip: the month and the Uposatha's day at the left, two weeks beside them (WidgetViews.calendarTwo)
+    write('layout/w2_cal_two.xml', root(lin('w_c', 'horizontal', [
+        lin('side', 'vertical', [tv('month', 'W_S'), tv('c_st', 'W_BA')], 'android:layout_width="wrap_content" android:layout_height="wrap_content"'),
+        lin('col_r', 'vertical', [wk, lin('grid', 'vertical', [], 'android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"')],
+            'android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"')], MATCH + ' android:gravity="center_vertical"')))
     # A day of the calendar: the tile (g, a picture so that the gap round it is its padding), over it the column of the number and the
     # moon. The number sits on two halves (hl, hr) that reach the edges of the cell: filled, they join the dates of one Uposatha into a
     # capsule across the cells (WidgetViews.week).

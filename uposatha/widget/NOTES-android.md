@@ -223,3 +223,11 @@ component, action and extras ours). `WidgetOpenActivity` hands them to `WidgetPr
 numbers (`WidgetPlan.keyOf`). A resize changes the reported size and the widget starts anew with the ladder. The settings' line says
 "view WxH" or "not known yet". Seen on a virtual phone (Test Lab): the tap's bounds do arrive ("reported 80x104 dp, its view is
 80x104 dp"). `WidgetFlowTest` 10b / 10c check that the tapped widget is drawn for exactly that.
+
+## The 4x1 strip has the three slides too (2026-10-11)
+
+Owner: "the same set as the big ones", with the same switch (variant B of the mock-ups, test.dhamma.gift/assets/shots/uposatha-widget-v2/strip-slides.html).
+Slide 0 is the strip itself, 1 is Day & night in `w2_day_m` with less air (`low`), 2 is `calendarTwo()`: the week of today and the next one
+(`w2_cal_two`: month and the Uposatha's day at the left, the same `week()` rows and capsules at the right; no month arrows, a date opens the
+app's calendar). "Low" is a slide under 110 dp without the switch. The setting "slides" is in the strip's settings as well; on by default,
+so strips already on a home screen get the switch with the update.

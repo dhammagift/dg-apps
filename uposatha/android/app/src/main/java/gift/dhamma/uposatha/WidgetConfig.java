@@ -19,7 +19,7 @@ final class WidgetConfig {
     int moons = APP;         // the calendar: the moon of every day
     boolean next = true;     // the calendar: the list of the next Uposathas
     boolean pct = false;     // the Moon 1x1: the lit percent under the moon (owner, 2026-10-10: just the moon by default)
-    boolean slides = true;   // the big widgets (4x2, 4x4): three slides (Uposatha, Day & night, Calendar) with a switch at the bottom
+    boolean slides = true;   // the big widgets (4x2, 4x4) and the 4x1 strip: three slides (Uposatha, Day & night, Calendar) with a switch at the bottom
 
     static WidgetConfig load(Context ctx, int id) {
         SharedPreferences p = WidgetProvider.prefs(ctx);

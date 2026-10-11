@@ -97,6 +97,11 @@ final class WidgetSheet {
         for (int[] o : new int[][] { { 6, 368, 429 }, { 4, 368, 214 } }) for (int sl = 0; sl < 3; sl++) for (int sc : new int[] { 5, 0 }) {
             Case x = new Case(o[0], o[1], o[2], sc, "owner-slide" + sl, def, 0); x.slide = sl; out.add(x);
         }
+        // The 4x1 strip with its three slides (owner, 2026-10-11: "the same set as the big ones"): the owner's razr (298 x 98), a
+        // Pixel (368 x 104), a low cell (313 x 75) and a narrow one (250 x 90)
+        for (int[] o : new int[][] { { 298, 98 }, { 368, 104 }, { 313, 75 }, { 250, 90 } }) for (int sl = 0; sl < 3; sl++) for (int sc : new int[] { 5, 0 }) {
+            Case x = new Case(WidgetPlan.STRIP, o[0], o[1], sc, "strip-slide" + sl, def, 0); x.slide = sl; out.add(x);
+        }
         // The same phone's seven widgets as it showed them on 2026-10-11 ({kind, reported w, h, real w, h}: 78 dp a column reported,
         // 78.5 n - 16 given): each drawn for the size the launcher takes out of WidgetPlan.sizes for the view it really has.
         for (int[] o : new int[][] { { 0, 78, 75, 62, 98 }, { 1, 156, 75, 141, 98 }, { 2, 156, 151, 141, 213 }, { 3, 313, 75, 298, 98 }, { 4, 313, 151, 298, 213 },

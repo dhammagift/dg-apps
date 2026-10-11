@@ -74,7 +74,7 @@ final class WidgetViews {
         this.ctx = ctx; this.widgetId = widgetId; this.cfg = cfg; this.monthOff = monthOff; this.slide = slide; this.drawnW = wDp; this.drawnH = hDp;
         this.w = Math.max(40, wDp - 2); this.h = Math.max(40, hDp - 2 - (slide >= 0 ? SWITCH_DP : 0));
         // a big widget (4x2, 4x4) with slides is one of three designs at the widget's own size: its own (the 2x2's in a narrow cell), Day & night, the calendar
-        this.kind = slide < 0 ? kind : slide == 1 ? WidgetPlan.DAY : slide == 2 ? WidgetPlan.CAL : this.w < 200 ? WidgetPlan.UPO : WidgetPlan.UPO_M;
+        this.kind = slide < 0 ? kind : slide == 1 ? WidgetPlan.DAY : slide == 2 ? WidgetPlan.CAL : kind == WidgetPlan.STRIP ? WidgetPlan.STRIP : this.w < 200 ? WidgetPlan.UPO : WidgetPlan.UPO_M;
         this.density = ctx.getResources().getDisplayMetrics().density;
         this.theme = cfg.theme;
         this.night = (ctx.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
@@ -83,7 +83,7 @@ final class WidgetViews {
     /** The widget of a kind for one cell size; data == null, stale or not covering today: the placeholder. A failure falls back to the placeholder too. */
     static RemoteViews build(Context ctx, int widgetId, int kind, int wDp, int hDp, JSONObject data, long now, WidgetConfig cfg, int monthOff, int slide) {
         if (cfg == null) cfg = new WidgetConfig();
-        if ((kind != WidgetPlan.UPO_M && kind != WidgetPlan.CAL) || !cfg.slides) slide = -1;
+        if ((kind != WidgetPlan.UPO_M && kind != WidgetPlan.CAL && kind != WidgetPlan.STRIP) || !cfg.slides) slide = -1;
         else slide = ((slide % 3) + 3) % 3;
         WidgetViews v = new WidgetViews(ctx, widgetId, kind, wDp, hDp, cfg, monthOff, slide);
         WidgetModel model = WidgetModel.parse(data, now);
@@ -571,14 +571,15 @@ final class WidgetViews {
         float needW = 32 + max(mw(SB, NS, name), mw(RG, T, sub)) + 16 + max(kalaW(KS), mw(RG, T, left));
         float head = lh(NS) + lh(T) + 12 + WidgetBar.HEIGHT + 1 + lh(S), listH = 8 + 6 * ROW + 8 + lh(12);
         boolean tall = h >= 24 + head + listH;   // a tall one adds the six parts with their borders and the sun
-        fit(needW, 24 + head + (tall ? listH : 0), 0.6f, tall ? 1.5f : 2.2f);
+        boolean low = h < LOW;   // a slide of the 4x1 strip: the same lines with less air round them, so the type stays readable
+        fit(needW, (low ? 10 : 24) + head - (low ? 6 : 0) + (tall ? listH : 0), 0.6f, tall ? 1.5f : 2.2f);   // low: 5 dp above and below, 6 less before the bar
         start(R.layout.w2_day_m);
-        pad(R.id.w_c, 16, 12, 16, 12);
+        pad(R.id.w_c, 16, low ? 5 : 12, 16, low ? 5 : 12);
         text(R.id.name, name, NS, TEXT);
         text(R.id.sub, sub, T, MUTED);
         kala(KS);
         text(R.id.left, left, T, MUTED); pad(R.id.left, 0, 1, 0, 0);
-        bar(d, cur, w - 32 * k); pad(R.id.bar, 0, 12, 0, 0);
+        bar(d, cur, w - 32 * k); pad(R.id.bar, 0, low ? 6 : 12, 0, 0);
         String[] tk = { d.partFrom[0], d.noon.hm, d.sunset.hm, d.partTo[5] };
         for (int i = 0; i < 4; i++) text(new int[] { R.id.tk0, R.id.tk1, R.id.tk2, R.id.tk3 }[i], tk[i], S, MUTED);
         pad(R.id.tks, 0, 1, 0, 0);
@@ -604,7 +605,37 @@ final class WidgetViews {
 
     // ================================================================== Calendar 4x4
 
+    /** The height (dp, without the slides' switch) under which a slide is a low strip: the 4x1 with its three slides. */
+    private static final float LOW = 110;
+
+    /**
+     * The calendar in the 4x1 strip: the week of today and the next one, with the same capsules; beside them the month and the
+     * day of the Uposatha that is on or comes next. No arrows: a tap on a date opens the app's calendar on it.
+     */
+    private void calendarTwo() {
+        final float M = 15, T = 11.5f, ROW = 26;
+        String month = tx.monthName(WidgetFormat.month(m.today)), day = dayN(m.cur());
+        float side = max(mw(SB, M, month), mw(BD, T, day)), needH = 12 + lh(10.5f) + 3 + 2 * ROW;
+        k = WidgetPlan.scale(w, h, 28 + side + 12 + 7 * 28, needH, 0.6f, 1.6f);
+        start(R.layout.w2_cal_two);
+        pad(R.id.w_c, 14, 6, 12, 6);
+        text(R.id.month, month, M, TEXT);
+        text(R.id.c_st, day, T, INK);
+        pad(R.id.c_st, 0, 2, 0, 0);
+        pad(R.id.side, 0, 0, 12, 0);
+        for (int i = 0; i < 7; i++) {
+            String s = tx.weekday(m.weekStart == 0 ? (i + 6) % 7 : i);
+            text(WD[i], tx.ru() ? s : s.substring(0, 2), 10.5f, MUTED);
+        }
+        pad(R.id.wk, 0, 0, 0, 3);
+        int dow = WidgetFormat.dow(WidgetFormat.year(m.today), WidgetFormat.month(m.today), WidgetFormat.day(m.today));
+        long first = WidgetFormat.daysFromCivil(WidgetFormat.year(m.today), WidgetFormat.month(m.today), WidgetFormat.day(m.today)) - (m.weekStart == 0 ? (dow + 1) % 7 : dow);
+        rv.removeAllViews(R.id.grid);
+        for (int r = 0; r < 2; r++) rv.addView(R.id.grid, week(first + r * 7L, 0, r, false, false));
+    }
+
     private void calendar() {
+        if (h < LOW) { calendarTwo(); return; }
         // the month shown: today's, or one of the next two (the arrows; the data reaches about eleven weeks ahead)
         int y0 = WidgetFormat.year(m.today), m0 = WidgetFormat.month(m.today) - 1 + Math.max(0, Math.min(WidgetProvider.MONTHS_AHEAD, monthOff));
         int[] mo = WidgetModel.month(WidgetModel.ymd(y0 + m0 / 12, m0 % 12 + 1, 1), m.weekStart);   // year, month, offset, days, rows
@@ -706,7 +737,7 @@ final class WidgetViews {
         for (int c = 0; c < 7; c++) {
             String ymd = WidgetFormat.ymdFromDays(start + c);
             int day = WidgetFormat.day(ymd);
-            boolean in = WidgetFormat.month(ymd) == month, today = ymd.equals(m.today), past = ymd.compareTo(m.today) < 0;
+            boolean in = month == 0 || WidgetFormat.month(ymd) == month, today = ymd.equals(m.today), past = ymd.compareTo(m.today) < 0;   // month 0: two weeks whatever the month (calendarTwo)
             WidgetModel.Upo startOf = m.startingOn(ymd), dayOf = m.uposathaOn(ymd);
             // Every date of an Uposatha carries the same solid mark - the evening it begins on and its own day (by the suttas two dates) -
             // and neighbouring dates are joined into one capsule: the band runs from the middle of a date to the middle of the next,

@@ -71,15 +71,16 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
     }
 
     // The sha256 the unpacked database must have, kept across launches: the transfer may end while the app is not running,
-    // and existing() unpacks the archive at the next launch.
-    private static let expectedShaKey = "dgLibrarySha256"
+    // and existing() unpacks the archive at the next launch. A file beside the archive, not UserDefaults: UserDefaults is
+    // one of Apple's required-reason APIs, and this app declares none (build-app.yml's check).
+    private static var expectedShaURL: URL { DgLibrary.archiveURL.appendingPathExtension("sha256") }
 
     @objc func start(_ call: CAPPluginCall) {
         guard let raw = call.getString("url"), let url = URL(string: raw) else {
             call.reject("no url")
             return
         }
-        UserDefaults.standard.set(call.getString("sha256") ?? "", forKey: Self.expectedShaKey)
+        try? (call.getString("sha256") ?? "").write(to: Self.expectedShaURL, atomically: true, encoding: .utf8)
         // A second start while one is running joins the running transfer instead of racing it: the
         // page can be reloaded (or the app relaunched) mid-download. After a relaunch the plugin is new
         // (task == nil) while the system's background session may still be carrying the previous run's
@@ -162,12 +163,14 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
             self.notifyListeners("unpack", data: ["loaded": loaded, "total": expectedBytes])
         }, output: { hasher.update(data: $0) })
         // The manifest's checksum, before anything replaces the working library (an archive an older build left has none).
-        let expected = UserDefaults.standard.string(forKey: Self.expectedShaKey) ?? ""
+        let expected = ((try? String(contentsOf: Self.expectedShaURL, encoding: .utf8)) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if !expected.isEmpty {
             let actual = hasher.finalize().map { String(format: "%02x", $0) }.joined()
             if actual.lowercased() != expected.lowercased() {
                 try? fm.removeItem(at: tmp)
                 try? fm.removeItem(at: archive)
+                try? fm.removeItem(at: Self.expectedShaURL)
                 throw DgSqlError("the downloaded library is damaged (checksum)")
             }
         }
@@ -179,6 +182,7 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
             try fm.moveItem(at: tmp, to: DgLibrary.dbURL)
         }
         try? fm.removeItem(at: archive)
+        try? fm.removeItem(at: Self.expectedShaURL)
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         var mutable = DgLibrary.dbURL

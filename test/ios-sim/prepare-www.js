@@ -114,7 +114,8 @@ const manifest = {
     file_gz: 'dg.db.gz',
     bytes_gz: gzBytes.length,
     bytes: dbBytes.length,
-    sha256: crypto.createHash('sha256').update(gzBytes).digest('hex'),
+    // Of the UNPACKED database, as dg-node's build-search-db.js publishes it and both native downloaders check it.
+    sha256: crypto.createHash('sha256').update(dbBytes).digest('hex'),
 };
 fs.writeFileSync(path.join(dataDir, 'db-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`fixture: ${(dbBytes.length / 1024).toFixed(0)} kB -> ${(gzBytes.length / 1024).toFixed(0)} kB gz, build_id ${manifest.build_id}`);

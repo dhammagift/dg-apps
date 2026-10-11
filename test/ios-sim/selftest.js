@@ -82,7 +82,13 @@
     // timeout with "TO JS {"connected":true,"connectionType":"wifi"}" as the last console line and
     // no selftest.json ever written. This harness IS the reader tapping "Download": it answers the
     // sheet the instant it opens, same as a human would.
+    // By TAPPING it: offline-status.js's listener runs first (this script is the last on the page) and has already
+    // settled platform.js's promise with the sheet's own answer, so a resolve(true) here was ignored and the sheet
+    // waited for a tap until the deadline (every run from 263 to 560: "the library never opened"). The sheet is
+    // built synchronously by then; without one (a page with no offline-status.js) the answer goes in directly.
     window.addEventListener('dg:need-consent', function (event) {
+        var download = document.querySelector('#dgConsent .dgc-primary');
+        if (download) { download.click(); return; }
         if (event && event.detail && typeof event.detail.resolve === 'function') event.detail.resolve(true);
     });
 

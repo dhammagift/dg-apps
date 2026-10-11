@@ -2,44 +2,46 @@ import UIKit
 import WebKit
 import Capacitor
 
-// The root: the page sits inside the safe area (under the status bar and above the home indicator), on a
-// fixed dark background — issue #15/#51's own words: the strip behind both bars is the site's own dark navbar
-// band, ALWAYS, in both themes, not something that follows the page's current theme.
+// The page's own background (white by day, #111111 at night): what shows behind the first paint and at the
+// overscroll edges, the same pair as Android's dg_navbar (values/colors.xml, values-night) and Uposatha's.
+private let dgPageBackground = UIColor { traits in
+    traits.userInterfaceStyle == .dark
+        ? UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 1)
+        : UIColor.white
+}
+
+// The root: the page runs EDGE TO EDGE, as on Android and in Uposatha and the dictionary on iOS (owner,
+// 2026-10-11: the dark "борода" below the page "занимает драгоценные миллиметры"). The WKWebView spans the
+// whole screen, under the transparent status bar and the home indicator. The page keeps clear of them
+// itself, the way it already does on Android: its strip behind the clock (home.css, html.dg-app
+// body::before, over every layer, the colour of what is under it), the drawer's and the sheets' padding
+// (--dg-sat/--dg-sab), and on the pages the app carries as files a strip of their own (native-bridge.js,
+// #dg-edge-strip). The bar heights come from the bridge below (--safe-area-inset-*), not from env() alone,
+// which WKWebView does not report dependably in an app (Uposatha's runs 446-449) — the failure that put
+// text under the clock before.
 //
-// This used to be done differently: capacitor.config.json's ios.contentInset:"always" (plus a matching
-// ios.backgroundColor), which insets the WKWebView's SCROLL CONTENT but leaves its FRAME spanning the whole
-// screen, status bar included — so the status bar is just the native OS chrome drawn transparently over
-// whatever the page has scrolled to that instant. Capacitor's own contentInset handling doesn't touch
-// position:fixed elements at all (they're laid out against the full, uninset viewport), so a fixed-position
-// panel (dg-node's #dg-drawer, dg-node #51 "мультитул") or the page's own top content can end up rendered
-// AT true screen y=0 — directly under/behind the status bar — independent of scroll position, which is
-// exactly the reported "иконки мультитула наезжают на статус-бар" and the settings sheet's sideways drift
-// (dg-node bc5a3e7 patched the drift's own symptom; this is that bug's actual native root cause).
-//
-// Uposatha and Dict hit no version of this bug because they never used contentInset — both already pin their
-// bridge's view to safeAreaLayoutGuide (see their own DgApp.swift), so their WKWebView's FRAME itself never
-// extends past the safe area: nothing in the page ever renders under either bar, fixed or not, scrolled or
-// not. Same fix here.
+// What this replaces: the web view pinned to the safe area on a fixed navy background (issue #15/#51), so
+// nothing could reach under the bars — at the price of a navy field above and below the page.
 final class DgRootViewController: UIViewController {
     private let bridgeController = DgBridgeViewController()
 
-    // UIKit asks the WINDOW'S rootViewController for this — this VC, not its child bridgeController, now
-    // that the child's own view no longer spans the full screen (it's confined to the safe area above). A
-    // status-bar-style override left on DgBridgeViewController alone would simply never be consulted.
-    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+    // The status bar's icon colour is the page's decision (native-bridge.js syncBarIcons -> SystemBars.setStyle,
+    // light on the navy home bar and the dark theme, dark on the light theme), which lands on the bridge view
+    // controller. UIKit asks the WINDOW'S root (this VC), so the question is forwarded.
+    override var childForStatusBarStyle: UIViewController? { bridgeController }
+    override var childForStatusBarHidden: UIViewController? { bridgeController }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0x2E / 255, green: 0x3E / 255, blue: 0x50 / 255, alpha: 1)
+        view.backgroundColor = dgPageBackground
         addChild(bridgeController)
         bridgeController.view.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bridgeController.view)
-        let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            bridgeController.view.topAnchor.constraint(equalTo: guide.topAnchor),
-            bridgeController.view.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
-            bridgeController.view.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
-            bridgeController.view.trailingAnchor.constraint(equalTo: guide.trailingAnchor)
+            bridgeController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            bridgeController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            bridgeController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bridgeController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
         bridgeController.didMove(toParent: self)
     }
@@ -101,7 +103,53 @@ class DgBridgeViewController: CAPBridgeViewController {
         return configuration
     }
 
+    // The safe-area insets, handed to the page as --safe-area-inset-* (the page's CSS takes the larger of these
+    // and env(); Android's SystemBars plugin writes the same variables). Written on every layout change, after
+    // every page load (a reload, Memo, the sign-in page: a new document starts without them), and kept in
+    // localStorage, which a document-start script reads, so a new page has them before its first paint.
+    private var loadingObservation: NSKeyValueObservation?
+
+    private func pushSafeAreaInsets() {
+        guard let webView = webView else { return }
+        let i = webView.safeAreaInsets
+        guard i.top > 0 || i.bottom > 0 else { return }
+        let js = "try{var v={top:\(i.top),right:\(i.right),bottom:\(i.bottom),left:\(i.left)};"
+            + "localStorage.setItem('dgSafeArea',JSON.stringify(v));"
+            + "var r=document.documentElement.style;for(var k in v)r.setProperty('--safe-area-inset-'+k,v[k]+'px')}catch(e){}"
+        webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    private func pushSafeAreaInsetsSoon() {
+        pushSafeAreaInsets()
+        for delay in [0.3, 1.0, 3.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.pushSafeAreaInsets() }
+        }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        pushSafeAreaInsets()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        pushSafeAreaInsets()
+    }
+
     override func capacitorDidLoad() {
+        // Edge to edge (DgRootViewController): what shows through before the first paint and under
+        // overscroll is the page's own background, not systemBackground.
+        webView?.backgroundColor = dgPageBackground
+        webView?.scrollView.backgroundColor = dgPageBackground
+        webView?.configuration.userContentController.addUserScript(WKUserScript(
+            source: "try{var v=JSON.parse(localStorage.getItem('dgSafeArea')||'null');if(v){var r=document.documentElement.style;"
+                + "for(var k in v)r.setProperty('--safe-area-inset-'+k,v[k]+'px')}}catch(e){}",
+            injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        loadingObservation = webView?.observe(\.isLoading, options: [.new]) { [weak self] _, change in
+            if change.newValue == false { DispatchQueue.main.async { self?.pushSafeAreaInsetsSoon() } }
+        }
+        pushSafeAreaInsetsSoon()
+
         // Edge swipe = browser Back. WKWebView leaves it off by default, and Android's system Back
         // already does this, so on iOS a reader who taps a link by accident had no way back to the
         // sutta (a tester's report). Uses the WebView's own history, so it only goes back when there

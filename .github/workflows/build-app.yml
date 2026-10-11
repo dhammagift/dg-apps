@@ -1349,8 +1349,9 @@ jobs:
       # The bundled page in a real browser, before anything is packaged: it opens with every request to
       # the network refused, the updater hands over exactly the file the site changed, and the app's own
       # burger rows (src/dict-bridge.js) land in the page in both languages and themes. bridge-ui.js is
-      # pointed at the bundle itself (a static server over www/, a directory's index.html like the app),
-      # not at the live dictionary. The tests load Playwright from the path it has on the dev server, so
+      # pointed at the bundle itself (test/serve-www.js over www/: a directory's index.html and /ru/static/
+      # from /static/, like the app's DgSitePlugin), not at the live dictionary; the bridge goes in at
+      # document start, as MainActivity injects it. The tests load Playwright from the path it has on the dev server, so
       # that path is pointed at this app's own copy. Every dictionary upload waits for this job.
       - name: Browser checks of the bundled page (offline start, updater, the app's rows)
         working-directory: dict
@@ -1363,7 +1364,7 @@ jobs:
           sudo ln -sfn "$PWD/node_modules/playwright" /usr/lib/node_modules/@playwright/cli/node_modules/playwright
           mkdir -p "$DG_SHOTS"
           node test/bundle-ui.js
-          python3 -m http.server 8191 --bind 127.0.0.1 --directory www > /dev/null 2>&1 &
+          node test/serve-www.js www 8191 > /dev/null 2>&1 &
           sleep 1
           DG_DICT_URL=http://127.0.0.1:8191/ node test/bridge-ui.js
 

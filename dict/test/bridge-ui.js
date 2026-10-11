@@ -3,9 +3,8 @@
 // The rows only ever appear inside the Android app, so the two things that make it "the app" are
 // mocked here: window.Capacitor (getPlatform() -> 'android', with DgShortcuts/App/Browser plugins
 // that record what they are called with) and window.__DG_APP_VERSION__, which MainActivity
-// prepends to the injected script. The bridge itself is the real file, evaluated in the page with
-// playwright's page.evaluate — the same code path the WebViewListener fallback uses on devices
-// whose WebView predates document-start injection.
+// prepends to the injected script. The bridge itself is the real file, injected at document start
+// (addInitScript), as MainActivity does with addDocumentStartJavaScript on current WebViews.
 //
 // Not a unit test of the Android side: an APK is built separately (./gradlew assembleDebug), and
 // nothing here can run a launcher or a WebView. What it does prove is that the injected script
@@ -13,7 +12,7 @@
 // themes, and hands the plugin the routed history it is supposed to.
 //
 //   node test/bridge-ui.js            # mobile + desktop, en/ru, light/dark
-//   DG_DICT_URL=... node test/bridge-ui.js
+//   DG_DICT_URL=... node test/bridge-ui.js   # CI: the bundle, served by test/serve-www.js (/ru/static -> /static)
 const fs = require('fs');
 const path = require('path');
 // The playwright CLI is the only copy on this machine; its bundled library is used directly so the
@@ -88,13 +87,11 @@ function check(name, actual, expected) {
             hasTouch: c.device === 'mobile',
         });
         await context.addInitScript(initScript, { version: '2.0.0 (3)', history: HISTORY, theme: c.theme });
+        // The bridge, exactly as MainActivity injects it (after the stub, before the page's own scripts).
+        await context.addInitScript(BRIDGE);
         const page = await context.newPage();
         await page.goto(c.url, { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(600);
-
-        // The bridge, exactly as MainActivity injects it.
-        await page.evaluate(BRIDGE);
-        await page.waitForTimeout(200);
+        await page.waitForTimeout(800);
 
         const t = c.lang === 'ru'
             ? { group: 'Приложение', shortcuts: 'Недавние слова в ярлыках', version: 'Версия приложения', rate: 'Оценить приложение' }

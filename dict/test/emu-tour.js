@@ -116,12 +116,14 @@ const clickText = (sel, rx) => ev(`(function(){ var l = [].filter.call(document.
 
 // --- cases -------------------------------------------------------------------------------------------------------
 const results = [];
-let n = 0;
+let n = 0, lastFailed = false;
 async function run(name, fn) {
   const id = String(++n).padStart(2, '0') + '-' + name;
   log('=== ' + id);
   adb('logcat -c');
-  if (n > 1 && /gift\.dhamma\.pali/.test(top())) { key('KEYCODE_ESCAPE'); await sleep(400); key('KEYCODE_ESCAPE'); await sleep(600); }
+  // After a failed case, start from the dictionary's start page (whatever it left open is gone; history stays). Not Esc:
+  // Android treats it as Back, and two of them left the app.
+  if (lastFailed) { adb(`shell am start -W -n ${PKG}/.MainActivity --es route /`); await sleep(4000); conn = null; }
   const rec = spawn('adb', ['shell', 'screenrecord', '--bit-rate', '2000000', '--time-limit', '170', '/sdcard/case.mp4'], { stdio: 'ignore' });
   await sleep(1000);
   let ok = false, why = '';
@@ -138,7 +140,7 @@ async function run(name, fn) {
   const jsErr = (lc.match(/Capacitor\/Console.*(Uncaught|TypeError|ReferenceError|SyntaxError).*/g) || []).slice(0, 3);
   if (jsErr.length) log('  page errors: ' + jsErr.join(' | '));
   const line = (ok ? 'PASS ' : 'FAIL ') + id + (ok ? '' : ': ' + why);
-  log(line); results.push(line);
+  log(line); results.push(line); lastFailed = !ok;
 }
 
 (async () => {

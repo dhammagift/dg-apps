@@ -1,0 +1,79 @@
+# A diagnostic, run by hand: the Uposatha APK of a build-app.yml run opened on the CI emulator under several variants at once,
+# to see which one keeps the emulator alive (its process died seconds after the app started, 2026-10-11; uposatha/test/emu-probe.sh).
+name: Uposatha emulator probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: 'build-app.yml run id whose APK to open'
+        required: true
+        type: string
+      apk_artifact:
+        description: 'APK artifact name in that run (dg-uposatha-apk-<run number> is the debug one)'
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: baseline,   gpu: swiftshader_indirect, extra: '-noaudio', route: '' }
+          - { name: tab-parts,  gpu: swiftshader_indirect, extra: '-noaudio', route: '/uposatha-calendar?app=1&tab=parts' }
+          - { name: tab-cal,    gpu: swiftshader_indirect, extra: '-noaudio', route: '/uposatha-calendar?app=1&tab=cal' }
+          - { name: with-audio, gpu: swiftshader_indirect, extra: '', route: '' }
+          - { name: no-camera,  gpu: swiftshader_indirect, extra: '-noaudio -camera-back none -camera-front none', route: '' }
+          - { name: no-vulkan,  gpu: swiftshader_indirect, extra: '-noaudio -feature -Vulkan', route: '' }
+          - { name: swangle,    gpu: swangle_indirect,     extra: '-noaudio', route: '' }
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Get the APK
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.apk_artifact }}
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Emulator
+        env:
+          ROUTE: ${{ matrix.route }}
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu ${{ matrix.gpu }} -no-snapshot -no-boot-anim ${{ matrix.extra }}
+          script: bash uposatha/test/emu-probe.sh "$(ls apk/*.apk | head -1)" shots "$ROUTE"
+
+      - name: Verdict
+        if: always()
+        run: |
+          { echo "### ${{ matrix.name }}"; echo '```'; cat shots/probe-result.txt 2>/dev/null || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: uposatha-probe-${{ matrix.name }}-${{ github.run_number }}
+          path: shots
+          retention-days: 7

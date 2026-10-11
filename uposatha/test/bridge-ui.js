@@ -134,7 +134,9 @@ function capacitorStub() {
             const page = await ctx.newPage();
             await page.goto(PAGE, { waitUntil: 'load' });
             if (late) { await page.waitForTimeout(800); await page.evaluate(BRIDGE); }
-            await page.waitForTimeout(7000);
+            // the hand-over waits for 1.5 s without a repaint and then for an idle moment of the page: wait for it, not for a fixed time
+            await page.waitForFunction(() => window.__puts && window.__puts.length > 0, null, { timeout: 20000 }).catch(() => { /* the check below says it */ });
+            await page.waitForTimeout(1500);
             const puts = await page.evaluate(() => (window.__puts || []).map((j) => { const d = JSON.parse(j); return [d.days.length, d.uposathas.length > 5, !!(d.moons && d.moons.lit)]; }));
             check(`widget data is handed over ${late ? 'with the bridge put in after the load (old WebViews)' : 'after the first paint'}: once, 31 days, Uposathas, the moon's percent`, puts, [[31, true, true]]);
             await ctx.close();

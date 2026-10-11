@@ -1105,9 +1105,18 @@
     // right after it appeared (a tap just then waited for it).
     var idle = window.requestIdleCallback ? function () { window.requestIdleCallback(push, { timeout: 4000 }); } : push;
     document.addEventListener('upo:painted', function () { clearTimeout(timer); timer = setTimeout(idle, 1500); });
-    // A WebView without document-start scripts (before Chrome 105) gets this bridge after the page has loaded and painted: that event
-    // is over, and the widgets stayed "Open Uposatha" until something made the page paint again (Android 11, Test Lab, 2026-10-11).
-    if (document.readyState === 'complete') timer = setTimeout(idle, 1500);
+    // The first paint may be over before this listener exists: the page paints while it is being read, this bridge starts at
+    // DOMContentLoaded (the log of a phone: "painted +309 ms, DOMContentLoaded +348 ms"), and a WebView without document-start
+    // scripts gets the bridge after the load. With nothing to repaint the page afterwards, the widgets got no data at all on that
+    // opening (they stayed "Open Uposatha" on Android 11; on others the hand-over came only with a later repaint - or not).
+    // So one hand-over is planned from here whatever was missed, and tried again while the page has no data yet.
+    var tries = 0;
+    (function first() {
+      timer = setTimeout(function () {
+        if (typeof window.__upoWidgetData !== 'function' && ++tries < 8) { first(); return; }
+        idle();
+      }, 1500);
+    })();
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') push(); });
     // A tap in the widget opens the app on a tab (deep link ?tab=home|parts|cal, see the widget's click intents); the page reads it itself.
   }

@@ -130,7 +130,8 @@ async function search(text) {   // the way a reader types: clear the box, tap it
   key('KEYCODE_ENTER');
   return waitFor(`document.body.dataset.screen === 'entry'`, 15);
 }
-const net = (on) => { adb(`shell svc wifi ${on ? 'enable' : 'disable'}`); adb(`shell svc data ${on ? 'enable' : 'disable'}`); };
+// Airplane mode: the emulator's network is not only wifi, and svc wifi/data off left navigator.onLine true (run 578).
+const net = (on) => { adb(`shell cmd connectivity airplane-mode ${on ? 'disable' : 'enable'}`); adb(`shell svc wifi ${on ? 'enable' : 'disable'}`); adb(`shell svc data ${on ? 'enable' : 'disable'}`); };
 const menu = async () => (await tapEl('#menubtn')) && waitFor(`document.querySelector('#p-menu[data-open="true"]')`, 5);
 const closeMenu = async () => { key('KEYCODE_BACK'); await sleep(1000); return waitFor(`!document.querySelector('.panel[data-open="true"]')`, 4); };
 const clickText = (sel, rx) => ev(`(function(){ var l = [].filter.call(document.querySelectorAll(${JSON.stringify(sel)}), function (e) { return ${rx}.test(e.textContent.trim()); }); if (!l.length) return null; l[0].setAttribute('data-tour', '1'); return true; })()`)
@@ -256,9 +257,11 @@ async function run(name, fn) {
     for (let i = 0; i < 3 && !nativeNode('text', '^Dict\\.Dhamma\\.Gift$'); i++) { adb(`shell input swipe ${W >> 1} ${Math.round(H * 0.85)} ${W >> 1} ${Math.round(H * 0.2)} 300`); await sleep(2000); }
     if (!(await tapNative('text', '^Dict\\.Dhamma\\.Gift$', 1500))) return false;
     sh(`adb exec-out screencap -p > ${path.join(OUT, 'long-press.png')}`);
-    if (!(await tapNative('text', '^sati$'))) return false;
+    const label = ((adb(`shell dumpsys shortcut ${PKG}`).match(/id=dg-dict-0[\s\S]*?shortLabel=([^,\n]+)/) || [])[1] || '').trim();
+    log('  long-press menu, first word: ' + label);
+    if (!label || !(await tapNative('text', '^' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'))) return false;
     await sleep(4000); conn = null;
-    return (await waitFor(`document.body.dataset.screen === 'entry'`, 15)) && (await word()) === 'sati';
+    return (await waitFor(`document.body.dataset.screen === 'entry'`, 15)) && (await word()) === label;
   });
   await run('shortcuts-switch', async () => {
     await launch();
@@ -347,7 +350,7 @@ async function run(name, fn) {
     if (!(await waitFor(`!document.querySelector('.panel[data-open="true"]') && document.body.dataset.screen === 'entry'`, 4))) return false;   // the panel closes, the word stays
     key('KEYCODE_BACK'); await sleep(1500);
     log('  after Back from the word: ' + await screen() + ' ' + (await word()));
-    for (let i = 0; i < 8 && /gift\.dhamma\.pali/.test(top()); i++) { key('KEYCODE_BACK'); await sleep(1500); }
+    for (let i = 0; i < 30 && /gift\.dhamma\.pali/.test(top()); i++) { key('KEYCODE_BACK'); await sleep(1000); }   // every page of the run is behind it
     return !/gift\.dhamma\.pali/.test(top());   // Back from the start screen leaves the app
   });
   await run('clear-history', async () => {

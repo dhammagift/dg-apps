@@ -1226,8 +1226,8 @@ jobs:
         with:
           node-version: '24.20.0'
       # One emulator for both scenarios (it used to boot twice, ~3 minutes each): the launcher shortcuts on the Play package,
-      # then the notification player on the debug one. The runner runs the lines in order and stops at the first that fails,
-      # as the second boot used to be skipped after a failed first one.
+      # then the notification player on the debug one. The runner stops at the first line that fails, so each scenario only
+      # marks its failure and the last line gives the verdict: a red shortcuts check no longer hides the player's (run 563).
       - name: Emulator (shortcuts, then the notification player)
         env:
           VIDEO: ${{ inputs.video && '1' || '0' }}
@@ -1240,10 +1240,11 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
-            bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.twa shortcuts
+            bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.twa shortcuts || touch emu-failed
             adb shell am force-stop gift.dhamma.twa
-            TRAY_ENGINE=audio bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-audio gift.dhamma.mobile tray
-            TRAY_ENGINE=native bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-native gift.dhamma.mobile tray
+            TRAY_ENGINE=audio bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-audio gift.dhamma.mobile tray || touch emu-failed
+            TRAY_ENGINE=native bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-native gift.dhamma.mobile tray || touch emu-failed
+            test ! -f emu-failed
       - name: Verdict, notification player
         if: always()
         run: |

@@ -367,15 +367,21 @@ if [ "${4:-}" = shortcuts ]; then
   # The launcher's own long-press menu, as the reader sees it: open the app drawer, long-press the icon,
   # screenshot, and read the menu (the launcher is native, so uiautomator sees its text).
   adb shell input keyevent KEYCODE_HOME; sleep 2
-  # The swipe up to the app drawer does not always take on the first try: up to three.
+  # The swipe up to the app drawer does not always take on the first try: up to three. It starts on the
+  # empty workspace, not on the dock row (run 563: the swipe from a dock icon left the drawer shut).
   for try in 1 2 3; do
-  adb shell input swipe 540 2000 540 500 $((300 * try)); sleep 3
+  adb shell input swipe 540 1500 540 300 $((300 * try)); sleep 3
   adb shell uiautomator dump /sdcard/l.xml > /dev/null 2>&1; adb shell cat /sdcard/l.xml > "$OUT/launcher.xml"
   xy=$(python3 - "$OUT/launcher.xml" << 'PY'
 import re, sys
 x = open(sys.argv[1], encoding='utf-8', errors='ignore').read()
+# Only the drawer's A-Z list. Run 563: the drawer had not opened, the home screen's dock held a launcher
+# prediction of the app ("Predicted app: Dhamma.gift"), and a long press on that one shows the
+# launcher's own hint, not the app's shortcuts.
+if 'id/apps_list_view' not in x:
+    sys.exit()
 for label in ('DGift', 'Dhamma.gift', 'Dhamma.Gift'):
-    m = re.search(r'text="%s"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"' % re.escape(label), x)
+    m = re.search(r'text="%s"(?![^>]*content-desc="Predicted)[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"' % re.escape(label), x)
     if m:
         a, b, c, d = map(int, m.groups()); print((a + c) // 2, (b + d) // 2); break
 PY

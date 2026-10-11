@@ -111,8 +111,15 @@ final class ShareSheetTests: XCTestCase {
         // keyboard focus in the simulator (run 252's failure: "Failed to synthesize event: Neither
         // element nor any descendant has keyboard focus", right after a plain tap()) — a second tap
         // is the usual fix for this XCUITest quirk. XCUIElement has no `hasKeyboardFocus` in this
-        // SDK (253's compile error), so the software keyboard's own appearance is the readable
-        // signal that the tap actually landed.
+        // SDK as a property (253's compile error).
+        //
+        // Focus is read from the field itself, not from a software keyboard in Safari's tree: the
+        // keyboard of the extension's remote view is not in that tree at all. Run 563 settled it —
+        // the after-test screenshot shows the keyboard up and the cursor in the field, and the
+        // failure's hierarchy dump marks the SearchField "Keyboard Focused", yet
+        // `safari.keyboards` stayed empty through both 10 s waits (the same check failed the same
+        // way in runs 251-258; it never passed). "Keyboard Focused" is the `hasKeyboardFocus`
+        // attribute, the one typeText itself checks, and a predicate reads it by key.
         //
         // One retry, not several close together: run 255's screenshot (taken after the whole test
         // finished) showed the keyboard WAS up by then, but also the field's "Paste / Select /
@@ -120,14 +127,18 @@ final class ShareSheetTests: XCTestCase {
         // a double-tap-to-select on already-focused text, which reopens that menu instead of just
         // confirming focus, and the menu can itself intercept the next hit-test. Each attempt gets
         // its own long wait instead.
-        let keyboard = safari.keyboards.firstMatch
+        let focused = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hasKeyboardFocus == true"), object: box)
         box.tap()
-        if !keyboard.waitForExistence(timeout: 10) {
+        var hasFocus = XCTWaiter().wait(for: [focused], timeout: 10) == .completed
+        if !hasFocus {
             box.tap()
-            _ = keyboard.waitForExistence(timeout: 10)
+            let again = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hasKeyboardFocus == true"), object: box)
+            hasFocus = XCTWaiter().wait(for: [again], timeout: 10) == .completed
         }
-        guard keyboard.exists else {
-            XCTFail("could not give the search box keyboard focus (no keyboard appeared)")
+        guard hasFocus else {
+            print("--- Safari accessibility tree (search box not focused) ---")
+            print(safari.debugDescription)
+            XCTFail("could not give the search box keyboard focus (the field never reported hasKeyboardFocus)")
             return
         }
         // The failed link-search left its own query in the box; backspace it out by its own length

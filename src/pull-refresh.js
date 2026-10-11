@@ -31,9 +31,10 @@
             + 'width:' + SIZE + 'px;height:' + SIZE + 'px;margin-left:-' + (SIZE / 2) + 'px;border-radius:50%;'
             + 'display:flex;align-items:center;justify-content:center;pointer-events:none;'
             + 'background:' + bg + ';color:' + cs.color + ';box-shadow:0 2px 8px rgba(0,0,0,.28);opacity:0';
-        // The arc-arrow of a browser's reload, drawn here so no app needs an icon file for it.
-        ring.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
-            + '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>';
+        // The arc-arrow of a browser's reload, drawn here so no app needs an icon file for it: the arc
+        // grows with the pull and the arrowhead appears once a release would reload.
+        ring.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
+            + '<circle cx="12" cy="12" r="8" stroke-dasharray="0 60" transform="rotate(-18 12 12)"/><path d="M10 1.5l3.5 2.5-3.5 2.5" opacity="0"/></svg>';
         document.body.appendChild(ring);
     }
 
@@ -42,7 +43,8 @@
         ring.style.transition = animate ? 'transform .2s, opacity .2s' : 'none';
         ring.style.transform = 'translateY(' + Math.min(d, MAX) + 'px) rotate(' + (p * 270) + 'deg)';
         ring.style.opacity = d > 0 ? String(0.35 + 0.65 * p) : '0';
-        ring.firstChild.style.opacity = p >= 1 ? '1' : '.55';
+        ring.querySelector('circle').setAttribute('stroke-dasharray', (p * 40.2).toFixed(1) + ' 60');
+        ring.querySelector('path').setAttribute('opacity', p >= 1 ? '1' : '0');
     }
 
     addEventListener('touchstart', function (e) {

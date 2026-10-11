@@ -163,8 +163,8 @@ final class WidgetViews {
             for (int i = 0; i < 3; i++) { tintImage(sw, dots[i], i == slide ? ACCENT : EDGE); sw.setViewPadding(dots[i], 3 * dp, 0, 3 * dp, 0); }
             tintImage(sw, R.id.sw_l, MUTED); tintImage(sw, R.id.sw_r, MUTED);
             sw.setViewPadding(R.id.sw_vis, 0, 0, 0, 3 * dp);
-            sw.setOnClickPendingIntent(R.id.sw_prev, WidgetProvider.slide(ctx, widgetId, -1, drawnH));
-            sw.setOnClickPendingIntent(R.id.sw_next, WidgetProvider.slide(ctx, widgetId, 1, drawnH));
+            sw.setOnClickPendingIntent(R.id.sw_prev, WidgetProvider.slide(ctx, widgetId, -1, drawnW, drawnH));
+            sw.setOnClickPendingIntent(R.id.sw_next, WidgetProvider.slide(ctx, widgetId, 1, drawnW, drawnH));
             rv.addView(R.id.sw_host, sw);
         }
     }
@@ -252,13 +252,25 @@ final class WidgetViews {
             bitmapBytes += l.getByteCount() + d.getByteCount();
             rv.setImageViewBitmap(R.id.moon_l, l);
             rv.setImageViewBitmap(R.id.moon_d, d);
+            sized(R.id.moon_l, boxDp); sized(R.id.moon_d, boxDp);
             show(R.id.moon_x, false); show(R.id.moon_l, true); show(R.id.moon_d, true);
         } else {
             Bitmap x = WidgetMoon.render(ctx, boxDp, phase, south, theme == DARK);
             bitmapBytes += x.getByteCount();
             rv.setImageViewBitmap(R.id.moon_x, x);
+            sized(R.id.moon_x, boxDp);
             show(R.id.moon_x, true); show(R.id.moon_l, false); show(R.id.moon_d, false);
         }
+    }
+
+    /**
+     * While a widget is drawn for many sizes at once, a moon's picture comes in a few steps of size and is shared by the views whose
+     * moons are about as big (WidgetMoon.shared); the view is then told its own size (Android 12+, where the many sizes are).
+     */
+    private void sized(int id, float boxDp) {
+        if (!WidgetMoon.shared || Build.VERSION.SDK_INT < 31) return;
+        rv.setViewLayoutWidth(id, boxDp, TypedValue.COMPLEX_UNIT_DIP);
+        rv.setViewLayoutHeight(id, boxDp, TypedValue.COMPLEX_UNIT_DIP);
     }
 
     private Bitmap mini(float sizeDp, double phase) {
@@ -611,8 +623,8 @@ final class WidgetViews {
         rv.setInt(R.id.nav_next, "setImageAlpha", off < WidgetProvider.MONTHS_AHEAD ? 255 : 70);
         rv.setViewPadding(R.id.nav_prev, px(10), 0, px(6), 0);
         rv.setViewPadding(R.id.nav_next, px(6), 0, 0, 0);
-        rv.setOnClickPendingIntent(R.id.nav_prev, WidgetProvider.nav(ctx, widgetId, -1, drawnH));
-        rv.setOnClickPendingIntent(R.id.nav_next, WidgetProvider.nav(ctx, widgetId, 1, drawnH));
+        rv.setOnClickPendingIntent(R.id.nav_prev, WidgetProvider.nav(ctx, widgetId, -1, drawnW, drawnH));
+        rv.setOnClickPendingIntent(R.id.nav_next, WidgetProvider.nav(ctx, widgetId, 1, drawnW, drawnH));
         for (int i = 0; i < 7; i++) {
             String s = tx.weekday(m.weekStart == 0 ? (i + 6) % 7 : i);
             text(WD[i], tx.ru() ? s : s.substring(0, 2), 10.5f, MUTED);

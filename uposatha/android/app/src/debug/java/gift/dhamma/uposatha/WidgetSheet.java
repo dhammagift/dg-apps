@@ -92,6 +92,11 @@ final class WidgetSheet {
         int[][] real = { { 0, 78, 132 }, { 1, 156, 132 }, { 2, 156, 266 }, { 3, 313, 132 }, { 3, 391, 118 }, { 3, 391, 132 }, { 4, 313, 266 }, { 4, 391, 266 }, { 5, 156, 266 },
                 { 6, 313, 532 }, { 6, 391, 713 }, { 6, 391, 799 } };
         for (int[] o : real) for (int sc : new int[] { 5, 0 }) out.add(new Case(o[0], o[1], o[2], sc, "real", def, 0));
+        // The owner's razr itself (2026-10-11): "391 x 302" is 375 x 441 on the screen and "391 x 151" is 375 x 213 - the launcher takes
+        // the views drawn for 368 x 429 and 368 x 214 (WidgetPlan.sizes / chosen). All three slides of both big widgets.
+        for (int[] o : new int[][] { { 6, 368, 429 }, { 4, 368, 214 } }) for (int sl = 0; sl < 3; sl++) for (int sc : new int[] { 5, 0 }) {
+            Case x = new Case(o[0], o[1], o[2], sc, "owner-slide" + sl, def, 0); x.slide = sl; out.add(x);
+        }
         for (int[] o : new int[][] { { 0, 78, 75 }, { 0, 78, 151 }, { 0, 313, 302 } }) { WidgetConfig p = new WidgetConfig(); p.pct = true; out.add(new Case(o[0], o[1], o[2], 5, "own-pct", p, 0)); }
         for (int sl = 1; sl < 3; sl++) { Case x = new Case(WidgetPlan.CAL, 391, 454, 5, "own-slide" + sl, def, 0); x.slide = sl; out.add(x); }
         WidgetConfig pct = new WidgetConfig(); pct.pct = true;   // the Moon with its percent (a setting; just the moon is the default)

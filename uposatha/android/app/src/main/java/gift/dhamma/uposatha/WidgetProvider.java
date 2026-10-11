@@ -202,7 +202,7 @@ public class WidgetProvider extends AppWidgetProvider {
     }
 
     static void update(Context ctx, AppWidgetManager mgr, int id) {
-        synchronized (DRAW) { draw(ctx, mgr, id, 0); }   // the page's thread (DgWidgetPlugin) and the settings screen draw too
+        synchronized (DRAW) { draw(ctx, mgr, id, 0, 0); }   // the page's thread (DgWidgetPlugin) and the settings screen draw too
     }
 
     /**
@@ -211,10 +211,10 @@ public class WidgetProvider extends AppWidgetProvider {
      * third of a second instead of most of a second on a phone. The next tick draws all the sizes again.
      */
     private static void tapped(Context ctx, AppWidgetManager mgr, int id, Intent intent) {
-        synchronized (DRAW) { draw(ctx, mgr, id, intent.getIntExtra("h", 0)); }
+        synchronized (DRAW) { draw(ctx, mgr, id, intent.getIntExtra("w", 0), intent.getIntExtra("h", 0)); }
     }
 
-    private static void draw(Context ctx, AppWidgetManager mgr, int id, int shownH) {
+    private static void draw(Context ctx, AppWidgetManager mgr, int id, int shownW, int shownH) {
         try {
             int kind = kindOf(mgr, id);
             List<int[]> sizes = sizesDp(ctx, mgr, id);
@@ -225,20 +225,20 @@ public class WidgetProvider extends AppWidgetProvider {
             int slide = slideOf(ctx, mgr, id);   // only the big widgets with the three slides use it
             int[] sz = sizes.get(0);
             if (android.os.Build.VERSION.SDK_INT >= 31) {
-                // One RemoteViews per size the widget may really have, and the launcher takes the biggest that fits the view it has:
-                // the size it reports, the same width at taller heights (WidgetPlan.TALLER: a launcher may report a cell lower than
-                // the real one), and the other orientation. The keys are a little under the sizes the views are drawn for, so a
-                // view a dp smaller than promised still gets its own. Refused (too many pictures): the pair below.
+                // One RemoteViews per size the widget may really have (WidgetPlan.sizes: the reported one, taller ones, and each of them
+                // a little narrower), plus the other orientation; the launcher takes the nearest that fits the view it really has.
+                // After a tap only the size the tap came from is drawn again. Refused (too many pictures): the pair below.
                 try {
                     long t0 = android.os.SystemClock.uptimeMillis();
                     WidgetViews.bitmapBytes = 0;
                     WidgetMoon.maxPx = 420;
+                    WidgetMoon.shared = true;
                     java.util.Map<android.util.SizeF, RemoteViews> map = new android.util.ArrayMap<>();
-                    map.put(new android.util.SizeF(sz[0] - 2, sz[1]), WidgetViews.build(ctx, id, kind, sz[0], sz[1], data, now, cfg, mon, slide));
-                    for (float f : WidgetPlan.TALLER) {
-                        int tall = Math.round(sz[1] * f);
-                        if (shownH > 0 && tall != shownH) continue;   // a tap: only the size it came from
-                        map.put(new android.util.SizeF(sz[0] - 2, tall - 1), WidgetViews.build(ctx, id, kind, sz[0], tall, data, now, cfg, mon, slide));
+                    int[][] all = WidgetPlan.sizes(sz[0], sz[1]);
+                    for (int i = 0; i < all.length; i++) {
+                        int[] c = all[i];
+                        if (i > 0 && shownH > 0 && !(c[0] == shownW && c[1] == shownH)) continue;   // a tap: only the size it came from (and the reported one)
+                        map.put(new android.util.SizeF(c[2], c[3]), WidgetViews.build(ctx, id, kind, c[0], c[1], data, now, cfg, mon, slide));
                     }
                     if (sizes.size() > 1) {
                         int[] ot = sizes.get(1);
@@ -252,6 +252,7 @@ public class WidgetProvider extends AppWidgetProvider {
                     android.util.Log.w("DgWidget", "the sizes were refused (" + (WidgetViews.bitmapBytes >> 10) + " KB of pictures), the two orientations instead: " + e);
                 } finally {
                     WidgetMoon.maxPx = 640;
+                    WidgetMoon.shared = false;
                 }
             }
             if (sizes.size() > 1) {
@@ -290,26 +291,28 @@ public class WidgetProvider extends AppWidgetProvider {
     }
 
     /** The switch of the 4x2's three slides: the one before (-1) or after (+1). */
-    static PendingIntent slide(Context ctx, int id, int dir, int drawnH) {
+    static PendingIntent slide(Context ctx, int id, int dir, int drawnW, int drawnH) {
         Intent i = new Intent(ctx, WidgetProvider.class);
         i.setAction(ACTION_SLIDE);
         i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
         i.putExtra("dir", dir);
         // Each size the widget is drawn for has its own intent (the data tells them apart, extras do not): the tap brings back the
         // height of the view the launcher is showing.
+        i.putExtra("w", drawnW);
         i.putExtra("h", drawnH);
-        i.setData(android.net.Uri.parse("dgwidget://slide/" + id + "/" + dir + "/" + drawnH));
+        i.setData(android.net.Uri.parse("dgwidget://slide/" + id + "/" + dir + "/" + drawnW + "x" + drawnH));
         return PendingIntent.getBroadcast(ctx, id * 2 + (dir < 0 ? 1 : 0), i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     /** The calendar's arrows: the month before (-1) or after (+1), inside the widget. */
-    static PendingIntent nav(Context ctx, int id, int dir, int drawnH) {
+    static PendingIntent nav(Context ctx, int id, int dir, int drawnW, int drawnH) {
         Intent i = new Intent(ctx, WidgetProvider.class);
         i.setAction(ACTION_NAV);
         i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
         i.putExtra("dir", dir);
+        i.putExtra("w", drawnW);
         i.putExtra("h", drawnH);
-        i.setData(android.net.Uri.parse("dgwidget://nav/" + id + "/" + dir + "/" + drawnH));
+        i.setData(android.net.Uri.parse("dgwidget://nav/" + id + "/" + dir + "/" + drawnW + "x" + drawnH));
         // The two intents differ only in an extra, which PendingIntent ignores: the request code tells them apart.
         return PendingIntent.getBroadcast(ctx, id * 2 + (dir < 0 ? 1 : 0), i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }

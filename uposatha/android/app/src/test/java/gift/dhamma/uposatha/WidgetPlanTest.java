@@ -94,4 +94,47 @@ public class WidgetPlanTest {
         for (String bad : new String[] { null, "", "https://example.com/", "http://x", "//example.com/x", "/\\example.com", "javascript:alert(1)", "uposatha-calendar" })
             assertFalse(String.valueOf(bad), WidgetPlan.ownPath(bad));
     }
+
+    /** The size a launcher takes of those the widget is drawn for: {draw w, draw h}. */
+    private static int[] taken(int reportedW, int reportedH, float realW, float realH) {
+        int[][] all = WidgetPlan.sizes(reportedW, reportedH);
+        return all[WidgetPlan.chosen(all, realW, realH)];
+    }
+
+    @Test
+    public void theLauncherFindsASizeNearTheRealOneWhateverItReported() {
+        // a launcher that tells the truth takes the reported size itself
+        assertArrayEquals(new int[] { 80, 104 }, java.util.Arrays.copyOf(taken(80, 104, 80, 104), 2));
+        // a Pixel 4x4: "368 x 442", really 368 x 464
+        int[] pixel = taken(368, 442, 368, 464);
+        assertTrue("pixel " + pixel[0] + "x" + pixel[1], pixel[0] == 368 && pixel[1] >= 442 * 1.04 && pixel[1] <= 465);
+        // a razr plus 2024: the cells of its other screen, "82 x 68" is 83 x 115 and "378 x 323" is 379 x 507
+        int[] cell = taken(82, 68, 83, 115);
+        assertTrue("razr 1x1 " + cell[0] + "x" + cell[1], cell[0] == 82 && cell[1] >= 115 / 1.12f && cell[1] <= 116);
+        int[] big = taken(378, 323, 379, 507);
+        assertTrue("razr 4x4 " + big[0] + "x" + big[1], big[0] == 378 && big[1] >= 507 / 1.12f && big[1] <= 508);
+        // the owner's razr: too WIDE as well, "391 x 302" is 375 x 441 and "391 x 151" is 375 x 213. With only the reported width
+        // nothing fitted and the launcher fell back to the smallest view.
+        int[] own = taken(391, 302, 375, 441);
+        assertTrue("owner 4x4 " + own[0] + "x" + own[1], own[0] <= 376 && own[0] >= 375 * 0.94f && own[1] >= 441 / 1.12f && own[1] <= 442);
+        int[] own2 = taken(391, 151, 375, 213);
+        assertTrue("owner 4x2 " + own2[0] + "x" + own2[1], own2[0] <= 376 && own2[1] >= 213 / 1.12f && own2[1] <= 214);
+        // nothing fits (a view much smaller than reported): the smallest, which is about the reported size - as before
+        int[] none = taken(391, 302, 300, 250);
+        assertTrue("nothing fits " + none[0] + "x" + none[1], none[1] == 302);
+    }
+
+    @Test
+    public void theMoonsOfTheCalendarComeBeforeTheCardOfToday() {
+        // {next rows, card, the card's detail line, mini-moons}: a height with room for the card OR the moons shows the moons
+        float h = WidgetPlan.CAL_FIXED + 5 * WidgetPlan.CAL_ROW_MOONS + 40;
+        assertArrayEquals(new int[] { 0, 0, 0, 1 }, WidgetPlan.cal(h, 5, true, true));
+        // room for both: both, and the moons stay when the list comes
+        int[] both = WidgetPlan.cal(WidgetPlan.CAL_FIXED + 5 * WidgetPlan.CAL_ROW_MOONS + WidgetPlan.calCardH(false) + 2, 5, false, true);
+        assertArrayEquals(new int[] { 0, 1, 0, 1 }, both);
+        for (int hh = 250; hh < 700; hh += 7) {
+            int[] p = WidgetPlan.cal(hh, 5, true, true);
+            if (p[1] == 1) assertEquals("a card without the moons at " + hh, 1, p[3]);
+        }
+    }
 }

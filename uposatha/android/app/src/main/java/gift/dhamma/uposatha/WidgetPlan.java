@@ -36,6 +36,44 @@ final class WidgetPlan {
      * Steps of 5 to 10 %: what is left unused is less than that.
      */
     static final float[] TALLER = { 1.05f, 1.12f, 1.2f, 1.3f, 1.42f, 1.56f, 1.72f, 1.9f };
+    /**
+     * ... and the width may be reported too WIDE: the owner's razr says 391 dp for a widget that is 375 on the screen. No view drawn
+     * for 391 fits there, and a launcher with nothing that fits takes the smallest one - so every taller view was passed over and
+     * the widget stayed small in the middle, with its text cut ("new moon · 0.4..."). Each height is therefore also drawn a little
+     * narrower.
+     */
+    static final float NARROWER = 0.94f;
+
+    /**
+     * The sizes a widget is drawn for when the launcher reports w x h dp: {draw w, draw h, key w, key h}. The first is the reported
+     * size itself. A key is a little under the size its view is drawn for: a view a dp smaller than promised still gets its own.
+     */
+    static int[][] sizes(int w, int h) {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        out.add(new int[] { w, h, w - 2, h });
+        int narrow = Math.round(w * NARROWER);
+        for (float f : TALLER) { int t = Math.round(h * f); out.add(new int[] { w, t, w - 2, t - 1 }); }
+        out.add(new int[] { narrow, h, narrow - 2, h - 1 });
+        for (float f : TALLER) { int t = Math.round(h * f); out.add(new int[] { narrow, t, narrow - 2, t - 1 }); }
+        return out.toArray(new int[0][]);
+    }
+
+    /**
+     * Which of the sizes a launcher takes for a view that is really w x h dp: Android's own rule (RemoteViews.findBestFitLayout) -
+     * of those that fit, the nearest; if none fits, the smallest. Here so that the choice can be tested without a phone.
+     */
+    static int chosen(int[][] sizes, float w, float h) {
+        int best = -1, smallest = 0;
+        double bestD = 0;
+        for (int i = 0; i < sizes.length; i++) {
+            int[] s = sizes[i];
+            if ((long) s[2] * s[3] < (long) sizes[smallest][2] * sizes[smallest][3]) smallest = i;
+            if (!(Math.ceil(w) + 1 > s[2] && Math.ceil(h) + 1 > s[3])) continue;
+            double d = (w - s[2]) * (w - s[2]) + (h - s[3]) * (h - s[3]);
+            if (best < 0 || d < bestD) { best = i; bestD = d; }
+        }
+        return best < 0 ? smallest : best;
+    }
 
     static float scale(float w, float h, float needW, float needH, float min, float max) {
         float k = Math.min(w / Math.max(1, needW), h / Math.max(1, needH));
@@ -103,14 +141,19 @@ final class WidgetPlan {
 
     /**
      * What a calendar of the given height (base dp) shows under the month's name: {next rows 0..6, card 0/1, the card's detail line 0/1,
-     * mini-moons 0/1}. The grid comes first (a week is never lower than CAL_ROW_MIN), then the card of today, then the list of the next
-     * Uposathas: as many rows as the height has left. Whatever is still spare goes to the grid (taller weeks).
+     * mini-moons 0/1}. The grid comes first (a week is never lower than CAL_ROW_MIN), then the moons under the dates of an Uposatha,
+     * then the card of today, then the list of the next Uposathas: as many rows as the height has left. Whatever is still spare goes
+     * to the grid (taller weeks).
      */
     static int[] cal(float hBase, int weeks, boolean details, boolean nextOn) {
         float avail = hBase - CAL_FIXED;
-        boolean card = true, det = details;
-        if (avail - weeks * CAL_ROW - calCardH(det) < 0) det = false;
-        if (avail - weeks * CAL_ROW_MIN - calCardH(det) < 0) card = false;
+        // The moons under the dates of an Uposatha come right after the grid itself: they say which Uposatha it is (new moon, full
+        // moon, a half), and the card of today must not take their room (owner, 2026-10-11: "the moon is not shown at all until I
+        // make the widget bigger"). So the card, and then its detail line, are shown when the weeks can still be CAL_ROW_MOONS high.
+        boolean moonsFit = avail >= weeks * CAL_ROW_MOONS;
+        float row = moonsFit ? CAL_ROW_MOONS : CAL_ROW_MIN;
+        boolean card = avail - weeks * row - calCardH(false) >= 0;
+        boolean det = details && card && avail - weeks * Math.max(row, CAL_ROW) - calCardH(true) >= 0;
         float cardH = card ? calCardH(det) : 0;
         int rows = 0;
         float free = avail - weeks * CAL_ROW - cardH;

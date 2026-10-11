@@ -37,6 +37,8 @@ final class WidgetMoon {
     private static long cacheBytes;
     /** The most pixels a side of a moon gets. Lower while a widget is drawn for several sizes at once: RemoteViews has a ceiling on its pictures. */
     static volatile int maxPx = 640;
+    /** Set while a widget is drawn for many sizes: the big moon is made in steps of a sixth, so views with moons of about one size carry ONE picture (WidgetViews.sized shows it at the view's own size). */
+    static volatile boolean shared;
 
     /**
      * The big moon of a widget, for an ImageView with wrap_content: a square picture that is shown boxDp wide whatever the screen
@@ -44,6 +46,7 @@ final class WidgetMoon {
      * refuses an update that carries too many big ones.
      */
     static synchronized Bitmap render(Context ctx, float boxDp, double phase, boolean south, boolean dark) {
+        if (shared) boxDp = (float) Math.pow(1.18, Math.ceil(Math.log(boxDp) / Math.log(1.18)));   // the next step up: 1.18^n dp
         return get(ctx, boxDp, phase, south, dark ? 1 : 0, DISC, 2f);
     }
 

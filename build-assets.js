@@ -261,6 +261,25 @@ function buildModeTable(langs) {
     fs.writeFileSync(dest, JSON.stringify({ ...modeTable, availableLangs: langs }, null, 2), 'utf8');
 }
 
+// The fonts the bundled stylesheets name (/assets/fonts/*: home.css's Lato subsets and the Pali scripts). The site serves
+// them from dg-node's public/overrides/fonts/ (legacy tree second); a named font that is in neither fails verifyReferencedAssets.
+function copyNamedFonts() {
+    const names = new Set();
+    const walk = (dir) => {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const p = path.join(dir, e.name);
+            if (e.isDirectory()) walk(p);
+            else if (e.name.endsWith('.css')) for (const m of fs.readFileSync(p, 'utf8').matchAll(/\/assets\/fonts\/([A-Za-z0-9_.-]+\.woff2?)/g)) names.add(m[1]);
+        }
+    };
+    walk(WWW);
+    let count = 0;
+    for (const name of names) {
+        if (copyAsset({ url: '/assets/fonts/' + name, sources: [f('public/overrides/fonts/' + name), l('fonts/' + name)] })) count++;
+    }
+    return count;
+}
+
 function copySvgIcons() {
     const destDir = path.join(WWW, 'assets', 'svg');
     fs.mkdirSync(destDir, { recursive: true });
@@ -718,10 +737,6 @@ const REFERENCE_EXCEPTIONS = [
     // app fetches it from the site and keeps it in the Cache API for offline use (native-bridge.js
     // dictionaryFromSite; paliLookup.js/ai-search.js load it through window.dgDictScript).
     /^\/assets\/js\/standalone-dpd\//,
-    // Font subsets referenced from search/css/home.css and player CSS. Absent from the legacy
-    // checkout AND from the site itself (verified: the same 404 in a browser) — a font the
-    // platform falls back from, not a page or a script.
-    /^\/assets\/fonts\//,
     // The .json-under-a-.js-name family: legacy JSONP fallbacks tried AFTER the .json that really
     // exists (/nodejs/res/*, /settings/scripts.js, /reader/mode-table.js, …), plus the legacy
     // reader's client-side DB, which was never shipped anywhere.
@@ -1074,6 +1089,7 @@ function main() {
     for (const asset of ASSETS) {
         if (copyAsset(asset)) ok++; else missing++;
     }
+    const fontCount = copyNamedFonts();   // after ASSETS: home.css is in www/ by now
     const nativeCount = copyNativeFiles();
     const memoCount = copyMemoApp();
     const rootCount = copyRootFiles();
@@ -1095,7 +1111,7 @@ function main() {
     verifyTocSnapshot();
     const appVersion = writeAppVersion();
     console.log(`  site-manifest.json: ${writeSiteManifest()} files the app may refresh from the site`);
-    console.log(`Assets: ${ok} copied, ${missing} missing. +${memoCount} memo files, +${rootCount} root files, +${rootTreeCount} root trees, ${dirLinks} pages with directory links resolved, ${bridged} pages given native-bridge.js, +${treeCount} legacy trees, +${looseCount} loose legacy files, +${svgCount} svg icons, +${nativeCount} native file(s), +${offlineCount} offline-layer entries from dg-node/public/offline, reader/images/, 2 generated bundles, mode-table.json (langs=${args.langs.join(',')}).`);
+    console.log(`Assets: ${ok} copied, ${missing} missing. +${memoCount} memo files, +${rootCount} root files, +${rootTreeCount} root trees, ${dirLinks} pages with directory links resolved, ${bridged} pages given native-bridge.js, +${treeCount} legacy trees, +${looseCount} loose legacy files, +${svgCount} svg icons, +${fontCount} fonts, +${nativeCount} native file(s), +${offlineCount} offline-layer entries from dg-node/public/offline, reader/images/, 2 generated bundles, mode-table.json (langs=${args.langs.join(',')}).`);
     console.log(`  app version: ${appVersion || 'unknown'}\n  dg-node: ${NODEJS_ROOT}\n  legacy assets: ${LEGACY_ASSETS}`);
     if (missing > 0) process.exitCode = 1;
 }

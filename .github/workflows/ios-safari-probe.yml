@@ -1,0 +1,55 @@
+# Pages of the live site in the iOS Simulator's own Safari: the same WebKit as the apps' WKWebView on a phone,
+# which Playwright's WebKit (webkit-probe.yml) is not — it laid the settings sheet out right while every iPhone
+# showed it wider than the screen. No app build: a page fix on test.dhamma.gift is checked in minutes.
+# One screenshot per URL (urls: space-separated), each after `wait` seconds.
+name: iOS Safari probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: Space-separated URLs to open in Safari, one screenshot each
+        default: https://test.dhamma.gift/settings/
+      wait:
+        description: Seconds to wait after opening each URL
+        default: '12'
+      appearance:
+        description: light or dark
+        default: dark
+
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Select Xcode
+        run: tools/select-xcode.sh
+      - name: Boot an iPhone and open the pages
+        env:
+          URLS: ${{ inputs.urls }}
+          WAIT: ${{ inputs.wait }}
+          APPEARANCE: ${{ inputs.appearance }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          UDID=$(xcrun simctl list devices available | grep -E "iPhone 1[6-9]( Pro)? \(" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          [ -n "$UDID" ] || { xcrun simctl list devices available; exit 1; }
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance "$APPEARANCE"
+          n=0
+          for u in $URLS; do
+            n=$((n + 1))
+            xcrun simctl openurl "$UDID" "$u"
+            sleep "$WAIT"
+            xcrun simctl io "$UDID" screenshot "out/$n.png"
+            echo "$n $u" >> out/index.txt
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-safari-probe
+          path: out

@@ -9,8 +9,7 @@ const nodeCrypto = require('crypto');
 const KEY = nodeCrypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
 const OTHER = nodeCrypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
 const PUB = KEY.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
-const code = fs.readFileSync(path.join(__dirname, '..', 'src', 'site-updater.js'), 'utf8')
-    .replace(/var SITE_PUBLIC_KEY = '[^']+'/, `var SITE_PUBLIC_KEY = '${PUB}'`);
+const code = fs.readFileSync(path.join(__dirname, '..', 'src', 'site-updater.js'), 'utf8');
 const sha = (text) => nodeCrypto.createHash('sha256').update(text).digest('hex');
 const ORIGIN = 'https://dhamma.gift';
 
@@ -21,7 +20,8 @@ function signed(list, key = KEY.privateKey) {
 
 function page({ ls = {}, ss = {}, plugin, fetchFn, config = {}, readyState = 'complete' }) {
     const timers = [], docListeners = {};
-    const win = { __DG_APP_VERSION__: ls.dgAppVersion || '1.0.1', crypto: nodeCrypto.webcrypto, addEventListener() {} };
+    const win = { __DG_APP_VERSION__: ls.dgAppVersion || '1.0.1', crypto: nodeCrypto.webcrypto, addEventListener() {},
+        location: { hostname: '127.0.0.1' }, __dgSiteKey: PUB };   // the updater's test hook: this file's key in place of the site's
     const localStorage = { setItem: (k, v) => { ls[k] = String(v); }, removeItem: (k) => { delete ls[k]; }, getItem: (k) => (k in ls ? ls[k] : null) };
     const sessionStorage = { setItem: (k, v) => { ss[k] = String(v); }, removeItem: (k) => { delete ss[k]; }, getItem: (k) => (k in ss ? ss[k] : null) };
     const document = { readyState, visibilityState: 'visible', addEventListener: (t, f) => { (docListeners[t] = docListeners[t] || []).push(f); } };

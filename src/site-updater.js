@@ -23,8 +23,10 @@
   var SITE = SITE_CONFIG.site;
   var SITE_CHECK_EVERY = 6 * 3600 * 1000;   // a successful check is not repeated sooner; a failed one does not count (see updateSite)
   // The public half of the key the site's list is signed with (ECDSA P-256, SPKI; the private half is on the server only:
-  // /root/.secrets/site-manifest-signing.pem). A new key needs a new app build.
-  var SITE_PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEHXt2cUx8f9Uw4xcYCvmqMMhZnQw/ei9pVMlIBhxMdPeOlKJrcwU+dTNcIsSdYkDQZpk4KOddNbrJe68Hi5ryUg==';
+  // /root/.secrets/site-manifest-signing.pem). A new key needs a new app build. window.__dgSiteKey is a test hook only (the
+  // browser tests sign with a throwaway key): read once, so it counts only when set before the bridge runs, and only on the
+  // tests' 127.0.0.1 servers (an app's own origin is never 127.0.0.1, so there the hook is ignored).
+  var SITE_PUBLIC_KEY = (window.location.hostname === '127.0.0.1' && window.__dgSiteKey) || 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEHXt2cUx8f9Uw4xcYCvmqMMhZnQw/ei9pVMlIBhxMdPeOlKJrcwU+dTNcIsSdYkDQZpk4KOddNbrJe68Hi5ryUg==';
   var RUN_KEY = 'dgSiteRun';   // sessionStorage: set by the first page of a run of the app (it lives as long as the WebView)
 
   function bytesToBase64(bytes) {

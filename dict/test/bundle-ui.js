@@ -6,13 +6,13 @@
 //   (cd dict && node tools/bundle-from-repo.js <ddg-ui dir> <dg-node dir> && node build.js) first, then:  node dict/test/bundle-ui.js
 const fs = require('fs');
 const path = require('path');
-const http = require('http');
 const { chromium } = require('/usr/lib/node_modules/@playwright/cli/node_modules/playwright');
 
 const WWW = path.join(__dirname, '..', 'www');
 const SHOTS = process.env.DG_SHOTS || '/var/www/html/dict-app';
 const PORT = 8108;
 const { bridgeSource } = require(path.join(__dirname, '..', 'build.js'));
+const { siteSigner, sha256 } = require(path.join(__dirname, '..', '..', 'test', 'signed-site-list.js'));
 
 const results = [];
 function check(name, actual, expected) {
@@ -21,16 +21,8 @@ function check(name, actual, expected) {
     console.log(`${pass ? 'ok  ' : 'FAIL'} ${name}${pass ? '' : `\n       expected ${JSON.stringify(expected)}\n       actual   ${JSON.stringify(actual)}`}`);
 }
 
-const TYPES = { html: 'text/html', js: 'application/javascript', css: 'text/css', json: 'application/json', svg: 'image/svg+xml', woff2: 'font/woff2', png: 'image/png', txt: 'text/plain' };
-const server = http.createServer((req, res) => {
-    const url = new URL(req.url, 'http://x');
-    // /ru/static/ is answered from /static/, as the app does (DgSitePlugin.serve, DgSiteRouter).
-    let file = path.join(WWW, decodeURIComponent(url.pathname).replace(/^\/ru\/static\//, '/static/'));
-    if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
-    if (!file.startsWith(WWW) || !fs.existsSync(file)) { res.writeHead(404); return res.end(); }
-    res.writeHead(200, { 'content-type': TYPES[path.extname(file).slice(1)] || 'application/octet-stream' });
-    fs.createReadStream(file).pipe(res);
-});
+const { serveWww, TYPES } = require('./serve-www.js');
+const server = serveWww(WWW);
 
 function capacitorStub() {
     window.__calls = { puts: [], shortcuts: [] };
@@ -48,12 +40,14 @@ function capacitorStub() {
     await new Promise((r) => server.listen(PORT, '127.0.0.1', r));
     const browser = await chromium.launch({ args: ['--no-sandbox'] });
     const BRIDGE = bridgeSource();
+    const SIGNER = siteSigner();   // the updater takes only a list signed with the key it trusts: this one, through its test hook
     const manifest = JSON.parse(fs.readFileSync(path.join(WWW, 'site-manifest.json'), 'utf8'));
     const changed = manifest.files.find((f) => /\/static\/dg\.css$/.test(f) && !f.startsWith('/ru/')) || manifest.files.find((f) => f.endsWith('.css'));
     try {
         for (const [theme, lang, url] of [['light', 'en', '/'], ['dark', 'ru', '/ru/']]) {
             const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: theme, locale: lang === 'ru' ? 'ru-RU' : 'en-US' });
             await ctx.addInitScript(capacitorStub);
+            await ctx.addInitScript(SIGNER.initScript);
             await ctx.addInitScript(BRIDGE);
             const page = await ctx.newPage();
             const bad = [], errors = [];
@@ -63,6 +57,8 @@ function capacitorStub() {
                 if (u.origin === 'https://dict.dhamma.gift' || u.origin === 'https://dhamma.gift') {   // find on the page's files come from dhamma.gift (urlFor in the bridge)
                     let p = u.pathname;
                     if (p.endsWith('/')) p += 'index.html';
+                    // The site's signed list: the bundle's own hashes, but the changed file's is the site's new one.
+                    if (p === '/app-site-manifest.json') return route.fulfill({ status: 200, contentType: 'application/json', body: SIGNER.envelope(u.origin, Object.assign({}, manifest.hashes, { [changed]: sha256(changedBody) })) });
                     if (p === changed) return route.fulfill({ status: 200, contentType: 'text/css', body: changedBody });
                     const f = path.join(WWW, p);
                     if (manifest.files.includes(p) && fs.existsSync(f)) return route.fulfill({ status: 200, contentType: TYPES[path.extname(f).slice(1)] || 'application/octet-stream', body: fs.readFileSync(f) });

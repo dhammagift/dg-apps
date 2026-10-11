@@ -137,7 +137,8 @@ final class DgTourTests: XCTestCase {
         openLink("dhammagift://dn22")
         look("tour-13-dark-reader")
         readerScrolled("tour-14-dark")
-        openLink("dhammagift://route/?q=kacchapa#dg-settings")
+        // Over the reader this time: the owner's screenshots showed the sheet wider than the screen opened there.
+        openLink("dhammagift://dn22#dg-settings")
         Thread.sleep(forTimeInterval: 3)
         look("tour-15-dark-settings")
         sideways(from: 0.75, to: 0.25)

@@ -54,5 +54,7 @@ sleep 2
 run test2_Dark
 sleep 1
 kill -INT "$rec" 2>/dev/null; wait "$rec" 2>/dev/null
+# What the page measured when the settings sheet last opened (home.js #dg-settings, written through DgSelfTest).
+cp "$(xcrun simctl get_app_container "$UDID" gift.dhamma.mobile data)/Documents/selftest.json" "$OUT/dg-tour-settings.json" 2>/dev/null || true
 ls -la "$OUT"/dg-tour.mp4 "$OUT"/tour-*.png 2>/dev/null
 [ -s "$OUT/dg-tour.mp4" ] || { echo "dg-tour: no video recorded"; exit 1; }

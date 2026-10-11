@@ -206,14 +206,20 @@ Why: the widget was one bitmap per size drawn by `WidgetRenderer` (Canvas). On a
 - Tested on the emulator launcher only (Pixel launcher): real Motorola / Samsung launchers may report other size lists; the layouts do not depend on exact sizes.
 - Verification status: ONE Test Lab virtual run (MediumPhone.arm API 34, dark; `gs://test-lab-nr56tiywzh2yc-kz084y8hszdu6/2026-10-10_03:45:45.303463_VKRj/`): the real pinned widget on the Pixel launcher, all three layers, resized shorter / narrower / wider+taller with the launcher's handles (nothing stretched, text stays text), plus 238 `sheet-*.png`. The second run was refused (TEST_QUOTA_EXCEEDED, shared daily quota). The later changes (low 2x2 / 4x2 degradation, narrower dots strip, smaller numbers on a low month grid, size class < 200 dp) were checked only with the local Robolectric sheets (same output as the emulator in the earlier comparison), not on the launcher.
 
-## The real size, learned from a tap (2026-10-11)
+## The real size, learned from a tap; and the limit of 16 views (2026-10-11)
 
-The owner's razr reports 78 dp a column and gives 78.5 n - 16 (two columns: "156", really 141), and it shows the view drawn for the
-reported size whatever taller or narrower views are offered (the 4x2 never changed with the ladder; the 2x2 widgets had their text cut
-and the hours under the bar run together). Guessing cannot fix that. A tap on a widget's background brings the bounds of the tapped
-view (the root, so the whole widget) in the intent - `Intent.getSourceBounds()`, written by RemoteViews into the fill-in intent, which
-is why that one PendingIntent is mutable (explicit component, action and extras ours). `WidgetOpenActivity` hands them to
-`WidgetProvider.learn`, which keeps "WxH" dp under `real_<id>_<reported>` and draws the widget again: one view, for the real size,
-under a key below both the reported and the real numbers (`WidgetPlan.keyOf`), so a launcher finds it whichever way it looks. A resize
-changes the reported size and the widget starts anew with the ladder. The settings' line says "view WxH" or "not known yet".
-Not yet seen on a device: `WidgetFlowTest` 10b checks it (the tapped widget is "drawn for" exactly the size the tap told).
+**The limit.** `new RemoteViews(Map<SizeF, RemoteViews>)` takes at most 16 views (`RemoteViews.MAX_INIT_VIEW_COUNT`) and throws
+"Too many RemoteViews in constructor" above that. The ladder had 9 sizes, then 18 with the narrower tier: from that build on every
+draw was refused and fell back to the pair of orientations, i.e. to the reported size - on the owner's phone "nothing changed" (the
+4x2 small in the middle, the 2x2 widgets with cut text). Found by the Test Lab log ("the sizes were refused"), not by any local
+render: a local render draws each size by itself. Now 2 x (1 + 6) sizes + the other orientation = 15, and a unit test holds the count.
+My guess before that log - "this launcher shows the reported view whatever is offered" - was wrong.
+
+**The tap.** The owner's razr reports 78 dp a column and gives 78.5 n - 16 (two columns: "156", really 141); a guess stays a guess.
+A tap on a widget's background brings the bounds of the tapped view (the root, so the whole widget) in the intent -
+`Intent.getSourceBounds()`, written by RemoteViews into the fill-in intent, which is why that one PendingIntent is mutable (explicit
+component, action and extras ours). `WidgetOpenActivity` hands them to `WidgetProvider.learn`, which keeps "WxH" dp under
+`real_<id>_<reported>` and draws the widget again: one view, for the real size, under a key below both the reported and the real
+numbers (`WidgetPlan.keyOf`). A resize changes the reported size and the widget starts anew with the ladder. The settings' line says
+"view WxH" or "not known yet". Seen on a virtual phone (Test Lab): the tap's bounds do arrive ("reported 80x104 dp, its view is
+80x104 dp"). `WidgetFlowTest` 10b / 10c check that the tapped widget is drawn for exactly that.

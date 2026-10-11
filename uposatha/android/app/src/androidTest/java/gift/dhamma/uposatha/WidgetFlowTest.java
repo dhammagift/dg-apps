@@ -403,17 +403,49 @@ public class WidgetFlowTest {
             final StringBuilder seen = new StringBuilder();
             step("moon-tap-size", () -> {
                 dev.pressHome();
-                sleep(1500);
-                toWidgetPage();
                 sleep(2500);
-                for (UiObject2 host : dev.findObjects(By.res(Pattern.compile("gift\\.dhamma\\.uposatha:id/sw_host")))) {
-                    String desc = host.getContentDescription();
-                    seen.append(desc).append("; ");
-                    if (want.equals(desc)) found[0] = true;
+                dev.pressHome();
+                sleep(1500);
+                for (int k = 0; k < 5 && !found[0]; k++) {   // the small widgets are on a page of their own
+                    for (UiObject2 host : dev.findObjects(By.res(Pattern.compile("gift\\.dhamma\\.uposatha:id/sw_host")))) {
+                        String desc = host.getContentDescription();
+                        seen.append(desc).append("; ");
+                        if (want.equals(desc)) found[0] = true;
+                    }
+                    if (!found[0]) nextPage();
                 }
             });
             check("widget tap: the tapped widget is drawn for its real size (" + want + ")", found[0], seen.toString());
         }
+
+        // 10c. The same with the big widget, whose size the launcher reports wrongly more often (a Pixel leaves the gaps between the
+        // rows out): a tap on its background - the corner, away from the dates and the arrows - and it is drawn for the view it has.
+        final String[] big = { "", "" };
+        step("big-tap", () -> {
+            toWidgetPage();
+            UiObject2 w = widget();
+            if (w == null) { Log.w(TAG, "no big widget to tap"); return; }
+            Rect b = w.getVisibleBounds();
+            int in = Math.round(12 * ctx.getResources().getDisplayMetrics().density);
+            dev.executeShellCommand("logcat -c");
+            dev.click(b.left + in, b.top + in);
+            dev.wait(Until.hasObject(By.pkg(PKG).depth(0)), 8000);
+            sleep(3000);
+            big[0] = logcat("-s DgWidget:I");
+            toWidgetPage();
+            sleep(2500);
+            float d = ctx.getResources().getDisplayMetrics().density;
+            for (UiObject2 host : dev.findObjects(By.res(Pattern.compile("gift\\.dhamma\\.uposatha:id/sw_host")))) {
+                Rect hb = host.getVisibleBounds();
+                big[1] += host.getContentDescription() + " in " + Math.round(hb.width() / d) + "x" + Math.round(hb.height() / d) + "; ";
+            }
+        });
+        java.util.regex.Matcher bigTold = Pattern.compile("reported (\\d+)x(\\d+) dp, its view is (\\d+)x(\\d+) dp").matcher(big[0]);
+        boolean bigKnown = bigTold.find();
+        // a widget whose view is the size the launcher reported says nothing new only if it was told before: the line is there once per size
+        check("big widget tap: the widget was told its real size", bigKnown, big[0].trim());
+        if (bigKnown) check("big widget tap: it is drawn for exactly the view it has (" + bigTold.group(3) + "x" + bigTold.group(4) + ", reported " + bigTold.group(1) + "x" + bigTold.group(2) + ")",
+                big[1].contains("drawn for " + bigTold.group(3) + "x" + bigTold.group(4) + " in " + bigTold.group(3) + "x" + bigTold.group(4)), big[1]);
 
         // 11. An address from outside (any app can start the launcher activity with any extra) is not opened in the app's window.
         step("foreign-route", () -> {

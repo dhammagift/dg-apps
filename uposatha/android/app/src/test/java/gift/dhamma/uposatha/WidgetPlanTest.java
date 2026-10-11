@@ -135,6 +135,15 @@ public class WidgetPlanTest {
     }
 
     @Test
+    public void allTheSizesGoIntoOneRemoteViews() {
+        // Android takes at most 16 views in a RemoteViews of sizes (RemoteViews.MAX_INIT_VIEW_COUNT) and throws above that: with 18
+        // the whole ladder was refused on every draw and the widgets fell back to the reported size (Test Lab, 2026-10-11 - and the
+        // owner's phone since the narrower tier came). One place is the other orientation's.
+        for (int[] r : new int[][] { { 78, 75 }, { 156, 151 }, { 313, 302 }, { 391, 454 }, { 80, 104 }, { 368, 584 } })
+            assertTrue(r[0] + "x" + r[1] + ": " + WidgetPlan.sizes(r[0], r[1]).length, WidgetPlan.sizes(r[0], r[1]).length + 1 <= WidgetPlan.MAX_VIEWS);
+    }
+
+    @Test
     public void theViewDrawnForTheRealSizeIsTakenWhicheverWayTheLauncherLooks() {
         assertArrayEquals(new int[] { 141, 213 }, WidgetPlan.learned("141x213"));
         for (String bad : new String[] { null, "", "141", "141x", "x213", "5x5", "141x99999", "141x213 ", "-141x213" }) assertNull(String.valueOf(bad), WidgetPlan.learned(bad));

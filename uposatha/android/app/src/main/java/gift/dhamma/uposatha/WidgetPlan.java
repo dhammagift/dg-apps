@@ -33,9 +33,10 @@ final class WidgetPlan {
      * its other screen: a 1 x 1 widget "82 x 68 dp" was 82 x 115 on the screen, so every design was scaled for a cell 1.7 times
      * lower than the real one and sat small in the middle of it (owner's phone and a razr plus 2024 in Test Lab, 2026-10-11).
      * A Pixel's launcher is a little off too: it leaves the gaps between the rows out (a 4 x 4 "440" was 464 dp high).
-     * Steps of 5 to 10 %: what is left unused is less than that.
+     * Steps of about 12 %: what is left unused is less than that. Six of them, not more: with the narrower tier and the other
+     * orientation that is 15 views, and Android takes 16 (MAX_VIEWS).
      */
-    static final float[] TALLER = { 1.05f, 1.12f, 1.2f, 1.3f, 1.42f, 1.56f, 1.72f, 1.9f };
+    static final float[] TALLER = { 1.05f, 1.17f, 1.31f, 1.46f, 1.64f, 1.84f };
     /**
      * ... and the width may be reported too WIDE: the owner's razr says 391 dp for a widget that is 375 on the screen. No view drawn
      * for 391 fits there, and a launcher with nothing that fits takes the smallest one - so every taller view was passed over and
@@ -43,6 +44,8 @@ final class WidgetPlan {
      * narrower.
      */
     static final float NARROWER = 0.94f;
+    /** Android's limit of views in one RemoteViews of sizes (RemoteViews.MAX_INIT_VIEW_COUNT): one more and the constructor throws. */
+    static final int MAX_VIEWS = 16;
     static final int MARGIN = 16;
 
     /**
@@ -74,9 +77,8 @@ final class WidgetPlan {
     }
 
     /**
-     * The key of the one view drawn for the real size. A launcher looks for a view that fits either the view it laid out (Android's
-     * own way) or the size it reported (the owner's razr, it seems: no taller or narrower view was ever taken there): under both
-     * numbers, this view fits both ways.
+     * The key of the one view drawn for the real size. Android looks for a view that fits the view it laid out; a launcher of its
+     * own making may go by the size it reported. Under both numbers, this view fits both ways.
      */
     static int[] keyOf(int[] reported, int[] real) {
         return new int[] { Math.min(reported[0], real[0]) - 2, Math.min(reported[1], real[1]) - 1 };

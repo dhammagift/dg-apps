@@ -207,9 +207,9 @@ public class WidgetProvider extends AppWidgetProvider {
 
     /**
      * A tap on a widget's background tells how big its view really is (the bounds Android puts into the tap, WidgetOpenActivity).
-     * What a launcher reports is a guess of its own - cells of another screen, a margin forgotten - and some launchers show the
-     * view drawn for that guess whatever else is offered. Kept under the reported size it belongs to; the widget is drawn anew
-     * when the number is news.
+     * What a launcher reports is a guess of its own - cells of another screen, a margin forgotten - and the ladder of sizes
+     * (WidgetPlan.sizes) only comes near the truth. Kept under the reported size it belongs to; the widget is drawn anew when the
+     * number is news.
      */
     static void learn(Context ctx, int id, int wPx, int hPx) {
         float d = ctx.getResources().getDisplayMetrics().density;

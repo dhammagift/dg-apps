@@ -2557,6 +2557,14 @@ jobs:
           xcrun simctl io "$UDID" screenshot .tmp/ios-ui/ios-share-sheet.png >/dev/null || true
           grep -q "\*\* TEST SUCCEEDED \*\*" .tmp/ios-ui/sharesheet-test.log || { echo "::error::the share sheet check failed — see sharesheet-test.log and sharesheet.xcresult"; exit 1; }
 
+      # A video of the app for a person to look at (owner, 2026-10-11, edge to edge on iOS: "сам посмотри и мне покажи
+      # видео"): home, search, the reader scrolled, pull to refresh, Settings with a sideways swipe, light then dark
+      # (test/ios-sim/dgtour). Never a gate: it runs even after a failed check above and cannot fail the job.
+      - name: Video tour (XCUITest, dg-tour.mp4)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: test/ios-sim/dgtour/tour.sh .tmp/ios-ui
+
       - name: Upload the report, the screenshots and the logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -2565,6 +2573,8 @@ jobs:
           path: |
             .tmp/ios-ui/selftest.json
             .tmp/ios-ui/*.png
+            .tmp/ios-ui/dg-tour.mp4
+            .tmp/ios-ui/dg-tour-*.log
             .tmp/ios-ui/app-console.log
             .tmp/ios-ui/sharesheet-test.log
             .tmp/ios-ui/sharesheet.xcresult

@@ -31,7 +31,9 @@ struct SwitchLayerIntent: AppIntent {
         let next = ((WStore.layer(family) + step) % n + n) % n   // step is -1 (left half) or +1 (right half)
         WStore.setLayer(family, next)
         WStore.defaults?.set(Date().timeIntervalSince1970, forKey: "at." + family)   // when it was chosen (WStore.monthOffset forgets a month chosen on another day)
-        WidgetCenter.shared.reloadAllTimelines()
+        WStore.markSwitch()
+        // only the widgets that have slides (two of one size show the same slide); the Moon and Day & night are not redrawn for a tap
+        WidgetCenter.shared.reloadTimelines(ofKind: "UposathaWidget")
         return .result()
     }
 }

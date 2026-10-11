@@ -109,9 +109,15 @@ final class WidgetGalleryTests: XCTestCase {
         // every preview: the Uposatha in three sizes, the Moon, Day & night (a swipe past the last page changes nothing)
         let pages = 5
         for page in 1...pages {
+            // the middle of the preview (every size covers it) is the card, not a black hole. A preview is black for a moment while
+            // the extension starts (run 4: the first two pages were pictured before their snapshots came), so it is given time.
+            var share = 1.0   // measured on the black run: 1.00 for all five, 0.00 for a drawn card
+            for _ in 0..<20 {
+                share = black(0.5, 0.61, 0.16, 0.06)
+                if share < 0.9 { break }
+                sleep(1)
+            }
             shot("preview-\(page)")
-            // the middle of the preview (every size covers it) is the card, not a black hole
-            let share = black(0.5, 0.61, 0.16, 0.06)   // measured on the black run: 1.00 for all five, 0.00 for a drawn card
             XCTAssertLessThan(share, 0.9, "preview \(page) is a black card: the system did not draw the widget")
             if page < pages {
                 board.swipeLeft()

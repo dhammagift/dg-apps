@@ -505,7 +505,7 @@ extension WData {
     // The moments the widget has to change at, within `hours` from `now`, for the timeline. The system draws and archives EVERY entry
     // of a timeline when it is made: with a day of them (up to 160) a reload took so long that a tap on the slide switch answered
     // late or not at all, and the large widget never got its timeline (owner, TestFlight 562). Four hours is some twenty entries.
-    func timelineDates(from now: Date, hours: Double = 24) -> [Date] {
+    func timelineDates(from now: Date, hours: Double = 4) -> [Date] {
         let horizon = now.addingTimeInterval(hours * 3600)
         var stamps: [Double] = [now.timeIntervalSince1970]
         func add(_ d: Date) {
@@ -548,7 +548,7 @@ extension WData {
                 lastStamp = s
             }
         }
-        return Array(out.prefix(160))
+        return Array(out.prefix(40))
     }
 }
 

@@ -131,8 +131,12 @@ final class DgTourTests: XCTestCase {
     }
 
     func test2_Dark() {
+        // Launched again by this test: XCUITest does not attach to the app the first test left running ("has not
+        // loaded accessibility", runs 587-595).
+        app.launch()
+        XCTAssertTrue(page.waitForExistence(timeout: 40), "no web view")
+        Thread.sleep(forTimeInterval: 8)
         openLink("dhammagift://search?q=kacchapa")
-        XCTAssertTrue(page.waitForExistence(timeout: 20), "no web view")
         look("tour-12-dark-results")
         openLink("dhammagift://dn22")
         look("tour-13-dark-reader")

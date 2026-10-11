@@ -2,8 +2,8 @@
 // страницу ... в браузере потянуть вниз и освежается"; "один общий код"). Included as /pull-refresh.js by
 // Dhamma.Gift's page (build-page.js) and inlined by the dictionary's and Uposatha's bridges ("// @pull-refresh").
 //
-// The gesture and the spinner are the platforms' own: UIRefreshControl on iOS (DgPullHold in the bridge view
-// controller), SwipeRefreshLayout on Android (DgPullHoldPlugin.java). A spinner drawn here, over a held picture
+// The gesture and the spinner are the apps': a Chrome-style circle over the page on iOS (DgPullHold/DgPullCircle in the
+// bridge view controller), SwipeRefreshLayout on Android (DgPullHoldPlugin.java). A spinner drawn here, over a held picture
 // of the page, "дергается ... выглядит кошмарно дешево" (owner, TestFlight). The app freezes the page as it is,
 // reloads it under the picture, and lets go once the new page says it is ready, so the content just changes.
 //
@@ -26,13 +26,12 @@
         return (document.scrollingElement || document.documentElement).scrollTop > 0;
     }
 
-    // Decided when the finger lands. Android asks before it takes the drag over (the address tells it the answer
-    // is this page's, not the one before it); iOS asks once its control has fired (dgPullAllowed).
+    // Decided when the finger lands and told to the app before it takes the drag over (on Android with the address,
+    // so the answer is known to be this page's, not the one before it).
     addEventListener('touchstart', function (e) {
         allowed = e.touches.length === 1 && !blocked(e.target);
-        if (android) android.setAllowed(allowed, location.href);
+        if (android) android.setAllowed(allowed, location.href); else ios.postMessage({ op: 'allowed', value: allowed });
     }, { passive: true, capture: true });
-    window.dgPullAllowed = function () { return allowed; };
 
     // Every page says it once; with no refresh under way the app ignores it.
     var sent = false;

@@ -147,7 +147,7 @@ class DgBridgeViewController: CAPBridgeViewController {
         // No scroll indicators: the page is the whole interface.
         webView?.scrollView.showsVerticalScrollIndicator = false
         webView?.scrollView.showsHorizontalScrollIndicator = false
-        // Pull to refresh: the system control, the page held on screen while it reloads (DgPullHold below, src/pull-refresh.js).
+        // Pull to refresh: a Chrome-style circle over the page, the page held on screen while it reloads (DgPullHold below, src/pull-refresh.js).
         webView?.configuration.userContentController.add(DgPullHold(webView), name: "dgPullHold")
 
         // The bridge (www/uposatha-bridge.js, the same file Android injects) runs before the page's own scripts. Added here and not
@@ -746,71 +746,104 @@ public class DgWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
-// Pull to refresh, iOS's own (src/pull-refresh.js; the same class in all three apps, as Android's
-// DgPullHoldPlugin.java). Owner, 2026-10-11: the page should stay exactly as it is and the new content just
-// appear. A bare reload painted blank and jumped, a fade over it was "дорогое мелькание", a spinner the page drew
-// over a held picture of itself "дергается ... кошмарно дешево". So the gesture and the spinner are
-// UIRefreshControl's, the control every iOS list has. Once it fires, and the page says the pull began on the page
-// itself (dgPullAllowed: scrolled to the top, not in a sheet, a popup or a field), the web view as it is, the
-// spinner included, becomes a picture over it with a live spinner on the frozen one, the page reloads under the
-// picture, and "release", sent by the new page once it has loaded with its fonts, takes the picture away and lets
-// the control close as it always does.
-final class DgPullHold: NSObject, WKScriptMessageHandler {
+// Pull to refresh with Chrome's look (src/pull-refresh.js; the same classes in all three apps; Android gets the same look
+// from SwipeRefreshLayout, DgPullHoldPlugin.java). Owner, 2026-10-11: UIRefreshControl turned behind the page's fixed
+// header, «какую-то полосу сверху вместо аккуратного лоадера как в хроме». So the circle is a view of our own ABOVE
+// the web view, above every layer of the page: the content stays where it is (no bounce) and only the circle comes
+// down from under the status bar, its arc growing with the pull and the arrowhead showing once a release would
+// refresh. On release the page as it is becomes a picture under the turning circle and reloads beneath it; "release",
+// sent by the new page once it has loaded with its fonts, takes the picture away and sends the circle back up.
+// Whether a pull may refresh is the page's word for the touch ({op:'allowed'} on touchstart): only one that starts on
+// the page itself, scrolled to the top, not in a sheet, a popup, a field or a scrolled box.
+final class DgPullHold: NSObject, WKScriptMessageHandler, UIGestureRecognizerDelegate {
     private weak var web: WKWebView?
-    private let control = DgRefreshControl()
+    private let circle = DgPullCircle()
     private var shot: UIView?
     private var token = 0
-    private var waitingForLift = false
+    private var allowed = false
+    private var armed = false
+    private var refreshing = false
+    private var travel: CGFloat = 0
+    private let threshold: CGFloat = 72   // how far the circle comes down before a release refreshes
+    private let maxTravel: CGFloat = 110
 
     init(_ web: WKWebView?) {
         self.web = web
         super.init()
         guard let web = web else { return }
-        // A short page (Uposatha's tabs, an empty search) is pulled too, as in Safari.
-        // Capacitor turns the scroll view's bounce off when it creates the web view (CAPBridgeViewController:
-        // `scrollView.bounces = false`); without it nothing can be pulled past the top and the control never
-        // fires (run 589's video: the pull did nothing). Bounce on, as in Safari.
-        web.scrollView.bounces = true
-        web.scrollView.alwaysBounceVertical = true
-        web.scrollView.refreshControl = control
-        control.addTarget(self, action: #selector(pulled), for: .valueChanged)
-        web.scrollView.panGestureRecognizer.addTarget(self, action: #selector(panned(_:)))
+        // The content stays put under a pull, as in Chrome (Capacitor's own setting; a bounce dragged the page under its
+        // fixed header). The pull is read by a recognizer of our own, alongside the scroll view's, so it also works on
+        // a page too short to scroll.
+        web.scrollView.bounces = false
+        web.scrollView.alwaysBounceVertical = false
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
+        pan.delegate = self
+        pan.cancelsTouchesInView = false
+        pan.delaysTouchesBegan = false
+        pan.delaysTouchesEnded = false
+        web.addGestureRecognizer(pan)
     }
 
-    @objc private func pulled() {
-        guard let web = web else { return control.endRefreshing() }
-        // A page without pull-refresh.js would never send "release": no refresh there.
-        web.evaluateJavaScript("window.dgPullAllowed ? dgPullAllowed() : false") { [weak self] result, _ in
-            guard let self = self else { return }
-            guard result as? Bool == true else { self.control.endRefreshing(); return }
-            if web.scrollView.isDragging { self.waitingForLift = true } else { self.hold() }
+    private func atTop(_ web: WKWebView) -> Bool {
+        web.scrollView.contentOffset.y <= -web.scrollView.adjustedContentInset.top + 1
+    }
+
+    // The circle's centre: hidden just above the top inset (under the status bar), down by `travel` from there.
+    private func place(_ travel: CGFloat) {
+        guard let web = web else { return }
+        circle.center = CGPoint(x: web.frame.midX,
+                                y: web.frame.minY + web.safeAreaInsets.top - DgPullCircle.size / 2 - 4 + travel)
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer, let web = web, !refreshing else { return false }
+        let v = pan.velocity(in: web)
+        return v.y > 0 && v.y > abs(v.x) && atTop(web)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        true
+    }
+
+    @objc private func panned(_ pan: UIPanGestureRecognizer) {
+        guard let web = web, !refreshing else { return }
+        switch pan.state {
+        case .began:
+            armed = true
+            travel = 0
+        case .changed:
+            // The page's answer can land a moment after the drag starts; until it says yes nothing shows.
+            guard armed, allowed, atTop(web), let parent = web.superview else {
+                if armed && !atTop(web) { armed = false; circle.hide() }
+                return
+            }
+            if circle.superview !== parent { parent.addSubview(circle); circle.reset() }
+            parent.bringSubviewToFront(circle)
+            travel = min(max(pan.translation(in: web).y, 0) * 0.55, maxTravel)
+            place(travel)
+            circle.pulled(travel / threshold)
+        case .ended, .cancelled, .failed:
+            guard armed else { return }
+            armed = false
+            if pan.state == .ended && allowed && travel >= threshold { refresh() } else { circle.hide() }
+        default:
+            break
         }
     }
 
-    // The picture is taken once the finger is up and the control has settled into its refreshing place.
-    @objc private func panned(_ pan: UIPanGestureRecognizer) {
-        guard waitingForLift, pan.state == .ended || pan.state == .cancelled || pan.state == .failed else { return }
-        waitingForLift = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in self?.hold() }
-    }
-
-    private func hold() {
-        guard let web = web, let parent = web.superview, control.isRefreshing, shot == nil else { return }
+    private func refresh() {
+        guard let web = web, let parent = web.superview else { return circle.hide() }
+        refreshing = true
         token += 1
         let mine = token
-        guard let picture = web.snapshotView(afterScreenUpdates: false) else { web.reload(); return }
-        picture.frame = web.frame
-        // The frozen spinner gets a live one on top, on the page's own background, so it keeps turning.
-        let spinner = UIActivityIndicatorView(style: .medium)
-        spinner.backgroundColor = web.scrollView.backgroundColor
-        spinner.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
-        var centre = control.convert(CGPoint(x: control.bounds.midX, y: control.bounds.midY), to: web)
-        centre.y += control.contentShift
-        spinner.center = centre
-        spinner.startAnimating()
-        picture.addSubview(spinner)
-        parent.insertSubview(picture, aboveSubview: web)
-        shot = picture
+        UIView.animate(withDuration: 0.15) { self.place(self.threshold) }
+        circle.spin()
+        if let picture = web.snapshotView(afterScreenUpdates: false) {
+            picture.frame = web.frame
+            parent.insertSubview(picture, belowSubview: circle)
+            shot = picture
+        }
         web.reload()
         // A page that never says it is ready (an error, a page without pull-refresh.js) is not held for ever.
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
@@ -819,28 +852,112 @@ final class DgPullHold: NSObject, WKScriptMessageHandler {
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        if (message.body as? [String: Any])?["op"] as? String == "release" { release() }
+        guard let body = message.body as? [String: Any] else { return }
+        switch body["op"] as? String {
+        case "allowed": allowed = body["value"] as? Bool ?? false
+        case "release": release()
+        default: break
+        }
     }
 
-    // Every page sends it once it is ready; with no picture up there is nothing to let go of.
+    // Every page says it once it is ready; with no refresh under way there is nothing to let go of.
     private func release() {
-        guard let picture = shot else { return }
+        guard refreshing else { return }
+        refreshing = false
         token += 1
-        shot = nil
-        UIView.animate(withDuration: 0.15, animations: { picture.alpha = 0 }, completion: { _ in picture.removeFromSuperview() })
-        control.endRefreshing()
+        if let picture = shot {
+            shot = nil
+            UIView.animate(withDuration: 0.15, animations: { picture.alpha = 0 }, completion: { _ in picture.removeFromSuperview() })
+        }
+        circle.hide()
     }
 }
 
-// Edge to edge the page runs under the status bar, and the control would turn under the clock (the Dynamic
-// Island): its content is moved down by the web view's top safe-area inset.
-final class DgRefreshControl: UIRefreshControl {
-    var contentShift: CGFloat { superview?.superview?.safeAreaInsets.top ?? 0 }
+// The circle itself: Chrome's/Material's pull-to-refresh disc. White (#2a2a2a in the dark), a shadow, the apps' teal
+// arc that grows to 4/5 of a turn with the pull, an arrowhead at its end once a release would refresh, and the arc
+// turning while the page reloads.
+final class DgPullCircle: UIView {
+    static let size: CGFloat = 40
+    private let arc = CAShapeLayer()
+    private let head = CAShapeLayer()
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        clipsToBounds = false
-        let shift = CGAffineTransform(translationX: 0, y: contentShift)
-        for view in subviews where view.transform != shift { view.transform = shift }
+    init() {
+        super.init(frame: CGRect(x: 0, y: 0, width: DgPullCircle.size, height: DgPullCircle.size))
+        isUserInteractionEnabled = false
+        backgroundColor = UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(red: 0x2A / 255, green: 0x2A / 255, blue: 0x2A / 255, alpha: 1) : .white }
+        layer.cornerRadius = DgPullCircle.size / 2
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.3
+        layer.shadowRadius = 4
+        layer.shadowOffset = CGSize(width: 0, height: 2)
+        let teal = UIColor(red: 0x1A / 255, green: 0x9B / 255, blue: 0x7B / 255, alpha: 1).cgColor
+        let c = CGPoint(x: DgPullCircle.size / 2, y: DgPullCircle.size / 2), r: CGFloat = 9
+        for l in [arc, head] { l.frame = bounds; layer.addSublayer(l) }
+        arc.path = UIBezierPath(arcCenter: c, radius: r, startAngle: -.pi / 2, endAngle: 1.5 * .pi, clockwise: true).cgPath
+        arc.fillColor = nil
+        arc.strokeColor = teal
+        arc.lineWidth = 2.5
+        arc.lineCap = .round
+        arc.strokeEnd = 0
+        // The arrowhead where the arc ends at 4/5 of a turn, pointing along it (clockwise).
+        let a = -CGFloat.pi / 2 + 0.8 * 2 * .pi
+        let tip = CGPoint(x: c.x + r * cos(a), y: c.y + r * sin(a))
+        let t = CGPoint(x: -sin(a), y: cos(a)), n = CGPoint(x: cos(a), y: sin(a))
+        let p = UIBezierPath()
+        p.move(to: CGPoint(x: tip.x + t.x * 4, y: tip.y + t.y * 4))
+        p.addLine(to: CGPoint(x: tip.x - t.x + n.x * 3.5, y: tip.y - t.y + n.y * 3.5))
+        p.addLine(to: CGPoint(x: tip.x - t.x - n.x * 3.5, y: tip.y - t.y - n.y * 3.5))
+        p.close()
+        head.path = p.cgPath
+        head.fillColor = teal
+        head.opacity = 0
+        alpha = 0
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func reset() {
+        layer.removeAllAnimations()
+        arc.removeAnimation(forKey: "spin")
+        transform = .identity
+        alpha = 0
+    }
+
+    // 0 = just started, 1 = a release refreshes.
+    func pulled(_ progress: CGFloat) {
+        let p = min(max(progress, 0), 1)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        arc.strokeEnd = 0.8 * p
+        head.opacity = p >= 1 ? 1 : 0
+        CATransaction.commit()
+        transform = CGAffineTransform(rotationAngle: p * .pi)
+        alpha = min(1, 0.3 + p)
+    }
+
+    func spin() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        head.opacity = 0
+        arc.strokeEnd = 0.8
+        CATransaction.commit()
+        let turn = CABasicAnimation(keyPath: "transform.rotation.z")
+        turn.fromValue = 0
+        turn.toValue = 2 * Double.pi
+        turn.duration = 0.8
+        turn.repeatCount = .infinity
+        arc.add(turn, forKey: "spin")
+    }
+
+    func hide() {
+        guard superview != nil else { return }
+        UIView.animate(withDuration: 0.2, animations: {
+            self.alpha = 0
+            self.transform = self.transform.scaledBy(x: 0.6, y: 0.6)
+        }, completion: { _ in
+            self.reset()
+            self.removeFromSuperview()
+        })
     }
 }

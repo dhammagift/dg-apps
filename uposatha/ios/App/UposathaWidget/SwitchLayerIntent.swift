@@ -32,8 +32,9 @@ struct SwitchLayerIntent: AppIntent {
         WStore.setLayer(family, next)
         WStore.defaults?.set(Date().timeIntervalSince1970, forKey: "at." + family)   // when it was chosen (WStore.monthOffset forgets a month chosen on another day)
         WStore.markSwitch()
-        // only the widgets that have slides (two of one size show the same slide); the Moon and Day & night are not redrawn for a tap
-        WidgetCenter.shared.reloadTimelines(ofKind: "UposathaWidget")
+        // No reload asked for here: the system itself reloads the widget whose button was tapped, and only that one (owner,
+        // 2026-10-11: a tap must not redraw the other widgets). A second widget of the same size shows the new slide at its own
+        // next reload.
         return .result()
     }
 }

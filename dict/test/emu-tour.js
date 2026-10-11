@@ -95,9 +95,13 @@ const typeAscii = (s) => adb(`shell input text '${s}'`);
 const launch = async () => { adb(`shell monkey -p ${PKG} -c android.intent.category.LAUNCHER 1`); await sleep(6000); conn = null; };
 const screen = () => ev(`document.body.dataset.screen`);
 const word = () => ev(`(document.getElementById('whead-word') || {}).textContent`);
-async function search(text) {   // the way a reader types: tap the box, clear it, type, Enter
-  if (!(await tapEl('#search-box'))) return false;
+async function search(text) {   // the way a reader types: clear the box, tap it, type, Enter
   await ev(`(function(){ var b = document.getElementById('search-box'); b.value = ''; b.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  for (let i = 0; i < 2; i++) {   // the box must have the focus, or the letters go to the page's keyboard shortcuts
+    if (!(await tapEl('#search-box'))) return false;
+    if (await ev(`document.activeElement === document.getElementById('search-box')`)) break;
+    log('  the box did not take the focus, tapping again');
+  }
   if (/^[\x20-\x7e]+$/.test(text)) typeAscii(text);
   else await (await page()).send('Input.insertText', { text });   // ā or Cyrillic: adb cannot type them
   await sleep(1200);
@@ -117,6 +121,7 @@ async function run(name, fn) {
   const id = String(++n).padStart(2, '0') + '-' + name;
   log('=== ' + id);
   adb('logcat -c');
+  if (n > 1 && /gift\.dhamma\.pali/.test(top())) { key('KEYCODE_ESCAPE'); await sleep(400); key('KEYCODE_ESCAPE'); await sleep(600); }
   const rec = spawn('adb', ['shell', 'screenrecord', '--bit-rate', '2000000', '--time-limit', '170', '/sdcard/case.mp4'], { stdio: 'ignore' });
   await sleep(1000);
   let ok = false, why = '';

@@ -1497,6 +1497,54 @@ jobs:
       apk_artifact: dg-dict-apk-release-${{ needs.plan.outputs.dict_number }}
       package: gift.dhamma.pali
 
+  # The dictionary driven the way a reader uses it (dict/test/emu-tour.js): search (Velthuis, autocomplete, English,
+  # Russian), favourites and history, EN/RU, theme, the app's own menu rows and the update check, launcher shortcuts and
+  # the long-press menu, find on the page, the Pāli letters bar, share and text selection, the Quick Settings tile,
+  # the offline mini-dictionary with the network off, the no-connection page, a turn, the Back button. Real touches on
+  # an emulator, the page read over DevTools (so the DEBUG APK), one video per case in the artifact. Test runs only.
+  dict-tour:
+    name: Dictionary app feature tour (emulator)
+    needs: [plan, dict-build]
+    if: needs.plan.outputs.build_dict == 'true' && needs.plan.outputs.dict_play != 'true' && !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+      - uses: actions/download-artifact@v4
+        with:
+          name: dg-dict-apk-${{ github.run_number }}
+          path: apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Feature tour on API 34
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: node dict/test/emu-tour.js "$(ls apk/*.apk | head -1)" tour
+      - name: Verdict
+        if: always()
+        run: |
+          { echo "### Dictionary feature tour"; echo '```'; cat tour/results.txt 2>/dev/null || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dict-tour-${{ github.run_number }}
+          path: tour
+          retention-days: 14
+
   # ---------------------------------------------------------------------------------------------
   # The Uposatha calendar app (gift.dhamma.uposatha) — a Capacitor shell around the site's calendar
   # page, living in uposatha/ of this repository. The same shape as dict-build above: no database,

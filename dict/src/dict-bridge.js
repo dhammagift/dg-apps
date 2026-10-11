@@ -25,6 +25,9 @@
   // own script then swaps for /ru/ (extra.js, changeLanguage): two full page loads at every start. Here, at document
   // start, before the English page has fetched anything, it goes to the address changeLanguage('ru') would.
   function ruAtOnce() {
+    // Only at document start: injected after load (MainActivity.onPageLoaded on old WebViews, on every load) the page has
+    // already started, and a redirect from here would reload /ru/ forever.
+    if (document.readyState !== 'loading') return false;
     try {
       var m = /^\/([^/.]*)$/.exec(location.pathname);   // the English page: "/" or a word's "/dukkha"
       if (!m) return false;

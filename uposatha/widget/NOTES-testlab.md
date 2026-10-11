@@ -71,3 +71,7 @@ Encode: `ffmpeg -i video.mp4 -vf scale=720:-2 -c:v libx264 -crf 26 -pix_fmt yuv4
 | 20:14 | REAL Galaxy S24 e1q (US), API 36, One UI 8 | 8 checks "failed", by eye all right | One UI shows the whole widget 1.2 times smaller than it lays it out (drawn for 376x427, on the screen 313x356: the same factor both ways), so nothing is cut and the design is whole; the size check compared the wrong things (now it compares the two directions with each other). The last pin (4x2) found no dialog: the page was full. The resize frame and the edit button have other ids there: those steps did nothing |
 Used that day: 10 of 10 virtual, 4 of 5 real. Not run: a tablet, landscape, the release build (R8) itself - only the debug one was on devices.
 On Android 11 with its stock WebView 91 the app's page is light while the system is dark (old WebViews do not report the dark scheme): not looked into.
+
+2026-10-11 (Pacific day), virtual, MediumPhone.arm API 34, WidgetFlowTest:
+- run 1 (2a2ce68): FAILED. The log: "the sizes were refused: Too many RemoteViews in constructor" on every full draw (18 sizes, Android takes 16); the tap's bounds do arrive ("its view is 80x104 dp"); the new check looked for the Moon on the wrong page (a fault of the test).
+- run 2 (f2c1fab): passed, 0 checks failed. "15 sizes from ..." on every full draw, nothing refused; both tapped widgets drawn for the size the tap told. On this phone the reported sizes were the real ones (80x104, 368x584), so a launcher that misreports is still only covered by unit tests and the owner's phone.

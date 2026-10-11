@@ -208,7 +208,6 @@ const ASSETS = [
     { url: '/settings/lang-counts.json', sources: [f('settings/lang-counts.json')] },
     { url: '/assets/css/styles.css', sources: [l('css/styles.css')] },
     { url: '/assets/texts/sutta_words.txt', sources: [l('texts/sutta_words.txt')] },
-    { url: '/assets/js/textinfo.js', sources: [l('js/textinfo.js')] },
 
     // ---- header/shell images (the persistent search bar's surrounding chrome) ----
     { url: '/assets/img/dgsanhkalogo.png', sources: [l('img/dgsanhkalogo.png')] },

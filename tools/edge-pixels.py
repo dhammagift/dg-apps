@@ -82,6 +82,12 @@ def main():
                 ink += 1
     ink_ratio = ink / max(1, total)
     empty_page = ink_ratio < 0.005
+    # The same, against the body's OWN dominant colour: page_bg is the top rows, which on an app that is not
+    # edge to edge are the system bar (#101010), and then a blank white WebView is 100% "ink" (run 562: the
+    # dictionary passed "painted" on its bare window background). A flat body is 0 here whatever its colour.
+    body = [px[x, y] for y in range(int(h * 0.08), int(h * 0.92), 6) for x in range(0, w, 6)]
+    body_bg = dominant(body)
+    body_ink = sum(1 for p in body if not near(p, body_bg, 32)) / max(1, len(body))
 
     # The status bar's own height: the fixed inset Android reserves for it, which is also what the
     # page gets as env(safe-area-inset-top) (~51 px of a 2400 px screen). The window manager's value
@@ -165,6 +171,8 @@ def main():
         "status_rows": status_rows,
         "empty_page": empty_page,
         "ink_ratio": round(ink_ratio, 5),
+        "body_bg": "#%02x%02x%02x" % body_bg[:3],
+        "body_ink": round(body_ink, 5),
         "cutout_bottom": blob_bottom,
         "page_text_top": page_text_top,
         "page_clear_of_status": page_clear_of_status,
@@ -176,7 +184,7 @@ def main():
     print(json.dumps(verdict))
     for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_color", "page_bg",
               "top_matches_page", "bottom_matches_page", "frame_left", "frame_right", "text_top", "status_rows",
-              "empty_page", "ink_ratio", "top_row_uniform", "cutout_bottom", "page_text_top", "page_clear_of_status"):
+              "empty_page", "ink_ratio", "body_ink", "top_row_uniform", "cutout_bottom", "page_text_top", "page_clear_of_status"):
         print(f"{k}={verdict[k]}")
 
 

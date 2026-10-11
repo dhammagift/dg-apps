@@ -1561,7 +1561,7 @@ jobs:
       - name: Build dg-node's icon bundle (fontawesome-local.js)
         working-directory: ${{ runner.temp }}/dg-node
         run: |
-          npm ci --legacy-peer-deps --ignore-scripts --no-audit
+          npm install --no-save --no-package-lock --legacy-peer-deps --ignore-scripts --no-audit --no-fund   # dg-node has no lock file: npm ci refuses
           npm run build-icons
 
       - name: Lay the calendar page out from dg-node

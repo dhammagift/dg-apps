@@ -16,6 +16,16 @@ on:
       appearance:
         description: light or dark
         default: dark
+      app_run:
+        description: 'Also run Dhamma.Gift itself: the build-app run ID whose dg-app-ios-simulator artifact to install (debug build; empty = Safari only)'
+        default: ''
+      app_urls:
+        description: Space-separated dhammagift:// links to open in the app, one screenshot each (plus the page's selftest.json)
+        default: 'dhammagift://route/?q=kacchapa#dg-settings'
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
   probe:
@@ -47,6 +57,44 @@ jobs:
             sleep "$WAIT"
             xcrun simctl io "$UDID" screenshot "out/$n.png"
             echo "$n $u" >> out/index.txt
+          done
+      - name: Download the app
+        if: inputs.app_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dg-app-ios-simulator-*
+          run-id: ${{ inputs.app_run }}
+          github-token: ${{ github.token }}
+          path: app
+      # The debug app, launched twice: the first start may fetch the site's newer pages (a signed update from
+      # online_origin, src/site-updater.js), the second runs them. Then each link, a screenshot, and what the page
+      # wrote through DgSelfTest (selftest.json) after it.
+      - name: Open the app's pages
+        if: inputs.app_run != ''
+        env:
+          APP_URLS: ${{ inputs.app_urls }}
+          WAIT: ${{ inputs.wait }}
+        run: |
+          set -uo pipefail
+          APP=$(find app -name App.app -maxdepth 3 | head -1)
+          [ -n "$APP" ] || { find app -maxdepth 3; exit 1; }
+          UDID=$(xcrun simctl list devices booted | grep -o '[0-9A-F-]\{36\}' | head -1)
+          xcrun simctl terminate "$UDID" com.apple.mobilesafari || true
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch "$UDID" gift.dhamma.mobile; sleep 40
+          xcrun simctl terminate "$UDID" gift.dhamma.mobile || true
+          xcrun simctl launch "$UDID" gift.dhamma.mobile; sleep 20
+          DATA=$(xcrun simctl get_app_container "$UDID" gift.dhamma.mobile data)
+          n=0
+          for u in $APP_URLS; do
+            n=$((n + 1))
+            rm -f "$DATA/Documents/selftest.json"
+            xcrun simctl openurl "$UDID" "$u"
+            sleep "$WAIT"
+            xcrun simctl io "$UDID" screenshot "out/app-$n.png"
+            cp "$DATA/Documents/selftest.json" "out/app-$n.json" 2>/dev/null || echo "no selftest.json for $u"
+            echo "app-$n $u" >> out/index.txt
+            cat "out/app-$n.json" 2>/dev/null; echo
           done
       - uses: actions/upload-artifact@v4
         if: always()

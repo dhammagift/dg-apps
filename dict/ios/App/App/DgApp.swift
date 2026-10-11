@@ -202,6 +202,7 @@ final class DgPaliAccessory: UIInputView {
     private static let main = ["ā", "ī", "ū", "ṁ", "ṅ", "ñ", "ṭ", "ḍ", "ṇ", "ḷ"]
     private static let more = ["ṃ", "ś", "ṣ", "ṛ", "ṝ", "ḹ", "ḥ"]
     private let stack = UIStackView()
+    private let topLine = CALayer()
     private let moreRow = UIStackView()
     private var height: NSLayoutConstraint!
 
@@ -240,6 +241,7 @@ final class DgPaliAccessory: UIInputView {
         moreRow.isHidden = true
         stack.addArrangedSubview(row)
         stack.addArrangedSubview(moreRow)
+        layer.addSublayer(topLine)
         paint()
         height = heightAnchor.constraint(equalToConstant: 50)
         height.priority = .defaultHigh
@@ -255,11 +257,21 @@ final class DgPaliAccessory: UIInputView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        topLine.frame = CGRect(x: 0, y: 0, width: bounds.width, height: 1 / UIScreen.main.scale)
+    }
+
     func paint() {
         let dark = Self.dark
-        backgroundColor = dark ? UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 1) : .white
+        // A panel of its own, as on Android (src/pali-bar.js: --dg-surface-hover with a border on top): on the page's own colour it
+        // could not be told from the page under it (owner, sim run 592).
+        backgroundColor = dark ? UIColor(red: 0x1d / 255, green: 0x20 / 255, blue: 0x24 / 255, alpha: 1)
+                               : UIColor(red: 0xee / 255, green: 0xf1 / 255, blue: 0xf4 / 255, alpha: 1)
+        topLine.backgroundColor = dark ? UIColor(white: 0.28, alpha: 1).cgColor
+                                       : UIColor(red: 0xd3 / 255, green: 0xd9 / 255, blue: 0xdf / 255, alpha: 1).cgColor
         overrideUserInterfaceStyle = dark ? .dark : .light
-        let keyColor = dark ? UIColor(white: 0.24, alpha: 1) : UIColor(white: 0.93, alpha: 1)
+        let keyColor = dark ? UIColor(white: 0.30, alpha: 1) : .white
         func keys(_ v: UIView) -> [UIButton] { (v as? UIButton).map { [$0] } ?? v.subviews.flatMap(keys) }
         keys(stack).forEach { $0.backgroundColor = keyColor }
     }

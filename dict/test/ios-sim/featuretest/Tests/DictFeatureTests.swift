@@ -139,8 +139,30 @@ final class DictFeatureTests: XCTestCase {
         for i in 1...4 { shot("06-caret-\(i)"); usleep(280_000) }
     }
 
+    // The same as test03 in the dark theme (feature-tour.sh switches the simulator to dark before this case; the page's "Auto"
+    // theme follows it and the row takes the page's theme): the keyboard up, the page scrolled under it, the row stays put.
+    func test07_DarkRowWhileScrolling() {
+        sleep(2)
+        clearAndFocus()
+        let a = app.buttons["ā"]
+        XCTAssertTrue(a.waitForExistence(timeout: 10), "no letters row in the dark theme")
+        let y0 = a.frame.minY
+        shot("07-dark-row")
+        var ys: [CGFloat] = []
+        for i in 0..<3 {
+            page.swipeUp(velocity: .slow)
+            ys.append(a.frame.minY)
+            if i == 1 { shot("07-dark-row-scrolled") }
+            page.swipeDown(velocity: .slow)
+            ys.append(a.frame.minY)
+        }
+        let drift = ys.filter { $0 > 0 }.map { abs($0 - y0) }.max() ?? 0
+        XCTAssertLessThanOrEqual(drift, 1, "the letters row moved while the page scrolled (dark): \(y0) -> \(ys)")
+        box.typeText("\n")
+    }
+
     // The Home Screen quick actions: long press on the icon, the menu, a word from it opens its page.
-    func test07_QuickActions() {
+    func test08_QuickActions() {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         XCUIDevice.shared.press(.home)
         sleep(2)
@@ -150,13 +172,13 @@ final class DictFeatureTests: XCTestCase {
         XCTAssertTrue(icon.waitForExistence(timeout: 10), "no app icon on the Home Screen")
         icon.press(forDuration: 1.6)
         sleep(1)
-        shot("07-menu")
+        shot("08-menu")
         let word = springboard.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "kacchap")).firstMatch
         if word.waitForExistence(timeout: 5) {
             word.tap()
             XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10), "the quick action did not open the app")
             sleep(3)
-            shot("07-opened")
+            shot("08-opened")
         } else {
             XCTFail("no recent word in the quick actions menu")
         }

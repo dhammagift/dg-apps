@@ -37,6 +37,7 @@ CASES=$(grep -oE 'func (test[0-9]+_[A-Za-z]+)' "$HERE/featuretest/Tests/DictFeat
 for c in $CASES; do
   name=$(echo "$c" | sed -E 's/^test([0-9]+)_(.*)$/\1-\2/')
   echo "=== $name"
+  case "$c" in *Dark*) xcrun simctl ui "$UDID" appearance dark; sleep 2 ;; *QuickActions*) xcrun simctl ui "$UDID" appearance light ;; esac
   xcrun simctl io "$UDID" recordVideo --codec h264 --force "$OUT/$name.mp4" >/dev/null 2>&1 &
   rec=$!
   sleep 2

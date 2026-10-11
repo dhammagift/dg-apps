@@ -106,8 +106,23 @@
 
   function place() {
     if (!bar) return;
+    var vv = window.visualViewport;
+    // A keyboard that overlays the page (iOS, a browser): the row is pinned by its top to the visual viewport's bottom edge.
+    // iOS moves the visual viewport inside the layout one while the page scrolls under the keyboard, and position:fixed
+    // follows the layout viewport, so a bottom set once floated up mid-page (owner, TestFlight 531). place() runs on
+    // every visualViewport scroll and resize.
+    // Keyed on the visual viewport being shorter than the layout one, not on the gap below it: scrolled to the end, that gap
+    // is 0 while the keyboard is still up (the bottom-based fallback then lifted the row by the keyboard's height once more).
+    if (vv && window.innerHeight - vv.height > 80) {
+      bar.style.bottom = 'auto';
+      bar.style.top = ((vv.offsetTop + vv.height) / zoom() - bar.offsetHeight) + 'px';
+      return;
+    }
+    bar.style.top = '';
     bar.style.bottom = lift() + 'px';
   }
+  var placing = 0;
+  function placeSoon() { if (!placing) placing = requestAnimationFrame(function () { placing = 0; place(); }); }
 
   // In the app the row waits for the keyboard's own report: shown before it, the row would sit at the bottom of the screen for a moment and
   // then jump up. Once any report has come (or in the app from the start) the row is there only while the keyboard is.
@@ -152,8 +167,9 @@
     // The next field may take the focus a tick later; the row stays then.
     setTimeout(function () { if (!typable(document.activeElement)) hide(); }, 120);
   }, true);
-  window.addEventListener('resize', place);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', place);
+  window.addEventListener('resize', placeSoon);
+  window.addEventListener('scroll', placeSoon, { passive: true });
+  if (window.visualViewport) { window.visualViewport.addEventListener('resize', placeSoon); window.visualViewport.addEventListener('scroll', placeSoon); }
   // The page may focus its field on its own (the dictionary does, on load): no focusin comes after that.
   function already() { if (document.activeElement && typable(document.activeElement)) show(document.activeElement); }
   if (document.body) already(); else document.addEventListener('DOMContentLoaded', already);

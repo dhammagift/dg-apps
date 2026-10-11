@@ -614,8 +614,8 @@
     });
     select.value = alarmStream() ? 'alarm' : 'notification';
     row.querySelector('.dg-stream-note').textContent = ru
-      ? 'Будильник звучит как будильник: громкостью будильника и сквозь «Не беспокоить».'
-      : 'The alarm sounds like an alarm clock: at the alarm volume, and through Do Not Disturb.';
+      ? 'Будильник: громкость будильника, звучит и при «Не беспокоить».'
+      : 'Alarm: the alarm volume, sounds in Do Not Disturb too.';
     return row;
   }
 
@@ -627,8 +627,8 @@
       + '<p class="dg-drawer-subtitle dg-dnd-note" style="font-weight:400;opacity:.75;margin-top:6px"></p>';
     row.querySelector('.dg-drawer-subtitle').textContent = ru ? 'Звук при «Не беспокоить»' : 'Sound in Do Not Disturb';
     row.querySelector('.dg-dnd-note').textContent = ru
-      ? 'Иначе при включённом «Не беспокоить» напоминание придёт без звука. Разрешить может только владелец телефона, в настройках Android.'
-      : 'Without it, a reminder arrives with no sound while Do Not Disturb is on. Only the phone\'s owner can allow it, in Android settings.';
+      ? 'Без этого при «Не беспокоить» напоминание придёт без звука.'
+      : 'Without it a reminder is silent in Do Not Disturb.';
     return row;
   }
 
@@ -671,10 +671,8 @@
     st.style.color = bad ? 'var(--dg-match, #a8341c)' : 'var(--dg-accent-ink, #0f7c63)';
     row.querySelector('button').textContent = ru ? 'Открыть настройки приложения' : 'Open the app\'s settings';
     row.querySelector('.dg-bg-note').textContent = ru
-      ? (bad ? 'Android придерживает напоминания ограниченного приложения, пока его не откроют: они могут не прийти. Там: Батарея → «Без ограничений» или «Оптимизировано».'
-        : 'Напоминания приходят вовремя. Если поставить «Ограничено» (или телефон сам усыпит приложение), они перестанут приходить. Там: Батарея.')
-      : (bad ? 'Android holds a restricted app\'s reminders until it is opened: they may not arrive. There: Battery → Unrestricted or Optimised.'
-        : 'Reminders arrive on time. With "Restricted" (or when the phone puts the app to sleep) they stop. There: Battery.');
+      ? (bad ? 'Напоминания могут не прийти. Батарея → «Без ограничений».' : 'Если ограничить, напоминания не придут.')
+      : (bad ? 'Reminders may not arrive. Battery → Unrestricted.' : 'If restricted, reminders will not arrive.');
   }
 
   function ensureStreamRow() {

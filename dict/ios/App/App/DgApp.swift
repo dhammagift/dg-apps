@@ -288,7 +288,8 @@ final class DgPaliAccessory: UIInputView {
     private func key(_ title: String?, symbol: String?) -> UIButton {
         let b = UIButton(type: .system)
         if let title = title { b.setTitle(title, for: .normal) }
-        if let symbol = symbol { b.setImage(UIImage(systemName: symbol), for: .normal) }
+        // The clipboard glyph at the letters' size: unconfigured it came out as big as the key (TestFlight 563).
+        if let symbol = symbol { b.setImage(UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)), for: .normal) }
         b.titleLabel?.font = .systemFont(ofSize: 22)
         b.tintColor = .label
         b.setTitleColor(.label, for: .normal)

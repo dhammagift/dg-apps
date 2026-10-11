@@ -30,7 +30,7 @@ function Tree([string]$name) {
   try {
     foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
       $wn = $w.Current.Name; $lines += "WINDOW [$wn] class=$($w.Current.ClassName)"
-      if ($wn -match 'Widget|Uposatha|Edge|Dhamma') {
+      if ($w.Current.ClassName -notmatch 'Shell_TrayWnd|Progman|ConsoleWindowClass') {
         $all = $w.FindAll($TS::Descendants, $Cond::TrueCondition); $i = 0
         foreach ($e in $all) { $i++; if ($i -gt 900) { break }
           if ($e.Current.Name) { $lines += "  $($e.Current.ControlType.ProgrammaticName -replace 'ControlType\.','') | $($e.Current.Name)" } }
@@ -59,13 +59,28 @@ function Tap([string]$window, [string]$pattern) {
   Log "nothing to tap for /$pattern/ in /$window/"; return $false
 }
 
+# A fresh runner user has never finished Windows' first-run screens: "Choose privacy settings for your device" covers the whole
+# screen (run 1: every screenshot was that page). Next / Accept until it is gone.
+function Dismiss {
+  for ($i = 0; $i -lt 8; $i++) {
+    $there = $false
+    foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.ClassName -match 'OOBE|CloudExperience') { $there = $true } }
+    if (-not $there) { Log "first-run screens: none left after $i step(s)"; return }
+    if (-not (Tap 'Microsoft account|privacy|Welcome|Windows' '^(Accept|Next|Skip|Skip for now|Not now|No thanks|Continue|Finish|Done)$')) { break }
+    Start-Sleep 4
+  }
+  Log 'first-run screens: still there'
+}
+
 # 1. What this machine is
 Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List | Out-File "$Out\system.txt"
 Get-AppxPackage | Where-Object { $_.Name -match 'WebExperience|Widget' } | Select-Object Name, Version | Format-Table -AutoSize | Out-File -Append "$Out\system.txt"
 $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 "Edge: $edge $((Get-Item $edge -ErrorAction SilentlyContinue).VersionInfo.ProductVersion)" | Out-File -Append "$Out\system.txt"
 Get-Content "$Out\system.txt"
-Shot 'desktop'
+Shot 'desktop'; Tree 'desktop'
+Dismiss
+Shot 'desktop-clear'
 
 # 2. The PWA, installed by policy when Edge starts
 $k = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
@@ -83,6 +98,7 @@ $lnk = Get-ChildItem "$env:USERPROFILE\Desktop\*.lnk" -ErrorAction SilentlyConti
 if ($lnk) { Start-Process $lnk.FullName; Start-Sleep 25; Shot 'app-window' } else { Log 'no Uposatha shortcut on the desktop: the PWA was not installed' }
 
 # 3. The Widgets Board
+Dismiss
 [Keys]::WinPlus(0x57)   # Win+W
 Start-Sleep 12
 Shot 'board'; Tree 'board'

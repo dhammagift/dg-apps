@@ -120,6 +120,17 @@ final class ShareSheetTests: XCTestCase {
             XCTFail("the page's search box is not there")
             return
         }
+        // The shared link's query is emptied with the page's own Clear button (the ✕ in the search
+        // shell, aria-label "Clear"), before the box is focused: a tap on a web button would take the
+        // focus away again. Run 567 showed why backspacing alone is not enough: the tap that focused
+        // the box put the cursor at the START of "https://example.com/", every backspace deleted
+        // nothing, and "kacchapa" went in front of the link ("kacchapahttps://exampl…", the test's
+        // screen recording), so the search could only fail. Picked by its row: Safari has buttons
+        // of its own.
+        let clear = safari.buttons.matching(NSPredicate(format: "label == 'Clear'")).allElementsBoundByIndex.first(where: {
+            $0.isHittable && abs($0.frame.midY - box.frame.midY) < box.frame.height
+        })
+        clear?.tap()
         // A WKWebView input's first tap after its window/sheet appears does not always pick up
         // keyboard focus in the simulator (run 252's failure: "Failed to synthesize event: Neither
         // element nor any descendant has keyboard focus", right after a plain tap()) — a second tap
@@ -159,6 +170,14 @@ final class ShareSheetTests: XCTestCase {
         // as `.value`, which is harmless to over-delete into).
         if let existing = box.value as? String, !existing.isEmpty {
             box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
+        }
+        // Said plainly when the link is still there, instead of a "no offline result" for a query
+        // that was never typed.
+        if let left = box.value as? String, left.contains("example.com") {
+            print("--- Safari accessibility tree (search box not emptied) ---")
+            print(safari.debugDescription)
+            XCTFail("the shared link is still in the search box (\(left)); the Clear button was \(clear == nil ? "not found" : "tapped")")
+            return
         }
         box.typeText("kacchapa\n")
         // App-wide too, for the same reason `box` is: the result lives in the extension's own

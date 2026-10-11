@@ -63,12 +63,20 @@ async function tapEl(sel, nth = 0) {
     var el = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]; if (!el) return null;
     el.scrollIntoView({ block: 'center' });
     var r = el.getBoundingClientRect(), f = innerWidth / document.documentElement.getBoundingClientRect().width;
+    if (!window.__tourHook) { window.__tourHook = 1; addEventListener('pointerdown', function (e) { var t = e.target; window.__tourLast = { x: Math.round(e.clientX), y: Math.round(e.clientY), on: (t.id ? '#' + t.id : t.tagName) }; }, true); }
     return { x: r.left + r.width / 2, y: r.top + r.height / 2, f: f, iw: innerWidth };
   })()`);
   if (!c) { log('  nothing to tap: ' + sel); return false; }
   const k = (Math.abs(c.f - 1) < 0.02 ? 1 : c.f) * W / c.iw;
-  adb(`shell input tap ${Math.round(c.x * k)} ${Math.round(c.y * k)}`);
-  await sleep(1500);
+  const sx = Math.round(c.x * k), sy = Math.round(c.y * k);
+  adb(`shell input tap ${sx} ${sy}`);
+  await sleep(700);
+  // Where the touch landed, as the page saw it (pointerdown clientX/Y), next to where it was aimed: the log says
+  // at once whether the mapping is off and by how much.
+  const seen = await ev(`window.__tourLast ? JSON.stringify(window.__tourLast) : 'none'`);
+  log(`  tap ${sel}: css ${Math.round(c.x)},${Math.round(c.y)} f=${c.f.toFixed(3)} iw=${c.iw} -> screen ${sx},${sy}; page saw ${seen}`);
+  await ev(`window.__tourLast = null`);
+  await sleep(800);
   return true;
 }
 // Native screen (launcher, shade, system dialogs): uiautomator.
@@ -150,7 +158,7 @@ async function run(name, fn) {
   log('webview: ' + (adb('shell dumpsys package com.google.android.webview').match(/versionName=\S+/) || ['?'])[0]);
   adb('shell settings put system accelerometer_rotation 0');
   adb('shell settings put secure show_ime_with_hard_keyboard 1');
-  adb('shell settings put system show_touches 1');   // the videos show where each touch lands   // the soft keyboard (and the Pāli bar above it) shows
+  adb('shell settings put system show_touches 1'); adb('shell settings put system pointer_location 1');   // the videos show where each touch lands   // the soft keyboard (and the Pāli bar above it) shows
 
   await run('first-launch', async () => {
     await launch();

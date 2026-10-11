@@ -130,7 +130,7 @@ final class DictFeatureTests: XCTestCase {
         sleep(1)
         for _ in 0..<4 { page.swipeDown(velocity: .slow) }
         sleep(1)
-        if !box.hasKeyboardFocus { box.tap(); sleep(1) }
+        box.tap(); sleep(1)   # the place the reader taps to type again; the caret must land inside the box
         let f = box.frame
         let note = XCTAttachment(string: "\(f.minX) \(f.minY) \(f.maxX) \(f.maxY)")
         note.name = "06-box-frame"

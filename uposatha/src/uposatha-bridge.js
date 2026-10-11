@@ -641,28 +641,40 @@
   }
 
   // Android may hold this app's alarms back: "Restricted" in the app's battery settings (the person's choice, or a phone's battery
-  // saver). Then no reminder comes until the app is opened, and nothing says so. A warning in the reminders' settings, with the way
-  // to the system page - only while that is the case (owner, 2026-10-11: another calendar app has such a row, ours had nothing).
-  var bgRestricted = false;
+  // saver). Then no reminder comes until the app is opened, and nothing says so. The reminders' settings have a row that is always
+  // there: how Android treats the app now, and the way to the system page (owner, 2026-10-11: a person may switch the phone to a
+  // saving mode later and never learn that such a setting exists - so it is shown always, not only when something is wrong).
+  var bgState = '';   // '' not known yet, 'restricted', 'optimized', 'unrestricted'
   function refreshBackground() {
     var DS = Cap.Plugins && Cap.Plugins.DgSound;
     if (!DS || typeof DS.background !== 'function') return;
-    DS.background().then(function (r) { bgRestricted = !!(r && r.restricted); paintBgRow(); }).catch(function () { /* an older shell: no row */ });
+    DS.background().then(function (r) { bgState = r && r.restricted ? 'restricted' : r && r.unrestricted ? 'unrestricted' : 'optimized'; paintBgRow(); }).catch(function () { /* an older shell: no row */ });
   }
   function paintBgRow() {
     var row = document.getElementById('dg-bg-row'), anchor = document.getElementById('rem-note');
-    if (!bgRestricted) { if (row) row.remove(); return; }
-    if (row || !anchor) return;
-    var ru = isRu();
-    row = document.createElement('div');
-    row.id = 'dg-bg-row';
-    row.innerHTML = '<p class="dg-drawer-subtitle" style="color:var(--dg-match,#a8341c)"></p><button type="button" class="pillbtn" id="dg-bg-btn"></button>'
-      + '<p class="dg-drawer-subtitle" style="font-weight:400;opacity:.75;margin-top:6px"></p>';
-    var p = row.querySelectorAll('p');
-    p[0].textContent = ru ? 'Android ограничил работу приложения в фоне: напоминания могут не прийти.' : 'Android restricts this app in the background: reminders may not arrive.';
+    if (!bgState) return;
+    if (!row) {
+      if (!anchor) return;
+      row = document.createElement('div');
+      row.id = 'dg-bg-row';
+      row.innerHTML = '<p class="dg-drawer-subtitle"></p><p class="dg-drawer-subtitle dg-bg-state" style="font-weight:600;margin-top:2px"></p>'
+        + '<button type="button" class="pillbtn" id="dg-bg-btn"></button><p class="dg-drawer-subtitle dg-bg-note" style="font-weight:400;opacity:.75;margin-top:6px"></p>';
+      anchor.parentNode.insertBefore(row, anchor);
+    }
+    if (row.getAttribute('data-state') === bgState) return;   // the page's observer calls this on every change of the drawer
+    row.setAttribute('data-state', bgState);
+    var ru = isRu(), bad = bgState === 'restricted';
+    row.firstChild.textContent = ru ? 'Работа в фоне (батарея)' : 'Background use (battery)';
+    var st = row.querySelector('.dg-bg-state');
+    st.textContent = ru ? (bad ? 'Сейчас: ограничено' : bgState === 'unrestricted' ? 'Сейчас: без ограничений ✓' : 'Сейчас: оптимизировано ✓')
+      : (bad ? 'Now: restricted' : bgState === 'unrestricted' ? 'Now: unrestricted ✓' : 'Now: optimised ✓');
+    st.style.color = bad ? 'var(--dg-match, #a8341c)' : 'var(--dg-accent-ink, #0f7c63)';
     row.querySelector('button').textContent = ru ? 'Открыть настройки приложения' : 'Open the app\'s settings';
-    p[1].textContent = ru ? 'Там: Батарея → «Без ограничений» или «Оптимизировано».' : 'There: Battery → Unrestricted or Optimized.';
-    anchor.parentNode.insertBefore(row, anchor);
+    row.querySelector('.dg-bg-note').textContent = ru
+      ? (bad ? 'Android придерживает напоминания ограниченного приложения, пока его не откроют: они могут не прийти. Там: Батарея → «Без ограничений» или «Оптимизировано».'
+        : 'Напоминания приходят вовремя. Если поставить «Ограничено» (или телефон сам усыпит приложение), они перестанут приходить. Там: Батарея.')
+      : (bad ? 'Android holds a restricted app\'s reminders until it is opened: they may not arrive. There: Battery → Unrestricted or Optimised.'
+        : 'Reminders arrive on time. With "Restricted" (or when the phone puts the app to sleep) they stop. There: Battery.');
   }
 
   function ensureStreamRow() {

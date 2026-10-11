@@ -61,6 +61,10 @@ Every one of these was on the owner's phone and in none of the "it passed" repor
   Costs 0.2-0.7 s per redraw on a razr, off the main thread. A tap on the slides' switch or a month arrow is answered faster: each
   size has its own intents (the data URI carries the height), so the tap says which size is on the screen, and only that one and the
   reported one are drawn; the next tick draws all again.
+  The owner's own razr over-reports the WIDTH as well ("391" is 375 dp): nothing drawn for 391 fitted, and a launcher with nothing
+  that fits takes the smallest view. So each height is also drawn at 0.94 of the width (`WidgetPlan.sizes`: 18 views; the big moon's
+  picture is shared between them, `WidgetMoon.shared`), and `WidgetPlan.chosen` replays Android's rule of choice in unit tests with
+  the numbers of the Pixel, the razr plus 2024 and the owner's phone.
   The low wide arrangement of the strip (`w2_strip_w`) was made for the phantom "391 x 75" and stays for cells that really are low.
   Samsung One UI 8 (Galaxy S24, Android 16) is another case and needs nothing: it lays the widget out at the size it reports and
   shows the whole view 1.2 times smaller (the same factor both ways), so the design is whole, only smaller.

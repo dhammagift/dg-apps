@@ -121,6 +121,9 @@ public class DgSoundPlugin extends Plugin {
             restricted = am != null && am.isBackgroundRestricted();
         }
         out.put("restricted", restricted);
+        // "Unrestricted" (the app is left out of battery optimisation) against the default "Optimised": both let the reminders through
+        android.os.PowerManager pm = getContext().getSystemService(android.os.PowerManager.class);
+        out.put("unrestricted", pm != null && pm.isIgnoringBatteryOptimizations(getContext().getPackageName()));
         call.resolve(out);
     }
 

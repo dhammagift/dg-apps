@@ -140,22 +140,26 @@ function capacitorStub() {
             await ctx.close();
         }
 
-        // 1d. "Restricted" background use (Android keeps such an app's alarms until it is opened): a warning with the way to the system
-        // page appears in the reminders' settings, and goes when the restriction is taken off.
+        // 1d. How Android treats the app in the background is a row of the reminders' settings that is always there (a person may
+        // restrict the app later and never learn why the reminders stopped): its state, a warning when "Restricted" (Android keeps
+        // such an app's alarms until it is opened), and the way to the system page.
         {
             const ctx = await ctxOf('light', 'en');
             await ctx.addInitScript(capacitorStub);
-            await ctx.addInitScript(() => { window.__bg = true; const S = window.Capacitor.Plugins.DgSound; S.background = () => Promise.resolve({ restricted: window.__bg }); S.openBackground = () => { window.__bgOpened = (window.__bgOpened || 0) + 1; return Promise.resolve(); }; });
+            await ctx.addInitScript(() => { window.__bg = { restricted: false, unrestricted: false }; const S = window.Capacitor.Plugins.DgSound; S.background = () => Promise.resolve(window.__bg); S.openBackground = () => { window.__bgOpened = (window.__bgOpened || 0) + 1; return Promise.resolve(); }; });
             await ctx.addInitScript(BRIDGE);
             const page = await ctx.newPage();
             await page.goto(PAGE, { waitUntil: 'load' });
             await page.waitForTimeout(2500);
-            check('restricted in the background: the warning is in the reminders settings, once', await page.evaluate(() => { const r = document.querySelectorAll('#dg-bg-row'); return [r.length, r[0] && r[0].nextElementSibling && r[0].nextElementSibling.id]; }), [1, 'rem-note']);
+            const state = () => page.evaluate(() => { const r = document.querySelectorAll('#dg-bg-row'); return [r.length, r[0] && r[0].getAttribute('data-state'), r[0] && r[0].nextElementSibling && r[0].nextElementSibling.id, r[0] && /: restricted/i.test(r[0].querySelector('.dg-bg-state').textContent)]; });
+            const back = async (v) => { await page.evaluate((x) => { window.__bg = x; document.dispatchEvent(new Event('visibilitychange')); }, v); await page.waitForTimeout(500); };
+            check('background use: the row is in the reminders settings although nothing is wrong (optimised)', await state(), [1, 'optimized', 'rem-note', false]);
             await page.evaluate(() => document.getElementById('dg-bg-btn').click());
             check('its button opens the system page', await page.evaluate(() => window.__bgOpened), 1);
-            await page.evaluate(() => { window.__bg = false; document.dispatchEvent(new Event('visibilitychange')); });
-            await page.waitForTimeout(500);
-            check('the restriction is off: the warning is gone', await page.evaluate(() => document.querySelectorAll('#dg-bg-row').length), 0);
+            await back({ restricted: true, unrestricted: false });
+            check('restricted: the same row says so', await state(), [1, 'restricted', 'rem-note', true]);
+            await back({ restricted: false, unrestricted: true });
+            check('unrestricted: the row stays and says so', await state(), [1, 'unrestricted', 'rem-note', false]);
             await ctx.close();
         }
 

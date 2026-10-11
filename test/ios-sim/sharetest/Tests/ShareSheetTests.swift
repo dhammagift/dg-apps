@@ -186,7 +186,10 @@ final class ShareSheetTests: XCTestCase {
         box.typeText("kacchapa\n")
         // App-wide too, for the same reason `box` is: the result lives in the extension's own
         // window, not in `web` (Safari's page webview).
-        let hit = safari.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Mahāsatipaṭṭhānasutta'")).firstMatch
+        // kacchapa (the turtle) is in dn2, dn1, mn129, sn35.240 and others, never in DN22: the old
+        // expectation "Mahāsatipaṭṭhānasutta" could not be met even by a working sheet (run 579 was the
+        // first to get this far).
+        let hit = safari.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Sāmaññaphalasutta' OR label CONTAINS 'Kummopamasutta'")).firstMatch
         XCTAssertTrue(hit.waitForExistence(timeout: 45), "no offline result for kacchapa in the sheet")
         attach("3-offline-results", safari)
     }

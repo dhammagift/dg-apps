@@ -112,6 +112,19 @@ final class DgTourTests: XCTestCase {
         look("tour-11-settings-scrolled")
     }
 
+    // For ios-safari-probe.yml: opens each link of DG_LINKS (space-separated, passed as TEST_RUNNER_DG_LINKS), answers
+    // iOS's «Open in "Dhamma.gift"?» and the first-start offer of the offline library, and leaves each page on screen
+    // for the workflow's screenshot and the page's DgSelfTest report.
+    func testOpenLinks() {
+        let links = (ProcessInfo.processInfo.environment["DG_LINKS"] ?? "").split(separator: " ").map(String.init)
+        for link in links {
+            openLink(link)
+            let notNow = app.buttons["Not now"]
+            if notNow.waitForExistence(timeout: 3) { notNow.tap() }
+            look("probe-" + String(link.suffix(24)).replacingOccurrences(of: "/", with: "_"), 10)
+        }
+    }
+
     func test2_Dark() {
         openLink("dhammagift://search?q=kacchapa")
         XCTAssertTrue(page.waitForExistence(timeout: 20), "no web view")

@@ -133,6 +133,11 @@ public class DgSoundPlugin extends Plugin {
         try {
             Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + getContext().getPackageName()));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            // Scroll to the "Battery" row and flash it, where the Settings app does that (its own search uses these keys)
+            intent.putExtra(":settings:fragment_args_key", "battery");
+            android.os.Bundle args = new android.os.Bundle();
+            args.putString(":settings:fragment_args_key", "battery");
+            intent.putExtra(":settings:show_fragment_args", args);
             getContext().startActivity(intent);
             call.resolve();
         } catch (RuntimeException e) {

@@ -669,10 +669,10 @@
     st.textContent = ru ? (bad ? 'Сейчас: ограничено' : bgState === 'unrestricted' ? 'Сейчас: без ограничений ✓' : 'Сейчас: оптимизировано ✓')
       : (bad ? 'Now: restricted' : bgState === 'unrestricted' ? 'Now: unrestricted ✓' : 'Now: optimised ✓');
     st.style.color = bad ? 'var(--dg-match, #a8341c)' : 'var(--dg-accent-ink, #0f7c63)';
-    row.querySelector('button').textContent = ru ? 'Открыть настройки приложения' : 'Open the app\'s settings';
+    row.querySelector('button').textContent = ru ? 'Настройки батареи' : 'Battery settings';   // the app's page of the system settings, its "Battery" row
     row.querySelector('.dg-bg-note').textContent = ru
-      ? (bad ? 'Напоминания могут не прийти. Батарея → «Без ограничений».' : 'Если ограничить, напоминания не придут.')
-      : (bad ? 'Reminders may not arrive. Battery → Unrestricted.' : 'If restricted, reminders will not arrive.');
+      ? (bad ? 'Напоминания могут не прийти. Там: Батарея → «Без ограничений».' : 'Если ограничить, напоминания не придут.')
+      : (bad ? 'Reminders may not arrive. There: Battery → Unrestricted.' : 'If restricted, reminders will not arrive.');
   }
 
   function ensureStreamRow() {

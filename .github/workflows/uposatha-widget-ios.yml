@@ -1,0 +1,105 @@
+name: Uposatha widget on iOS (simulator)
+
+# The Uposatha widgets as iOS itself draws them: the app is built for the simulator, a UI test opens the widget gallery, pictures
+# every preview and puts a widget on the Home Screen; the extension's log and crash reports are kept with the pictures
+# (uposatha/test/ios-sim/widget-gallery.sh). Started by hand only. Nothing is signed or uploaded anywhere.
+#
+# The web bundle is taken from a build-app.yml run (uposatha-www-<n>), not built here: the widgets are native code, and the page
+# only has to open and hand its data over.
+
+on:
+  workflow_dispatch:
+    inputs:
+      www_run:
+        description: 'build-app.yml run ID to take the Uposatha web bundle from'
+        required: false
+        type: string
+        default: '38143508176'
+
+concurrency:
+  group: uposatha-widget-ios
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read   # another run's artifact
+
+jobs:
+  widget:
+    name: Widget gallery and Home Screen
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Checkout this repo (the app)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download the web bundle
+        uses: actions/download-artifact@v4
+        with:
+          pattern: uposatha-www-*
+          merge-multiple: true
+          path: uposatha/www
+          run-id: ${{ inputs.www_run }}
+          github-token: ${{ github.token }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Restore npm and SwiftPM caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ~/Library/Caches/org.swift.swiftpm
+            uposatha/ios/DerivedData/SourcePackages
+          key: ${{ runner.os }}-upo-ios-${{ hashFiles('uposatha/ios/App/CapApp-SPM/Package.swift', 'uposatha/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-upo-ios-
+
+      - name: Install the app's dependencies
+        working-directory: uposatha
+        run: npm ci
+
+      - name: Select Xcode
+        run: tools/select-xcode.sh
+
+      - name: Sync Capacitor into uposatha/ios
+        working-directory: uposatha
+        run: npx cap sync ios
+
+      - name: Build for the iOS Simulator
+        working-directory: uposatha/ios/App
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ../../ios-build.log | tail -30
+
+      - name: Generate the widget test project
+        run: |
+          brew install xcodegen >/dev/null 2>&1 || brew install xcodegen
+          (cd uposatha/test/ios-sim/widgettest && xcodegen generate)
+
+      - name: The widget gallery and the Home Screen
+        run: uposatha/test/ios-sim/widget-gallery.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app widget-shots
+
+      - name: Upload the pictures and the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uposatha-widget-ios-${{ github.run_number }}
+          path: |
+            widget-shots
+            uposatha/ios-build.log
+          retention-days: 14
+          if-no-files-found: ignore

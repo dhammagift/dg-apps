@@ -110,11 +110,6 @@ on:
         required: false
         type: boolean
         default: false
-      all_apps:
-        description: 'A test run (release=none) builds and checks all three apps at once: Dhamma.Gift, the dictionary and Uposatha (owner, 2026-10-11: one test build, not one per app). Untick for a Dhamma.Gift-only run.'
-        required: false
-        type: boolean
-        default: true
       dict_only:
         description: 'Run ONLY the dictionary app jobs and skip Dhamma.Gift entirely. For checking a change under dict/ without building the offline library: minutes instead of the better part of an hour. A tag ignores it.'
         required: false
@@ -244,7 +239,6 @@ jobs:
           IOS_CHECKS: ${{ inputs.ios_checks }}
           UPOSATHA: ${{ inputs.uposatha }}
           DICT_ONLY: ${{ inputs.dict_only }}
-          ALL_APPS: ${{ inputs.all_apps }}
           KEEP_IPA: ${{ inputs.keep_ipa }}
         run: |
           set -euo pipefail
@@ -281,10 +275,8 @@ jobs:
             # As before: a dictionary-only run or a dictionary/Uposatha release skips Dhamma.Gift and its database,
             # and an iOS-only release skips the Android emulator suite.
             build_dg=$(yes eval '! on "${DICT_ONLY:-}" && [ "$app" != dict ] && [ "$app" != uposatha ]')
-            # A test run (no release) with all_apps builds the dictionary and Uposatha too: one run checks everything.
-            all=$(yes eval 'on "${ALL_APPS:-}" && [ -z "$app" ] && ! on "${DICT_ONLY:-}"')
-            build_dict=$(yes eval 'on "${DICT_ONLY:-}" || [ "$app" = dict ] || [ "$all" = true ]')
-            build_upo=$(yes eval '[ "$app" = uposatha ] || on "${IOS_CHECKS:-}" || on "${UPOSATHA:-}" || [ "$all" = true ]')
+            build_dict=$(yes eval 'on "${DICT_ONLY:-}" || [ "$app" = dict ]')
+            build_upo=$(yes eval '[ "$app" = uposatha ] || on "${IOS_CHECKS:-}" || on "${UPOSATHA:-}"')
             dg_android_tests=$(yes eval '[ "$build_dg" = true ] && [[ "${RELEASE:-}" != *-ios ]]')
           fi
           # An IPA is made only when someone will send it: TestFlight now, or ios-upload.yml later (keep_ipa).
@@ -293,8 +285,8 @@ jobs:
           dg_ios_checks=$(yes eval 'on "${IOS_CHECKS:-}" || [ "$dg_ios_archive" = true ]')
           upo_ios_checks=$(yes eval 'on "${IOS_CHECKS:-}" || on "${UPOSATHA:-}" || [ "$upo_ios" = true ]')
           # The emulator launch checks: before every Play upload, and on the test runs of that app so they are known to work.
-          dict_launch=$(yes eval '[ "$build_dict" = true ] && { [ "$dict_play" = true ] || on "${DICT_ONLY:-}" || [ "${all:-false}" = true ]; }')
-          upo_launch=$(yes eval '[ "$build_upo" = true ] && { [ "$upo_play" = true ] || on "${UPOSATHA:-}" || [ "${all:-false}" = true ]; }')
+          dict_launch=$(yes eval '[ "$build_dict" = true ] && { [ "$dict_play" = true ] || on "${DICT_ONLY:-}"; }')
+          upo_launch=$(yes eval '[ "$build_upo" = true ] && { [ "$upo_play" = true ] || on "${UPOSATHA:-}"; }')
           github_release=$(yes eval '[ "$GITHUB_EVENT_NAME" = push ] && [ "$app" = dg ]')
           for v in build_dg dg_android_tests dg_ios_checks dg_ios_archive dg_play dg_ios github_release \
                    build_dict dict_launch dict_play dict_ios build_upo upo_launch upo_ios_checks upo_play upo_ios; do

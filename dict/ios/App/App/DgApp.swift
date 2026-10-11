@@ -289,9 +289,15 @@ final class DgPaliAccessory: UIInputView {
         let b = UIButton(type: .system)
         if let title = title { b.setTitle(title, for: .normal) }
         // The clipboard glyph at the letters' size: unconfigured it came out as big as the key (TestFlight 563).
-        if let symbol = symbol { b.setImage(UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)), for: .normal) }
+        if let symbol = symbol {
+            // Small and in the accent green, as on Android; a plain symbol image still came out as tall as the key (sim run 592).
+            b.setPreferredSymbolConfiguration(UIImage.SymbolConfiguration(pointSize: 15, weight: .regular, scale: .small), forImageIn: .normal)
+            b.setImage(UIImage(systemName: symbol), for: .normal)
+            b.imageView?.contentMode = .scaleAspectFit
+            b.tintColor = UIColor(red: 0x13 / 255, green: 0x9b / 255, blue: 0x7b / 255, alpha: 1)
+        }
         b.titleLabel?.font = .systemFont(ofSize: 22)
-        b.tintColor = .label
+        if symbol == nil { b.tintColor = .label }
         b.setTitleColor(.label, for: .normal)
         b.layer.cornerRadius = 6
         b.layer.shadowColor = UIColor.black.cgColor

@@ -54,7 +54,9 @@ jobs:
           arch: x86_64
           profile: pixel_7
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          # swangle, not swiftshader: the emulator's swiftshader GL translator crashes the whole emulator on the Uposatha home tab
+          # (the SVG moon with blur filters, dg-node b8f5005); real phones are fine (uposatha-emu-probe.yml, run 38118358611).
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash tools/emu-launch.sh "$(ls apk/*.apk | head -1)" shots "$PKG"
 
       - name: Verdict

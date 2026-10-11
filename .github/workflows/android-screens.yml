@@ -126,7 +126,7 @@ jobs:
           arch: x86_64
           profile: ${{ inputs.profile }}
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots "$PKG" "$MODE"
 
       - name: Upload the screenshots

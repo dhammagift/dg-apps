@@ -59,7 +59,9 @@ for t in m:
     for a in t.get('attachments', []):
         name = (a.get('suggestedHumanReadableName') or a.get('name') or '').split('_')[0]
         src = os.path.join(d, a.get('exportedFileName', ''))
-        if name and os.path.exists(src): shutil.copy(src, os.path.join(out, name if name.endswith('.png') else name + '.png'))
+        if name and os.path.exists(src):
+            ext = os.path.splitext(src)[1] or '.png'
+            shutil.copy(src, os.path.join(out, name if name.endswith(ext) else name + ext))
 PY
   why=$(grep -E "error: -\[|XCTAssert|failed -|: error:" "$OUT/$name.log" | head -3 | sed -E 's/^.*error: //' | tr '\n' ' ')
   if [ $code -eq 0 ]; then echo "PASS $name" | tee -a "$OUT/results.txt"
@@ -78,6 +80,31 @@ band = im.crop((int(w * 0.08), int(40 * s), int(w * 0.92), int(52 * s)))
 sd = ImageStat.Stat(band).stddev[0]
 ok = sd < 6
 print(('PASS' if ok else 'FAIL') + ' 04-strip-under-the-clock: luminance spread %.1f under the status bar (text there reads > 6)' % sd)
+sys.exit(0 if ok else 1)
+PY
+fi
+
+# The caret after scrolling down and back up: the blue caret (iOS's tint) must be inside the search box's frame. The box's frame
+# comes from the test as text, in points; the screenshots are in pixels (3x on an iPhone Pro). The caret blinks, so any of the
+# four screenshots that shows it counts.
+if ls "$OUT"/06-caret-*.png >/dev/null 2>&1; then
+  FRAME=$(cat "$OUT/att-06-CaretAfterScrollingDownAndUp"/*.txt 2>/dev/null | head -1)
+  python3 - "$FRAME" "$OUT"/06-caret-*.png <<'PY' | tee -a "$OUT/results.txt" || FAILED=1
+import sys
+from PIL import Image
+try: x1, y1, x2, y2 = map(float, sys.argv[1].split())
+except Exception: print('FAIL 06-caret-in-the-box: no box frame from the test'); sys.exit(1)
+seen = []
+for f in sys.argv[2:]:
+    im = Image.open(f).convert('RGB'); w, h = im.size; s = float(round(w / 400.0))   # the screen's scale: 3 on every iPhone Pro
+    px = im.load(); pts = [(x, y) for y in range(0, int(h * 0.3)) for x in range(0, w, 1) if (lambda r, g, b: b > 200 and r < 90 and 90 < g < 170)(*px[x, y])]
+    if pts:
+        xs = [p[0] / s for p in pts]; ys = [p[1] / s for p in pts]
+        seen.append((min(xs), min(ys), max(xs), max(ys)))
+if not seen: print('FAIL 06-caret-in-the-box: no caret in the screenshots'); sys.exit(1)
+cx1, cy1, cx2, cy2 = seen[0]
+ok = x1 - 2 <= cx1 and cx2 <= x2 + 2 and y1 - 2 <= cy1 and cy2 <= y2 + 2
+print(('PASS' if ok else 'FAIL') + ' 06-caret-in-the-box: caret at %.0f,%.0f-%.0f,%.0f pt, box %.0f,%.0f-%.0f,%.0f pt' % (cx1, cy1, cx2, cy2, x1, y1, x2, y2))
 sys.exit(0 if ok else 1)
 PY
 fi

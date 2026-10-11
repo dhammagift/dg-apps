@@ -122,8 +122,25 @@ final class DictFeatureTests: XCTestCase {
         shot("05-after")
     }
 
+    // The owner's case (TestFlight 563): the box has the focus, the page is scrolled down and back up - the caret must still be
+    // inside the box. The box's frame goes along as text; the script finds the blue caret in the screenshots and checks it.
+    func test06_CaretAfterScrollingDownAndUp() {
+        clearAndFocus()
+        for _ in 0..<3 { page.swipeUp(velocity: .slow) }
+        sleep(1)
+        for _ in 0..<4 { page.swipeDown(velocity: .slow) }
+        sleep(1)
+        if !box.hasKeyboardFocus { box.tap(); sleep(1) }
+        let f = box.frame
+        let note = XCTAttachment(string: "\(f.minX) \(f.minY) \(f.maxX) \(f.maxY)")
+        note.name = "06-box-frame"
+        note.lifetime = .keepAlways
+        add(note)
+        for i in 1...4 { shot("06-caret-\(i)"); usleep(280_000) }
+    }
+
     // The Home Screen quick actions: long press on the icon, the menu, a word from it opens its page.
-    func test06_QuickActions() {
+    func test07_QuickActions() {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         XCUIDevice.shared.press(.home)
         sleep(2)
@@ -133,13 +150,13 @@ final class DictFeatureTests: XCTestCase {
         XCTAssertTrue(icon.waitForExistence(timeout: 10), "no app icon on the Home Screen")
         icon.press(forDuration: 1.6)
         sleep(1)
-        shot("06-menu")
+        shot("07-menu")
         let word = springboard.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "kacchap")).firstMatch
         if word.waitForExistence(timeout: 5) {
             word.tap()
             XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10), "the quick action did not open the app")
             sleep(3)
-            shot("06-opened")
+            shot("07-opened")
         } else {
             XCTFail("no recent word in the quick actions menu")
         }

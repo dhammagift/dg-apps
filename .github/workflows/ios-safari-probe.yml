@@ -43,7 +43,7 @@ jobs:
           WAIT: ${{ inputs.wait }}
           APPEARANCE: ${{ inputs.appearance }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           mkdir -p out
           UDID=$(xcrun simctl list devices available | grep -E "iPhone 1[6-9]( Pro)? \(" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           [ -n "$UDID" ] || { xcrun simctl list devices available; exit 1; }
@@ -53,7 +53,8 @@ jobs:
           n=0
           for u in $URLS; do
             n=$((n + 1))
-            xcrun simctl openurl "$UDID" "$u"
+            # Safari's first start after a boot can take longer than openurl waits (run 38151652342): once more.
+            xcrun simctl openurl "$UDID" "$u" || { sleep 15; xcrun simctl openurl "$UDID" "$u" || echo "could not open $u"; }
             sleep "$WAIT"
             xcrun simctl io "$UDID" screenshot "out/$n.png"
             echo "$n $u" >> out/index.txt
@@ -91,7 +92,7 @@ jobs:
           for u in $APP_URLS; do
             n=$((n + 1))
             rm -f "$DATA/Documents/selftest.json"
-            xcrun simctl openurl "$UDID" "$u"
+            xcrun simctl openurl "$UDID" "$u" || { sleep 15; xcrun simctl openurl "$UDID" "$u" || echo "could not open $u"; }
             sleep "$WAIT"
             xcrun simctl io "$UDID" screenshot "out/app-$n.png"
             cp "$DATA/Documents/selftest.json" "out/app-$n.json" 2>/dev/null || echo "no selftest.json for $u"

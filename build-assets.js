@@ -826,6 +826,7 @@ const ROOT_FILES = [
     // (public/overrides/read/js), the legacy reader tree is no longer a source.
     { url: '/read/js/ranges.js', sources: ['public/overrides/read/js/ranges.js'] },
     { url: '/read/js/voice-mem.js', sources: ['public/overrides/read/js/voice-mem.js'] },
+    { url: '/read/js/voice-offline.js', sources: ['public/overrides/read/js/voice-offline.js'] },
     { url: '/read/js/reader-rus-translations.js', sources: ['public/overrides/read/js/reader-rus-translations.js'] },
     { url: '/assets/img/albumart.png', sources: ['img/albumart.png'], legacy: true },
 ];

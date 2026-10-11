@@ -54,18 +54,32 @@ async function waitFor(js, sec = 10) {
   log('  not true after ' + sec + 's: ' + js);
   return false;
 }
-// A real touch (adb input tap) on an element's centre. The page's CSS px map to the screen as innerWidth to the screen's
-// width (the WebView fills it edge to edge): getBoundingClientRect and innerWidth share one space, CSS zoom included.
-// (First run, 2026-10-11: devicePixelRatio times the zoom missed by 10 %; a touch sent over DevTools did not click buttons.)
+// A touch on an element's centre: first a real one (adb input tap; CSS px map to the screen as innerWidth to its width,
+// the WebView filling it edge to edge). If the page saw no pointerdown from it, the same tap goes in as a touchscreen tap
+// gesture over DevTools (Input.synthesizeTapGesture: the renderer's own input path, so buttons click and inputs focus),
+// and the first time that happens it is logged with the window that had the focus. (2026-10-11: on the CI emulator adb
+// taps did not reach the WebView at all in runs 566 and 569; a plain DevTools touch sequence did not click buttons.)
+let adbMissLogged = false;
 async function tapEl(sel, nth = 0) {
   const c = await ev(`(function(){
     var el = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]; if (!el) return null;
     el.scrollIntoView({ block: 'center' });
     var r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, iw: innerWidth };
+    if (!window.__tourDown) { window.__tourDown = 0; addEventListener('pointerdown', function () { window.__tourDown++; }, true); }
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, iw: innerWidth, down: window.__tourDown };
   })()`);
   if (!c) { log('  nothing to tap: ' + sel); return false; }
-  adb(`shell input tap ${Math.round(c.x * W / c.iw)} ${Math.round(c.y * W / c.iw)}`);
+  const sx = Math.round(c.x * W / c.iw), sy = Math.round(c.y * W / c.iw);
+  adb(`shell input tap ${sx} ${sy}`);
+  await sleep(600);
+  if ((await ev('window.__tourDown')) > c.down) { await sleep(600); return true; }
+  if (!adbMissLogged) {
+    adbMissLogged = true;
+    log(`  adb tap ${sx},${sy} (${sel}) did not reach the page; focus: ` + (adb('shell dumpsys window').match(/mCurrentFocus=.*/) || [''])[0] + '; tapping over DevTools from here on when that happens');
+    adb('shell uiautomator dump /sdcard/miss.xml'); adb(`pull /sdcard/miss.xml ${path.join(OUT, 'adb-miss-ui.xml')}`);
+    sh(`adb exec-out screencap -p > ${path.join(OUT, 'adb-miss.png')}`);
+  }
+  await (await page()).send('Input.synthesizeTapGesture', { x: c.x, y: c.y, tapCount: 1, gestureSourceType: 'touch' });
   await sleep(1200);
   return true;
 }
@@ -140,7 +154,8 @@ async function run(name, fn) {
   if (!/Success/.test(inst)) { log('install failed: ' + inst); process.exit(1); }
   log('webview: ' + (adb('shell dumpsys package com.google.android.webview').match(/versionName=\S+/) || ['?'])[0]);
   adb('shell settings put system accelerometer_rotation 0');
-  adb('shell settings put secure show_ime_with_hard_keyboard 1');   // the soft keyboard (and the Pāli bar above it) shows
+  adb('shell settings put secure show_ime_with_hard_keyboard 1');
+  adb('shell settings put system show_touches 1');   // the videos show where each touch lands   // the soft keyboard (and the Pāli bar above it) shows
 
   await run('first-launch', async () => {
     await launch();

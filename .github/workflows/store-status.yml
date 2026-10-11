@@ -6,6 +6,11 @@ name: Store status
 # Nothing in any store is changed (the Play "edit" is opened only to read tracks and is discarded).
 on:
   workflow_dispatch:
+  # After every app build, so a new TestFlight / Play upload / build number shows within minutes (the page showed numbers
+  # 2.5 hours old, owner 2026-10-11); the schedule stays for what changes in the stores without a build of ours.
+  workflow_run:
+    workflows: ["Build App"]
+    types: [completed]
   schedule:
     - cron: '17 */3 * * *'
 

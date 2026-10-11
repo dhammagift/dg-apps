@@ -147,7 +147,7 @@ class DgBridgeViewController: CAPBridgeViewController {
         // No scroll indicators: the page is the whole interface.
         webView?.scrollView.showsVerticalScrollIndicator = false
         webView?.scrollView.showsHorizontalScrollIndicator = false
-        // Pull to refresh holds the page on screen while it reloads (DgPullHold below, src/pull-refresh.js).
+        // Pull to refresh: the system control, the page held on screen while it reloads (DgPullHold below, src/pull-refresh.js).
         webView?.configuration.userContentController.add(DgPullHold(webView), name: "dgPullHold")
 
         // The bridge (www/uposatha-bridge.js, the same file Android injects) runs before the page's own scripts. Added here and not
@@ -746,45 +746,67 @@ public class DgWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
-// Pull to refresh with the page held on screen (src/pull-refresh.js; the same class in all three apps, as
-// Android's DgPullHoldPlugin.java). Owner, 2026-10-11: the page should stay exactly as it is and the new
-// content just appear; a bare reload painted blank and jumped, a fade over it was "дорогое мелькание".
-// "hold" puts a picture of the web view over it, with the page's spinner cut out of the picture and turning,
-// and reloads the page under it; "release", sent by the new page once it has loaded with its fonts, takes
-// the picture away, so the next frame is the new page, whole.
+// Pull to refresh, iOS's own (src/pull-refresh.js; the same class in all three apps, as Android's
+// DgPullHoldPlugin.java). Owner, 2026-10-11: the page should stay exactly as it is and the new content just
+// appear. A bare reload painted blank and jumped, a fade over it was "дорогое мелькание", a spinner the page drew
+// over a held picture of itself "дергается ... кошмарно дешево". So the gesture and the spinner are
+// UIRefreshControl's, the control every iOS list has. Once it fires, and the page says the pull began on the page
+// itself (dgPullAllowed: scrolled to the top, not in a sheet, a popup or a field), the web view as it is, the
+// spinner included, becomes a picture over it with a live spinner on the frozen one, the page reloads under the
+// picture, and "release", sent by the new page once it has loaded with its fonts, takes the picture away and lets
+// the control close as it always does.
 final class DgPullHold: NSObject, WKScriptMessageHandler {
     private weak var web: WKWebView?
+    private let control = DgRefreshControl()
     private var shot: UIView?
     private var token = 0
+    private var waitingForLift = false
 
-    init(_ web: WKWebView?) { self.web = web }
+    init(_ web: WKWebView?) {
+        self.web = web
+        super.init()
+        guard let web = web else { return }
+        // A short page (Uposatha's tabs, an empty search) is pulled too, as in Safari.
+        web.scrollView.alwaysBounceVertical = true
+        web.scrollView.refreshControl = control
+        control.addTarget(self, action: #selector(pulled), for: .valueChanged)
+        web.scrollView.panGestureRecognizer.addTarget(self, action: #selector(panned(_:)))
+    }
 
-    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        let body = message.body as? [String: Any] ?? [:]
-        release()
-        guard body["op"] as? String == "hold", let web = web else { return }
+    @objc private func pulled() {
+        guard let web = web else { return control.endRefreshing() }
+        // A page without pull-refresh.js would never send "release": no refresh there.
+        web.evaluateJavaScript("window.dgPullAllowed ? dgPullAllowed() : false") { [weak self] result, _ in
+            guard let self = self else { return }
+            guard result as? Bool == true else { self.control.endRefreshing(); return }
+            if web.scrollView.isDragging { self.waitingForLift = true } else { self.hold() }
+        }
+    }
+
+    // The picture is taken once the finger is up and the control has settled into its refreshing place.
+    @objc private func panned(_ pan: UIPanGestureRecognizer) {
+        guard waitingForLift, pan.state == .ended || pan.state == .cancelled || pan.state == .failed else { return }
+        waitingForLift = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in self?.hold() }
+    }
+
+    private func hold() {
+        guard let web = web, let parent = web.superview, control.isRefreshing, shot == nil else { return }
+        token += 1
         let mine = token
-        guard let parent = web.superview, let picture = web.snapshotView(afterScreenUpdates: false) else { web.reload(); return }
+        guard let picture = web.snapshotView(afterScreenUpdates: false) else { web.reload(); return }
         picture.frame = web.frame
+        // The frozen spinner gets a live one on top, on the page's own background, so it keeps turning.
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.backgroundColor = web.scrollView.backgroundColor
+        spinner.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        var centre = control.convert(CGPoint(x: control.bounds.midX, y: control.bounds.midY), to: web)
+        centre.y += control.contentShift
+        spinner.center = centre
+        spinner.startAnimating()
+        picture.addSubview(spinner)
         parent.insertSubview(picture, aboveSubview: web)
         shot = picture
-        // The spinner's square, in CSS px from the viewport's top left: points in the web view, past any inset.
-        if let x = body["x"] as? Double, let y = body["y"] as? Double, let size = body["size"] as? Double, size > 0 {
-            let inset = web.scrollView.adjustedContentInset
-            let square = CGRect(x: x + inset.left, y: y + inset.top, width: size, height: size)
-            if let ring = web.resizableSnapshotView(from: square, afterScreenUpdates: false, withCapInsets: .zero) {
-                ring.frame = square
-                ring.layer.cornerRadius = size / 2
-                ring.clipsToBounds = true
-                let turn = CABasicAnimation(keyPath: "transform.rotation.z")
-                turn.fromValue = 0
-                turn.toValue = Double.pi * 2
-                turn.duration = 0.7
-                turn.repeatCount = .infinity
-                ring.layer.add(turn, forKey: "spin")
-                picture.addSubview(ring)
-            }
-        }
         web.reload()
         // A page that never says it is ready (an error, a page without pull-refresh.js) is not held for ever.
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
@@ -792,9 +814,29 @@ final class DgPullHold: NSObject, WKScriptMessageHandler {
         }
     }
 
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        if (message.body as? [String: Any])?["op"] as? String == "release" { release() }
+    }
+
+    // Every page sends it once it is ready; with no picture up there is nothing to let go of.
     private func release() {
+        guard let picture = shot else { return }
         token += 1
-        shot?.removeFromSuperview()
         shot = nil
+        UIView.animate(withDuration: 0.15, animations: { picture.alpha = 0 }, completion: { _ in picture.removeFromSuperview() })
+        control.endRefreshing()
+    }
+}
+
+// Edge to edge the page runs under the status bar, and the control would turn under the clock (the Dynamic
+// Island): its content is moved down by the web view's top safe-area inset.
+final class DgRefreshControl: UIRefreshControl {
+    var contentShift: CGFloat { superview?.superview?.safeAreaInsets.top ?? 0 }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        clipsToBounds = false
+        let shift = CGAffineTransform(translationX: 0, y: contentShift)
+        for view in subviews where view.transform != shift { view.transform = shift }
     }
 }

@@ -123,6 +123,14 @@ enum WStore {
     }
     static func setLayer(_ key: String, _ value: Int) { defaults?.set(value, forKey: "layer." + key) }
 
+    // A slide or a month was switched a moment ago (SwitchLayerIntent stamps "at.switch"): the timeline asked for right after it is
+    // the answer to a tap, so it is made short (UposathaProvider.build).
+    static func markSwitch() { defaults?.set(Date().timeIntervalSince1970, forKey: "at.switch") }
+    static func switchedJustNow() -> Bool {
+        let at = defaults?.double(forKey: "at.switch") ?? 0
+        return at > 0 && abs(Date().timeIntervalSince1970 - at) < 5
+    }
+
     // The month the calendar shows at a moment: 0 = today's, up to 2 ahead (the arrows, key "layer.month"). A choice made on another
     // day of the place is forgotten, as on Android. SwitchLayerIntent stamps the choice ("at.month").
     static func monthOffset(_ data: WData, at t: Date) -> Int {
@@ -494,7 +502,9 @@ extension WData {
         return out
     }
 
-    // The moments the widget has to change at, within `hours` from `now`, for the timeline.
+    // The moments the widget has to change at, within `hours` from `now`, for the timeline. The system draws and archives EVERY entry
+    // of a timeline when it is made: with a day of them (up to 160) a reload took so long that a tap on the slide switch answered
+    // late or not at all, and the large widget never got its timeline (owner, TestFlight 562). Four hours is some twenty entries.
     func timelineDates(from now: Date, hours: Double = 24) -> [Date] {
         let horizon = now.addingTimeInterval(hours * 3600)
         var stamps: [Double] = [now.timeIntervalSince1970]

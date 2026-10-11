@@ -107,11 +107,25 @@ struct UposathaProvider: TimelineProvider {
         completion(Timeline(entries: built.entries, policy: .after(built.reload)))
     }
 
-    // Entries for the next 24 hours: every quarter of an hour, every moment the data names (dawn, noon, sunset, the parts, an Uposatha's
-    // start and end) and the hours of the counter. One timeline is one refresh of the system's budget; the widget counts nothing itself.
-    static func build(now: Date, family: WidgetFamily) -> (entries: [UposathaEntry], reload: Date) {
+    // Entries for the next four hours: every quarter of an hour, every moment the data names (dawn, noon, sunset, the parts, an
+    // Uposatha's start and end) and the hours of the counter; then the system asks again. The widget counts nothing itself.
+    // Right after a tap on the slide switch only the first two entries are made (the answer to the tap must be quick) and the
+    // full timeline is asked for a quarter of an hour later.
+    static func build(now real: Date, family: WidgetFamily) -> (entries: [UposathaEntry], reload: Date) {
         let key = WidgetFamilies.key(family)
-        let loaded = WStore.load()
+        var loaded = WStore.load()
+        var now = real
+        #if DEBUG
+        // The simulator check (uposatha/test/ios-sim) runs an unsigned build: no App Group there, so the app's data never arrives.
+        // A debug build then makes the real timeline from the bundled sample, at the sample's own moment (its entries are in the
+        // past: the system shows the last one), so that the designs and the slide switch are what the check looks at.
+        var sampled = false
+        if loaded == nil, let s = WStore.sample(), let g = s.generatedAt.flatMap({ WTime.parseISO($0) }) {
+            loaded = s
+            now = g
+            sampled = true
+        }
+        #endif
         guard let data = loaded, data.isUsable(at: now) else {
             // no data, stale data, or today not covered: "Open Uposatha" (the app's next start reloads the widgets)
             let empty = UposathaEntry(date: now, data: nil, layer: 0, month: 0, stale: loaded != nil, isSample: false)
@@ -120,13 +134,18 @@ struct UposathaProvider: TimelineProvider {
         let layer = WidgetFamilies.layer(key)
         // a month chosen on another day is forgotten, so the arrows start from today's month again
         if WStore.monthOffset(data, at: now) == 0 && WStore.layer("month") != 0 { WStore.setLayer("month", 0) }
-        let dates = data.timelineDates(from: now)
+        let quick = WStore.switchedJustNow()
+        let all = data.timelineDates(from: now)
+        let dates = quick ? Array(all.prefix(2)) : all
         var list: [UposathaEntry] = []
         for d in dates {
             list.append(UposathaEntry(date: d, data: data, layer: layer, month: WStore.monthOffset(data, at: d), stale: false, isSample: false))
         }
+        #if DEBUG
+        if sampled { return (list, real.addingTimeInterval(quick ? 900 : 3600)) }
+        #endif
         let last = dates.last ?? now
-        return (list, max(last, now.addingTimeInterval(900)))
+        return (list, quick ? now.addingTimeInterval(900) : max(last, now.addingTimeInterval(900)))
     }
 }
 

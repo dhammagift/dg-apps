@@ -2,7 +2,8 @@ import XCTest
 
 // The Uposatha widgets as the system shows them (owner, 2026-10-11: on a real iPhone every preview in the gallery and the widget
 // on the Home Screen were black). Nothing but SpringBoard draws a widget, so the test drives SpringBoard: Home Screen -> edit mode
-// -> Add Widget -> search "Uposatha" -> every page of the previews -> Add Widget -> the Home Screen with it.
+// -> Add Widget -> search "Uposatha" -> every page of the previews -> Add Widget (the large one) -> the Home Screen with it ->
+// four taps on its slide switch, each timed.
 // A widget the system refuses to draw is a pure black card (what the owner saw): the previews of the real widgets and the widget
 // on the Home Screen must not be one. The shell side (widget-gallery.sh) collects the extension's log and crash reports. Every
 // step leaves a screenshot, and SpringBoard's element tree where a step can miss (the labels differ by iOS).
@@ -18,20 +19,35 @@ final class WidgetGalleryTests: XCTestCase {
         do { try XCUIScreen.main.screenshot().pngRepresentation.write(to: file) } catch { print("shot \(name): \(error)") }
     }
 
-    // The share of pure black in a box of the screen (centre and size as shares of the screen)
-    private func black(_ cx: CGFloat, _ cy: CGFloat, _ w: CGFloat, _ h: CGFloat) -> Double {
-        guard let full = XCUIScreen.main.screenshot().image.cgImage else { return 0 }
+    // The pixels (RGBA) of a box of the screen (centre and size as shares of the screen)
+    private func pixels(_ cx: CGFloat, _ cy: CGFloat, _ w: CGFloat, _ h: CGFloat) -> [UInt8] {
+        guard let full = XCUIScreen.main.screenshot().image.cgImage else { return [] }
         let W = CGFloat(full.width), H = CGFloat(full.height)
         let box = CGRect(x: (cx - w / 2) * W, y: (cy - h / 2) * H, width: w * W, height: h * H).integral
-        guard let part = full.cropping(to: box) else { return 0 }
+        guard let part = full.cropping(to: box) else { return [] }
         let pw = part.width, ph = part.height
         var px = [UInt8](repeating: 0, count: pw * ph * 4)
         guard let ctx = CGContext(data: &px, width: pw, height: ph, bitsPerComponent: 8, bytesPerRow: pw * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return 0 }
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return [] }
         ctx.draw(part, in: CGRect(x: 0, y: 0, width: pw, height: ph))
+        return px
+    }
+
+    // The share of pure black in a box of the screen
+    private func black(_ cx: CGFloat, _ cy: CGFloat, _ w: CGFloat, _ h: CGFloat) -> Double {
+        let px = pixels(cx, cy, w, h)
+        if px.isEmpty { return 0 }
         var dark = 0
         for i in stride(from: 0, to: px.count, by: 4) where px[i] < 6 && px[i + 1] < 6 && px[i + 2] < 6 { dark += 1 }
-        return Double(dark) / Double(pw * ph)
+        return Double(dark) / Double(px.count / 4)
+    }
+
+    // The share of the bytes that differ between two pictures of the same box
+    private func differ(_ a: [UInt8], _ b: [UInt8]) -> Double {
+        if a.isEmpty || a.count != b.count { return 1 }
+        var n = 0
+        for i in 0..<a.count where abs(Int(a[i]) - Int(b[i])) > 12 { n += 1 }
+        return Double(n) / Double(a.count)
     }
 
     private func tree(_ name: String) {
@@ -102,8 +118,8 @@ final class WidgetGalleryTests: XCTestCase {
                 sleep(2)
             }
         }
-        // back to the first one (the small Uposatha): that is the one put on the Home Screen
-        for _ in 1..<pages {
+        // back to the third one, the large Uposatha: the one with three slides, put on the Home Screen
+        for _ in 1...2 {
             board.swipeRight()
             sleep(1)
         }
@@ -116,10 +132,36 @@ final class WidgetGalleryTests: XCTestCase {
         sleep(4)
         shot("home-with-widget-editing")
         XCUIDevice.shared.press(.home)
-        sleep(6)
+        sleep(8)
         shot("home-with-widget")
         tree("tree-6-home")
-        // the new widget takes the first place of the page: its middle
-        XCTAssertLessThan(black(0.29, 0.21, 0.20, 0.06), 0.9, "the widget on the Home Screen is a black card")
+
+        let widget = board.icons.matching(NSPredicate(format: "value == 'Widget' AND label == 'Uposatha'")).firstMatch
+        XCTAssertTrue(widget.waitForExistence(timeout: 5), "the widget is not on the Home Screen")
+        let screen = board.frame, f = widget.frame
+        // the widget itself (the icon's frame has the name under it): its middle part
+        let cx = f.midX / screen.width, cy = (f.minY + (f.height - 27) / 2) / screen.height
+        let bw = f.width / screen.width * 0.8, bh = (f.height - 27) / screen.height * 0.7
+        XCTAssertLessThan(black(cx, cy, bw, bh), 0.9, "the widget on the Home Screen is a black card")
+
+        // The slide switch: a tap on the right half of the strip at the widget's bottom turns to the next slide. How long the
+        // widget takes to change is the thing the owner felt ("pressed, and only then it changes; every other time").
+        var report = "widget frame \(f)\n"
+        for turn in 1...4 {
+            let before = pixels(cx, cy, bw, bh)
+            let at = Date()
+            widget.coordinate(withNormalizedOffset: CGVector(dx: 0.72, dy: (f.height - 27 - 17) / f.height)).tap()
+            var took = -1.0
+            for _ in 0..<40 {
+                if differ(before, pixels(cx, cy, bw, bh)) > 0.02 { took = Date().timeIntervalSince(at); break }
+                usleep(150_000)
+            }
+            report += took < 0 ? "tap \(turn): no change in 10+ s\n" : String(format: "tap %d: the slide changed %.1f s after the tap\n", turn, took)
+            XCTAssertGreaterThanOrEqual(took, 0, "tap \(turn) on the slide switch changed nothing")
+            sleep(1)
+            shot("slide-after-tap-\(turn)")
+        }
+        print(report)
+        try? report.write(to: out.appendingPathComponent("switch-times.txt"), atomically: true, encoding: .utf8)
     }
 }

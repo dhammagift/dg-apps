@@ -53,6 +53,9 @@ xcrun simctl spawn "$UDID" log show --start "$START" --style compact --info \
   --predicate 'process CONTAINS[c] "WidgetRenderer" OR (process != "chronod" AND process != "UposathaWidget" AND eventMessage CONTAINS[c] "uposatha")' \
   > "$OUT/widget-renderer-log.txt" 2>&1
 echo "widget-gallery: $(wc -l < "$OUT/widget-log.txt") log lines"
+cat "$OUT/switch-times.txt" 2>/dev/null
+# how long the extension took over each timeline (began -> ended), as its own log says
+grep -E "chrono:timeline\] (Request (began|ended)|Batch (begin|end))" "$OUT/widget-log.txt" | sed -E 's# - to archive: .*##' | cut -c12-150 > "$OUT/timeline-requests.txt"
 grep -iE "crash|fatal|terminat|exception|error" "$OUT/widget-log.txt" | head -40
 CRASHES=0
 for f in ~/Library/Logs/DiagnosticReports/*UposathaWidget*; do

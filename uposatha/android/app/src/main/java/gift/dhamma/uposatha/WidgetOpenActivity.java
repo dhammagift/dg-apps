@@ -32,6 +32,13 @@ public class WidgetOpenActivity extends Activity {
         super.onCreate(savedInstanceState);
         String route = getIntent() == null ? null : getIntent().getStringExtra("route");
         if (route != null && !route.isEmpty()) pending = route;
+        // A tap on the widget's background: how big its view really is on this launcher (WidgetProvider.learn)
+        android.graphics.Rect b = getIntent() == null ? null : getIntent().getSourceBounds();
+        int id = getIntent() == null ? 0 : getIntent().getIntExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, 0);
+        if (b != null && id != 0 && b.width() > 0 && b.height() > 0) {
+            try { WidgetProvider.learn(getApplicationContext(), id, b.width(), b.height()); }
+            catch (RuntimeException e) { android.util.Log.w("DgWidget", "the view's size was not kept: " + e); }
+        }
         Intent main = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (main != null) {
             main.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

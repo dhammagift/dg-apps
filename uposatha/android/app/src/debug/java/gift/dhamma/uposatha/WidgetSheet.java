@@ -97,6 +97,16 @@ final class WidgetSheet {
         for (int[] o : new int[][] { { 6, 368, 429 }, { 4, 368, 214 } }) for (int sl = 0; sl < 3; sl++) for (int sc : new int[] { 5, 0 }) {
             Case x = new Case(o[0], o[1], o[2], sc, "owner-slide" + sl, def, 0); x.slide = sl; out.add(x);
         }
+        // The same phone's seven widgets as it showed them on 2026-10-11 ({kind, reported w, h, real w, h}: 78 dp a column reported,
+        // 78.5 n - 16 given): each drawn for the size the launcher takes out of WidgetPlan.sizes for the view it really has.
+        for (int[] o : new int[][] { { 0, 78, 75, 62, 98 }, { 1, 156, 75, 141, 98 }, { 2, 156, 151, 141, 213 }, { 3, 313, 75, 298, 98 }, { 4, 313, 151, 298, 213 },
+                { 5, 156, 151, 141, 213 }, { 6, 313, 302, 298, 443 } }) {
+            int[][] ladder = WidgetPlan.sizes(o[1], o[2]); int[] t = ladder[WidgetPlan.chosen(ladder, o[3], o[4])];
+            for (int sc : new int[] { 5, 0 }) out.add(new Case(o[0], t[0], t[1], sc, "owner-now", def, 0));
+            // ... what it shows today (the view drawn for the reported size: that launcher takes no other), and after a tap on the
+            // widget has told its real size (WidgetProvider.learn)
+            for (int sc : new int[] { 5, 0 }) out.add(new Case(o[0], o[3], o[4], sc, "owner-tapped", def, 0));
+        }
         for (int[] o : new int[][] { { 0, 78, 75 }, { 0, 78, 151 }, { 0, 313, 302 } }) { WidgetConfig p = new WidgetConfig(); p.pct = true; out.add(new Case(o[0], o[1], o[2], 5, "own-pct", p, 0)); }
         for (int sl = 1; sl < 3; sl++) { Case x = new Case(WidgetPlan.CAL, 391, 454, 5, "own-slide" + sl, def, 0); x.slide = sl; out.add(x); }
         WidgetConfig pct = new WidgetConfig(); pct.pct = true;   // the Moon with its percent (a setting; just the moon is the default)

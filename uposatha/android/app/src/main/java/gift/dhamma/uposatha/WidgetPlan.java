@@ -43,6 +43,7 @@ final class WidgetPlan {
      * narrower.
      */
     static final float NARROWER = 0.94f;
+    static final int MARGIN = 16;
 
     /**
      * The sizes a widget is drawn for when the launcher reports w x h dp: {draw w, draw h, key w, key h}. The first is the reported
@@ -51,11 +52,34 @@ final class WidgetPlan {
     static int[][] sizes(int w, int h) {
         java.util.List<int[]> out = new java.util.ArrayList<>();
         out.add(new int[] { w, h, w - 2, h });
-        int narrow = Math.round(w * NARROWER);
+        // The owner's razr gives 78.5 n - 16 dp for n columns and reports 78 n: 16 dp too wide at any width, which is 4 % of five
+        // columns and 10 % of two. So the narrower tier is the smaller of the two guesses.
+        int narrow = Math.max(40, Math.min(Math.round(w * NARROWER), w - MARGIN));
         for (float f : TALLER) { int t = Math.round(h * f); out.add(new int[] { w, t, w - 2, t - 1 }); }
         out.add(new int[] { narrow, h, narrow - 2, h - 1 });
         for (float f : TALLER) { int t = Math.round(h * f); out.add(new int[] { narrow, t, narrow - 2, t - 1 }); }
         return out.toArray(new int[0][]);
+    }
+
+    /**
+     * The real size of a widget's view as a tap on it told (WidgetProvider.learn), kept as "WxH" under the size the launcher
+     * reported then: null when nothing sane is kept. A widget that was resized is reported differently and starts anew.
+     */
+    static int[] learned(String kept) {
+        if (kept == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d{2,4})x(\\d{2,4})$").matcher(kept);
+        if (!m.matches()) return null;
+        int w = Integer.parseInt(m.group(1)), h = Integer.parseInt(m.group(2));
+        return w < 30 || h < 30 || w > 2000 || h > 2000 ? null : new int[] { w, h };
+    }
+
+    /**
+     * The key of the one view drawn for the real size. A launcher looks for a view that fits either the view it laid out (Android's
+     * own way) or the size it reported (the owner's razr, it seems: no taller or narrower view was ever taken there): under both
+     * numbers, this view fits both ways.
+     */
+    static int[] keyOf(int[] reported, int[] real) {
+        return new int[] { Math.min(reported[0], real[0]) - 2, Math.min(reported[1], real[1]) - 1 };
     }
 
     /**

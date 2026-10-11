@@ -3,6 +3,7 @@ package gift.dhamma.uposatha;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -119,9 +120,33 @@ public class WidgetPlanTest {
         assertTrue("owner 4x4 " + own[0] + "x" + own[1], own[0] <= 376 && own[0] >= 375 * 0.94f && own[1] >= 441 / 1.12f && own[1] <= 442);
         int[] own2 = taken(391, 151, 375, 213);
         assertTrue("owner 4x2 " + own2[0] + "x" + own2[1], own2[0] <= 376 && own2[1] >= 213 / 1.12f && own2[1] <= 214);
+        // the same phone, narrow widgets (its screenshots of 2026-10-11): the launcher reports 78 dp a column and gives 78.5 n - 16,
+        // so two columns are "156" and really 141 - 6 % narrower was not enough, the 2x2 widgets were drawn for 156 x 151 in
+        // a 141 x 213 view (text cut, the hours under the bar run together)
+        int[][] narrow = { { 156, 151, 141, 213 }, { 156, 75, 141, 98 }, { 78, 75, 62, 98 }, { 313, 302, 298, 443 }, { 313, 75, 298, 98 } };
+        for (int[] n : narrow) {
+            int[] got = taken(n[0], n[1], n[2], n[3]);
+            assertTrue("owner " + n[0] + "x" + n[1] + " in " + n[2] + "x" + n[3] + ": " + got[0] + "x" + got[1],
+                    got[0] <= n[2] + 1 && got[0] >= n[2] * 0.9f && got[1] <= n[3] + 1 && got[1] >= n[3] / 1.12f);
+        }
         // nothing fits (a view much smaller than reported): the smallest, which is about the reported size - as before
         int[] none = taken(391, 302, 300, 250);
         assertTrue("nothing fits " + none[0] + "x" + none[1], none[1] == 302);
+    }
+
+    @Test
+    public void theViewDrawnForTheRealSizeIsTakenWhicheverWayTheLauncherLooks() {
+        assertArrayEquals(new int[] { 141, 213 }, WidgetPlan.learned("141x213"));
+        for (String bad : new String[] { null, "", "141", "141x", "x213", "5x5", "141x99999", "141x213 ", "-141x213" }) assertNull(String.valueOf(bad), WidgetPlan.learned(bad));
+        // {reported w, h, real w, h}: narrower and taller (the owner's razr), wider and taller (a Pixel), the same, smaller both ways
+        for (int[] c : new int[][] { { 156, 151, 141, 213 }, { 368, 442, 368, 464 }, { 80, 104, 80, 104 }, { 391, 302, 300, 250 } }) {
+            int[] key = WidgetPlan.keyOf(new int[] { c[0], c[1] }, new int[] { c[2], c[3] });
+            int[][] one = { { c[2], c[3], key[0], key[1] } };
+            // Android's rule finds it by the view's real size, and a launcher that goes by what it reported finds it too
+            for (float[] seen : new float[][] { { c[2], c[3] }, { c[0], c[1] } })
+                assertTrue(c[0] + "x" + c[1] + " seen as " + seen[0] + "x" + seen[1], Math.ceil(seen[0]) + 1 > key[0] && Math.ceil(seen[1]) + 1 > key[1]);
+            assertEquals(0, WidgetPlan.chosen(one, c[2], c[3]));
+        }
     }
 
     @Test

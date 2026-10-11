@@ -137,6 +137,8 @@ public class WidgetConfigActivity extends Activity {
         android.content.res.Configuration cf = getResources().getConfiguration();
         dbg.append(" · screen ").append(cf.screenWidthDp).append('x').append(cf.screenHeightDp)
                 .append(" · density ").append(getResources().getDisplayMetrics().density).append(" · font ").append(cf.fontScale);
+        int[] real = WidgetProvider.realOf(this, id, new int[] { wDp, hDp });
+        dbg.append(real == null ? " · view not known yet (tap the widget once)" : " · view " + real[0] + "x" + real[1]);
         TextView info = label(dbg.toString());
         info.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
         col.addView(info);

@@ -55,6 +55,10 @@ public class WidgetProvider extends AppWidgetProvider {
     @Override
     public void onDeleted(Context ctx, int[] ids) {
         WidgetConfig.forget(ctx, ids);
+        SharedPreferences p = prefs(ctx);
+        SharedPreferences.Editor e = p.edit();
+        for (String k : p.getAll().keySet()) for (int id : ids) if (k.startsWith("real_" + id + "_")) e.remove(k);
+        e.apply();
     }
 
     @Override
@@ -201,6 +205,29 @@ public class WidgetProvider extends AppWidgetProvider {
         }
     }
 
+    /**
+     * A tap on a widget's background tells how big its view really is (the bounds Android puts into the tap, WidgetOpenActivity).
+     * What a launcher reports is a guess of its own - cells of another screen, a margin forgotten - and some launchers show the
+     * view drawn for that guess whatever else is offered. Kept under the reported size it belongs to; the widget is drawn anew
+     * when the number is news.
+     */
+    static void learn(Context ctx, int id, int wPx, int hPx) {
+        float d = ctx.getResources().getDisplayMetrics().density;
+        int w = Math.round(wPx / d), h = Math.round(hPx / d);
+        AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
+        int[] rep = sizesDp(ctx, mgr, id).get(0);
+        String key = "real_" + id + "_" + rep[0] + "x" + rep[1], val = w + "x" + h;
+        if (WidgetPlan.learned(val) == null || val.equals(prefs(ctx).getString(key, null))) return;
+        prefs(ctx).edit().putString(key, val).apply();
+        android.util.Log.i("DgWidget", "widget " + id + ": reported " + rep[0] + "x" + rep[1] + " dp, its view is " + val + " dp");
+        WORK.execute(() -> update(ctx.getApplicationContext(), mgr, id));
+    }
+
+    /** The real size learned for the size the launcher reports now, or null. */
+    static int[] realOf(Context ctx, int id, int[] reported) {
+        return WidgetPlan.learned(prefs(ctx).getString("real_" + id + "_" + reported[0] + "x" + reported[1], null));
+    }
+
     static void update(Context ctx, AppWidgetManager mgr, int id) {
         synchronized (DRAW) { draw(ctx, mgr, id, 0, 0); }   // the page's thread (DgWidgetPlugin) and the settings screen draw too
     }
@@ -234,18 +261,22 @@ public class WidgetProvider extends AppWidgetProvider {
                     WidgetMoon.maxPx = 420;
                     WidgetMoon.shared = true;
                     java.util.Map<android.util.SizeF, RemoteViews> map = new android.util.ArrayMap<>();
-                    int[][] all = WidgetPlan.sizes(sz[0], sz[1]);
+                    int[] real = realOf(ctx, id, sz);
+                    // The real size is known (a tap told it): one view, drawn for it, whatever the launcher goes by
+                    int[][] all = real == null ? WidgetPlan.sizes(sz[0], sz[1])
+                            : new int[][] { { real[0], real[1], WidgetPlan.keyOf(sz, real)[0], WidgetPlan.keyOf(sz, real)[1] } };
+                    if (real != null) shownH = 0;
                     for (int i = 0; i < all.length; i++) {
                         int[] c = all[i];
                         if (i > 0 && shownH > 0 && !(c[0] == shownW && c[1] == shownH)) continue;   // a tap: only the size it came from (and the reported one)
                         map.put(new android.util.SizeF(c[2], c[3]), WidgetViews.build(ctx, id, kind, c[0], c[1], data, now, cfg, mon, slide));
                     }
                     if (sizes.size() > 1) {
-                        int[] ot = sizes.get(1);
-                        android.util.SizeF key = new android.util.SizeF(ot[0] - 2, ot[1]);
-                        if (!map.containsKey(key)) map.put(key, WidgetViews.build(ctx, id, kind, ot[0], ot[1], data, now, cfg, mon, slide));
+                        int[] ot = sizes.get(1), otReal = realOf(ctx, id, ot), draw = otReal != null ? otReal : ot;
+                        android.util.SizeF key = otReal != null ? new android.util.SizeF(WidgetPlan.keyOf(ot, otReal)[0], WidgetPlan.keyOf(ot, otReal)[1]) : new android.util.SizeF(ot[0] - 2, ot[1]);
+                        if (!map.containsKey(key)) map.put(key, WidgetViews.build(ctx, id, kind, draw[0], draw[1], data, now, cfg, mon, slide));
                     }
-                    mgr.updateAppWidget(id, new RemoteViews(map));
+                    mgr.updateAppWidget(id, map.size() == 1 ? map.values().iterator().next() : new RemoteViews(map));
                     android.util.Log.i("DgWidget", "widget " + id + ": " + map.size() + " sizes from " + sz[0] + "x" + sz[1] + " dp, " + (WidgetViews.bitmapBytes >> 10) + " KB of pictures, " + (android.os.SystemClock.uptimeMillis() - t0) + " ms");
                     return;
                 } catch (RuntimeException e) {
@@ -287,7 +318,11 @@ public class WidgetProvider extends AppWidgetProvider {
         i.putExtra("route", route);
         i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         // The intents differ only in an extra, which PendingIntent ignores: the request code tells them apart.
-        return PendingIntent.getActivity(ctx, widgetId * 64 + slot, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        if (slot != 0) return PendingIntent.getActivity(ctx, widgetId * 64 + slot, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        // The background's tap is the one that brings the view's bounds (see learn()): Android writes them into the intent only when
+        // it may be filled in. The component, the action and our extras are set and stay ours; a launcher can add bounds, no more.
+        i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId);
+        return PendingIntent.getActivity(ctx, widgetId * 64, i, PendingIntent.FLAG_UPDATE_CURRENT | (android.os.Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0));
     }
 
     /** The switch of the 4x2's three slides: the one before (-1) or after (+1). */

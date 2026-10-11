@@ -392,6 +392,29 @@ public class WidgetFlowTest {
         check("widget tap: the open page went to the place itself", route.contains("the open page went there"), "");
         check("widget tap: the page was not loaded again", !route.contains("the page is loaded"), "");
 
+        // 10b. That tap told the widget how big its view really is (WidgetProvider.learn), and it was drawn again for exactly that:
+        // a launcher that reports another size, and shows the view drawn for it whatever else is offered, is put right by one tap.
+        java.util.regex.Matcher told = Pattern.compile("its view is (\\d+)x(\\d+) dp").matcher(route);
+        boolean toldIt = told.find();
+        check("widget tap: the widget was told its real size", toldIt, route.trim());
+        if (toldIt) {
+            final String want = "drawn for " + told.group(1) + "x" + told.group(2);
+            final boolean[] found = { false };
+            final StringBuilder seen = new StringBuilder();
+            step("moon-tap-size", () -> {
+                dev.pressHome();
+                sleep(1500);
+                toWidgetPage();
+                sleep(2500);
+                for (UiObject2 host : dev.findObjects(By.res(Pattern.compile("gift\\.dhamma\\.uposatha:id/sw_host")))) {
+                    String desc = host.getContentDescription();
+                    seen.append(desc).append("; ");
+                    if (want.equals(desc)) found[0] = true;
+                }
+            });
+            check("widget tap: the tapped widget is drawn for its real size (" + want + ")", found[0], seen.toString());
+        }
+
         // 11. An address from outside (any app can start the launcher activity with any extra) is not opened in the app's window.
         step("foreign-route", () -> {
             dev.executeShellCommand("logcat -c");

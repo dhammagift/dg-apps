@@ -54,6 +54,19 @@ async function waitFor(js, sec = 10) {
   log('  not true after ' + sec + 's: ' + js);
   return false;
 }
+// Where the WebView starts on screen, from uiautomator (run 574: it sits under the status bar, 135 px down on the
+// Pixel 7 image, and every tap aimed as if it began at 0 landed that much too high). Read again after a turn.
+let wvTop = null, wvRot = null;
+function webviewTop() {
+  const rot = (adb('shell settings get system user_rotation').trim());
+  if (wvTop !== null && wvRot === rot) return wvTop;
+  adb('shell uiautomator dump /sdcard/wv.xml'); adb('pull /sdcard/wv.xml /tmp/tour-wv.xml');
+  const xml = fs.existsSync('/tmp/tour-wv.xml') ? fs.readFileSync('/tmp/tour-wv.xml', 'utf8') : '';
+  const m = xml.match(/class="android\.webkit\.WebView"[^>]*bounds="\[\d+,(\d+)\]/) || xml.match(/bounds="\[\d+,(\d+)\][^>]*class="android\.webkit\.WebView"/);
+  wvTop = m ? +m[1] : 0; wvRot = rot;
+  log('  the WebView starts at y=' + wvTop + (m ? '' : ' (not found in the dump, assumed)'));
+  return wvTop;
+}
 // A real touch (adb input tap) on an element's centre. Screen px = CSS px x zoom x (screen width / innerWidth), the
 // WebView filling the screen edge to edge. The page sets CSS zoom 110 % on <html>; an older WebView (113 on the CI
 // image) gives getBoundingClientRect without that zoom, a newer one (128+) with it: the factor is innerWidth over the
@@ -68,7 +81,8 @@ async function tapEl(sel, nth = 0) {
   })()`);
   if (!c) { log('  nothing to tap: ' + sel); return false; }
   const k = (Math.abs(c.f - 1) < 0.02 ? 1 : c.f) * W / c.iw;
-  const sx = Math.round(c.x * k), sy = Math.round(c.y * k);
+  const top = webviewTop();
+  const sx = Math.round(c.x * k), sy = Math.round(top + c.y * k);
   adb(`shell input tap ${sx} ${sy}`);
   await sleep(700);
   // Where the touch landed, as the page saw it (pointerdown clientX/Y), next to where it was aimed: the log says

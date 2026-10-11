@@ -113,6 +113,28 @@ class DgBridgeViewController: CAPBridgeViewController {
         }
     }
 
+    // The status bar's and the home indicator's reach, written into the page as --safe-area-inset-* (dict-edge.js pads the page
+    // and sizes its top strip by them). WKWebView's own env(safe-area-inset-top) is not dependable in an app (Uposatha's
+    // DgApp.swift: 62 px in one run, 0 in the next): with 0 the strip had no height and a scrolled page ran under the clock
+    // (owner, TestFlight 561). Written on every layout change; the page also asks DgInsets.get() when it starts, since a write
+    // that lands before the document exists is lost.
+    private func pushSafeAreaInsets() {
+        guard let webView = webView else { return }
+        let i = webView.safeAreaInsets
+        let js = "try{var r=document.documentElement.style;r.setProperty('--safe-area-inset-top','\(i.top)px');r.setProperty('--safe-area-inset-right','\(i.right)px');r.setProperty('--safe-area-inset-bottom','\(i.bottom)px');r.setProperty('--safe-area-inset-left','\(i.left)px');}catch(e){}"
+        webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        pushSafeAreaInsets()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        pushSafeAreaInsets()
+    }
+
     private func reportKeyboard(_ points: CGFloat) {
         webView?.evaluateJavaScript("window.__dgIme && window.__dgIme(\(Int(points.rounded())))", completionHandler: nil)
     }
@@ -139,11 +161,38 @@ class DgBridgeViewController: CAPBridgeViewController {
 
         bridge?.registerPluginInstance(DgShortcutsPlugin())
         bridge?.registerPluginInstance(DgSitePlugin())
+        bridge?.registerPluginInstance(DgInsetsPlugin())
+        for delay in [0.5, 2.0, 5.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.pushSafeAreaInsets() }
+        }
         #if DEBUG
         // Debug builds only: the App Store screenshot tour (test/ios-sim/tour.js) needs one native call to say
         // which view is on screen; a release build's Capacitor.Plugins.DgSelfTest is undefined.
         bridge?.registerPluginInstance(DgSelfTestPlugin())
         #endif
+    }
+}
+
+// MARK: - The safe-area insets (the same plugin as Uposatha's)
+
+@objc(DgInsetsPlugin)
+public class DgInsetsPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "DgInsetsPlugin"
+    public let jsName = "DgInsets"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "get", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func get(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let insets = self.bridge?.webView?.safeAreaInsets ?? .zero
+            call.resolve([
+                "top": Double(insets.top),
+                "right": Double(insets.right),
+                "bottom": Double(insets.bottom),
+                "left": Double(insets.left)
+            ])
+        }
     }
 }
 

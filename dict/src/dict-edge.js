@@ -84,7 +84,24 @@
     Bars.setStyle({ style: style, bar: 'NavigationBar' }).catch(function () { last = ''; });
   }
 
+  // iOS: the app's own numbers for the bars (DgInsets, ios/App/App/DgApp.swift). WKWebView's env(safe-area-inset-top) can read 0
+  // in an app, and then the strip on top had no height and the page ran under the clock once scrolled (TestFlight 561). Android
+  // needs nothing here: SystemBars writes the same variables.
+  function askInsets() {
+    var Insets = Cap && Cap.getPlatform && Cap.getPlatform() === 'ios' && Cap.Plugins && Cap.Plugins.DgInsets;
+    if (!Insets || typeof Insets.get !== 'function') return;
+    Insets.get().then(function (i) {
+      var root = document.documentElement;
+      ['top', 'right', 'bottom', 'left'].forEach(function (k) {
+        var v = Math.round((i && i[k]) || 0);
+        if (v > 0) root.style.setProperty('--safe-area-inset-' + k, v + 'px');
+      });
+    }).catch(function () {});
+  }
+
   function start() {
+    askInsets();
+    window.addEventListener('orientationchange', function () { setTimeout(askInsets, 400); });
     dressPage();
     icons(true);
     new MutationObserver(function () { icons(false); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });

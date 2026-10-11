@@ -1,7 +1,8 @@
 # Upload an AAB that an earlier Build App run already made, instead of building again (owner,
 # 2026-09-30: "всё собрано, потестили — нажимаем отправить", not a new build with the next number).
 # The bytes that go to Play are exactly the ones the owner and the emulator tests had; versionCode is
-# that run's number. Only on the owner's explicit yes (CLAUDE.md), and never to production.
+# the build number that run gave the app (build-info, .github/scripts/build_numbers.py). Only on the owner's
+# explicit yes (CLAUDE.md), and never to production.
 name: Play upload
 
 on:
@@ -50,12 +51,13 @@ jobs:
         env:
           RUN_ID: ${{ inputs.build_run_id }}
           CHECK: ${{ steps.app.outputs.check }}
+          APP: ${{ inputs.app }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: tools/check-build-run.sh "$RUN_ID" "$CHECK"
+        run: tools/check-build-run.sh "$RUN_ID" "$CHECK" "$APP"
 
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ steps.app.outputs.prefix }}-${{ steps.run.outputs.run_number }}
+          name: ${{ steps.app.outputs.prefix }}-${{ steps.run.outputs.build_number }}
           run-id: ${{ inputs.build_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: aab
@@ -71,7 +73,7 @@ jobs:
 
       - name: Summary
         env:
-          N: ${{ steps.run.outputs.run_number }}
+          N: ${{ steps.run.outputs.build_number }}
           TRACK: ${{ steps.app.outputs.track }}
           PKG: ${{ steps.app.outputs.pkg }}
         run: echo "### versionCode $N -> $TRACK of $PKG" >> "$GITHUB_STEP_SUMMARY"

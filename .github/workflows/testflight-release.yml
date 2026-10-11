@@ -13,7 +13,8 @@ name: TestFlight release
 # no registered UDID.
 #
 # The version people see is the app's version.properties (`ios`, else `version`), passed as
-# MARKETING_VERSION; the build number is the run number. The team comes from the secret.
+# MARKETING_VERSION; the build number (CURRENT_PROJECT_VERSION) is the app's own counter, worked out by the calling
+# run's plan job (.github/scripts/build_numbers.py), not the run number. The team comes from the secret.
 #
 # Signing, in the order the runs taught it (Dhamma.Gift, 2026-09):
 #   * run 156 — the Capacitor template's "iPhone Developer" in BOTH configurations made the
@@ -38,6 +39,10 @@ on:
     inputs:
       app:
         description: 'dg, dict or uposatha'
+        required: true
+        type: string
+      build_number:
+        description: 'CFBundleVersion of this build (the app''s build number from the plan job)'
         required: true
         type: string
       upload:
@@ -71,8 +76,10 @@ jobs:
         id: app
         env:
           APP: ${{ inputs.app }}
+          BUILD: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
+          [[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "::error::build_number '$BUILD' is not a number"; exit 1; }
           case "$APP" in
             dg)       dir=.;        www=www;          ipa=dg-app-full-ipa;  label=Dhamma.Gift ;;
             dict)     dir=dict;     www=dict-www;     ipa=dg-dict-ipa;      label=Dictionary ;;
@@ -86,11 +93,11 @@ jobs:
             echo "dir=$dir"
             echo "www_artifact=$www-$GITHUB_RUN_NUMBER"
             echo "www_path=$dir/www"
-            echo "ipa_artifact=$ipa-$GITHUB_RUN_NUMBER"
+            echo "ipa_artifact=$ipa-$BUILD"
             echo "label=$label"
             echo "version=$version"
           } >> "$GITHUB_OUTPUT"
-          echo "$label $version ($GITHUB_RUN_NUMBER) from $dir/"
+          echo "$label $version ($BUILD) from $dir/"
 
       - name: Download the web bundle
         uses: actions/download-artifact@v4
@@ -220,6 +227,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           DIR: ${{ steps.app.outputs.dir }}
           VERSION: ${{ steps.app.outputs.version }}
+          BUILD: ${{ inputs.build_number }}
         run: |
           set -o pipefail
           xcodebuild \
@@ -234,7 +242,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             MARKETING_VERSION="$VERSION" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            CURRENT_PROJECT_VERSION="$BUILD" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             archive 2>&1 | tee ios-archive.log | tail -30
 
@@ -284,19 +292,26 @@ jobs:
           if-no-files-found: error
 
       # The same altool call ios-upload.yml uses, as --validate-app: proves on every build that the IPA
-      # and the key would be accepted, without putting a build into TestFlight.
+      # and the key would be accepted, without putting a build into TestFlight. A refusal fails the job
+      # (the IPA artifact above is already kept). It used to be green whatever Apple said: continue-on-error,
+      # and `| tail` without pipefail took tail's exit code (2026-10-07: "train version 1.18 is closed", green).
+      # Apple's verdict is read from the output as well as the exit code, the way the upload steps do it.
       - name: Validate the IPA with App Store Connect (no upload)
         if: steps.asc.outputs.have == 'yes'
-        continue-on-error: true
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           DIR: ${{ steps.app.outputs.dir }}
         run: |
+          set -o pipefail
           cp "$RUNNER_TEMP/asc/AuthKey.p8" "$RUNNER_TEMP/asc/AuthKey_$ASC_KEY_ID.p8"
           API_PRIVATE_KEYS_DIR="$RUNNER_TEMP/asc" xcrun altool --validate-app -t ios \
             -f "$(ls "$DIR"/ios/build/export/*.ipa | head -1)" \
-            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tail -20
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee ios-validate.log | tail -20
+          if grep -q "ERROR" ios-validate.log || ! grep -qiE "No errors validating|VALIDATION SUCCEEDED" ios-validate.log; then
+            echo "::error::App Store Connect refused this IPA (ios-validate.log): $(grep -m1 ERROR ios-validate.log || echo 'no success line')"
+            exit 1
+          fi
 
       # The release itself keeps the export path that has worked since run 170 (destination=upload,
       # "Upload succeeded" in the log).
@@ -337,6 +352,7 @@ jobs:
           path: |
             ios-archive.log
             ios-export.log
+            ios-validate.log
             ios-upload.log
           retention-days: 7
           if-no-files-found: ignore
@@ -348,9 +364,10 @@ jobs:
           VERSION: ${{ steps.app.outputs.version }}
           IPA: ${{ steps.app.outputs.ipa_artifact }}
           APP: ${{ inputs.app }}
+          BUILD: ${{ inputs.build_number }}
         run: |
           if [ -f ios-upload.log ]; then
-            printf '### %s iOS release: uploaded\n\n%s (%s) was archived and sent to TestFlight (processing takes 5-15 minutes).\n' "$LABEL" "$VERSION" "$GITHUB_RUN_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+            printf '### %s iOS release: uploaded\n\n%s (%s) was archived and sent to TestFlight (processing takes 5-15 minutes).\n' "$LABEL" "$VERSION" "$BUILD" >> "$GITHUB_STEP_SUMMARY"
           else
             printf '### %s iOS: IPA kept, not uploaded\n\nArtifact %s. To send it to TestFlight later: ios-upload.yml with this run id and app=%s.\n' "$LABEL" "$IPA" "$APP" >> "$GITHUB_STEP_SUMMARY"
           fi

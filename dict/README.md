@@ -181,12 +181,13 @@ shallow checkout (`DICT_UI_REF`) plus find on the page from dg-node (`DG_NODE_RE
 - **`dict-build`** — `npm ci`, the two checkouts, `tools/bundle-from-repo.js` and `test/bundle-files.js`, `npm run sync-android`,
   the browser checks of the bundle (`test/bundle-ui.js`, `test/bridge-ui.js` on the bundle itself), then the Gradle tasks. Runs with
   `dict_only`, `release: dict` / `dict-ios` and on a `dict-v*` tag; `dict-launch` then opens the signed APK on an emulator. Uploads three artifacts: `dg-dict-apk-<run>` (debug, installable straight
-  away), `dg-dict-apk-release-<run>` and `dg-dict-aab-release-<run>`. `versionCode` is the run
-  number (`-PdgVersionCode`), like Dhamma.Gift — it must only ever climb, and the TWA last
-  uploaded 2 under this package id.
+  away), `dg-dict-apk-release-<build>` and `dg-dict-aab-release-<build>`. `versionCode` (`-PdgVersionCode`) is the
+  dictionary's own build number, not the run number: the plan job's `.github/scripts/build_numbers.py`, one above the
+  highest code Play and TestFlight have for `gift.dhamma.pali` (and above `build_floor` in `dict/version.properties`),
+  independent of Dhamma.Gift's and Uposatha's.
 - **`dict-release`** — a manual run with `release: dict` from `main`, or a `dict-v*` tag, after `dict-build` and
   `dict-launch` passed. Uploads `gift.dhamma.pali` to the **closed testing (alpha)** track of Google Play. With `release: none` (the default) it does not run, so a manual run never burns a
-  versionCode in the console. Promoting internal → production stays a human decision.
+  versionCode in the console. Promoting it to production stays a human decision.
 
 Both jobs use the secrets that are already in the repository, under the same names Dhamma.Gift
 uses (`ANDROID_KEYSTORE_BASE64 || KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD || KEYSTORE_PASSWORD`,

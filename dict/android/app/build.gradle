@@ -9,9 +9,9 @@ android {
     compileSdk = rootProject.ext.compileSdkVersion
     // The Capacitor app replaces the Bubblewrap TWA in dg-twa/dict-app, which Play knows as
     // gift.dhamma.pali: the package id cannot change, and the versionCode has to keep climbing from
-    // the code that TWA last shipped (2). 3 is the first code Play has not already seen. It can be
-    // overridden per build with -PdgVersionCode, which is what a CI run reading the highest code
-    // from Play would pass; the default is the next one, by hand.
+    // the code that TWA last shipped (2). 3 is the first code Play has not already seen, for a local
+    // build; CI passes -PdgVersionCode, the dictionary's own build number (.github/scripts/build_numbers.py:
+    // above the highest code in Play and TestFlight).
     defaultConfig {
         applicationId "gift.dhamma.pali"
         minSdkVersion rootProject.ext.minSdkVersion

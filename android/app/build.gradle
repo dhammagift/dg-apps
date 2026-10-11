@@ -9,7 +9,8 @@ android {
     compileSdk = rootProject.ext.compileSdkVersion
     // Google Play knows this app as gift.dhamma.twa: it replaces the TWA's listing, whose package id cannot
     // change. Test APKs stay gift.dhamma.mobile so both can sit on one phone; CI passes -PdgAppId for the AAB.
-    // versionCode from the CI run number: Play refuses a code it has already seen (17 was fixed before).
+    // versionCode from CI (-PdgVersionCode): Dhamma.Gift's own build number, .github/scripts/build_numbers.py
+    // (Play refuses a code it has already seen; 17 is only for a local build).
     //
     // Two packages that can be installed at once are two apps in the same launcher, so they cannot both be
     // called "Dhamma.gift" (owner: "у меня две аппки dhamma.gift сейчас"). The Play package keeps the name

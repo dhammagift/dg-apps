@@ -184,6 +184,9 @@ jobs:
       upo_ios_checks: ${{ steps.what.outputs.upo_ios_checks }}
       upo_play: ${{ steps.what.outputs.upo_play }}
       upo_ios: ${{ steps.what.outputs.upo_ios }}
+      dg_number: ${{ steps.num.outputs.dg_number }}
+      dict_number: ${{ steps.num.outputs.dict_number }}
+      uposatha_number: ${{ steps.num.outputs.uposatha_number }}
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -292,6 +295,7 @@ jobs:
           done
           uploads=""
           for v in dg_play dg_ios dict_play dict_ios upo_play upo_ios; do [ "${!v}" = true ] && uploads="$uploads $v"; done
+          echo "uploads=$uploads" >> "$GITHUB_OUTPUT"
           if [ -z "$uploads" ]; then
             echo "Nothing from this run goes to a store." >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -307,17 +311,38 @@ jobs:
             echo "::error::a store release talks to https://dhamma.gift, not $DG_ONLINE_ORIGIN (online_origin is for test builds)"; exit 1
           fi
 
+      # Each app's build number (versionCode / CFBundleVersion): its own counter, read from the stores and the
+      # app's version.properties (build_floor), not the run number. The rule is in .github/scripts/build_numbers.py.
+      # A store this run uploads to must answer, or the run stops here instead of at the upload an hour later.
+      - name: Build numbers (one counter per app)
+        id: num
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          MUST_READ: ${{ steps.what.outputs.uploads }}
+        run: |
+          set -euo pipefail
+          pip install --quiet google-api-python-client google-auth 'pyjwt[crypto]'
+          python3 .github/scripts/build_numbers.py | tee -a "$GITHUB_OUTPUT"
+          { echo ""; echo "Build numbers: $(grep -h _number= "$GITHUB_OUTPUT" | tr '\n' ' ')"; } >> "$GITHUB_STEP_SUMMARY"
+
       # What play-upload.yml and ios-upload.yml check before they send this run's files anywhere later.
       - name: Write down what this run is
         env:
           DG_NODE_SHA: ${{ steps.pin.outputs.dg_node_sha }}
           DDG_UI_SHA: ${{ steps.pin.outputs.ddg_ui_sha }}
+          DG_NUMBER: ${{ steps.num.outputs.dg_number }}
+          DICT_NUMBER: ${{ steps.num.outputs.dict_number }}
+          UPOSATHA_NUMBER: ${{ steps.num.outputs.uposatha_number }}
         run: |
           python3 - <<'EOF'
           import json, os
           e = os.environ
           json.dump({'run_number': int(e['GITHUB_RUN_NUMBER']), 'ref': e['GITHUB_REF'], 'sha': e['GITHUB_SHA'],
-                     'dg_node': e['DG_NODE_SHA'], 'ddg_ui': e['DDG_UI_SHA'], 'online_origin': e['DG_ONLINE_ORIGIN']},
+                     'dg_node': e['DG_NODE_SHA'], 'ddg_ui': e['DDG_UI_SHA'], 'online_origin': e['DG_ONLINE_ORIGIN'],
+                     'build_numbers': {a: int(e[a.upper() + '_NUMBER']) for a in ('dg', 'dict', 'uposatha')}},
                     open('build-info.json', 'w'), indent=2)
           EOF
           cat build-info.json
@@ -359,6 +384,10 @@ jobs:
       # the test for Android and iOS at once, because both hand the same raw URL to the same mapping (src/deep-link.js).
       - name: Check the deep-link contract
         run: node test/deep-link.test.js
+
+      # The per-app build number rule (plan's "Build numbers" step) against fake store answers.
+      - name: Check the build-number rule
+        run: python3 .github/scripts/build_numbers.py --self-test
 
       # One version per app (version.properties), read by gradle and passed to xcodebuild. The Xcode project still carries
       # MARKETING_VERSION for a build from Xcode on a Mac; it must say the same, or a local build and CI would disagree.
@@ -661,8 +690,9 @@ jobs:
         run: node build-assets.js
         env:
           # Goes into www/app-version.json, i.e. the "App version" row — the same number gradle
-          # gets as -PdgVersionCode below (see build-assets.js's writeAppVersion).
-          DG_VERSION_CODE: ${{ github.run_number }}
+          # gets as -PdgVersionCode below (see build-assets.js's writeAppVersion): Dhamma.Gift's build
+          # number from the plan job, not the run number.
+          DG_VERSION_CODE: ${{ needs.plan.outputs.dg_number }}
 
       # The iOS job (bottom of this file) builds and tests the SAME bundle on a macOS runner. It
       # must not re-run this whole pipeline — the expensive part is dg-node's dg.db and the
@@ -696,6 +726,14 @@ jobs:
       # already gives every other dependency (npm's lockfile, DG_NODE_REF, the JDK/SDK versions).
       # (The dhammagift:// contract itself, test/deep-link.test.js, needs nothing but node: it runs
       # in the unit job.)
+      # The browsers are the same bytes for one Playwright version, so they are kept between runs, keyed by that version (the
+      # system libraries --with-deps adds still come from apt each time). The version is the one pinned in the step below.
+      - name: Restore the Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: /opt/pw-browsers
+          key: ${{ runner.os }}-pw-1.49.1-chromium-webkit
+
       - name: Install a browser driver for the end-to-end checks
         # 40-170 s normally; run 429 hung here for 40 min (a stuck download on the runner) with nothing
         # to stop it but the 6-hour job limit. Each try is capped, and a second one follows a hang.
@@ -970,7 +1008,7 @@ jobs:
         # The signing certificate's SHA-256 is public: it is what assetlinks.json must list for gift.dhamma.mobile.
         id: sig
         run: |
-          ./gradlew assembleRelease -PdgVersionCode=${{ github.run_number }} --stacktrace
+          ./gradlew assembleRelease -PdgVersionCode=${{ needs.plan.outputs.dg_number }} --stacktrace
           digest=$("$ANDROID_HOME"/build-tools/36.0.0/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -m1 'SHA-256' | sed -E 's/.*: *//')
           echo "$digest"
           echo "cert=$digest" >> "$GITHUB_OUTPUT"
@@ -979,7 +1017,7 @@ jobs:
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: dg-app-full-apk-release-${{ github.run_number }}
+          name: dg-app-full-apk-release-${{ needs.plan.outputs.dg_number }}
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -1002,13 +1040,13 @@ jobs:
         run: |
           sed -i 's/android:targetPackage="gift.dhamma.mobile"/android:targetPackage="gift.dhamma.twa"/' app/src/main/res/xml/shortcuts.xml
           grep -c 'android:targetPackage="gift.dhamma.twa"' app/src/main/res/xml/shortcuts.xml
-          ./gradlew bundleRelease -PdgAppId=gift.dhamma.twa -PdgVersionCode=${{ github.run_number }} --stacktrace
+          ./gradlew bundleRelease -PdgAppId=gift.dhamma.twa -PdgVersionCode=${{ needs.plan.outputs.dg_number }} --stacktrace
 
       - name: Upload release AAB artifact
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: dg-app-full-aab-release-${{ github.run_number }}
+          name: dg-app-full-aab-release-${{ needs.plan.outputs.dg_number }}
           path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
@@ -1085,11 +1123,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: dg-app-full-apk-release-${{ github.run_number }}
+          name: dg-app-full-apk-release-${{ needs.plan.outputs.dg_number }}
           path: apk
       - uses: actions/download-artifact@v4
         with:
-          name: dg-app-full-aab-release-${{ github.run_number }}
+          name: dg-app-full-aab-release-${{ needs.plan.outputs.dg_number }}
           path: aab
       - uses: actions/download-artifact@v4
         with:
@@ -1112,7 +1150,7 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            App version ${{ needs.build.outputs.app_version }} (code ${{ github.run_number }}), built from:
+            App version ${{ needs.build.outputs.app_version }} (code ${{ needs.plan.outputs.dg_number }}), built from:
             - dg-apps `${{ github.sha }}`
             - dg-node `${{ needs.plan.outputs.dg_node_sha }}`
 
@@ -1175,18 +1213,6 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Emulator
-        env:
-          VIDEO: ${{ inputs.video && '1' || '0' }}
-        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: 36
-          target: google_apis
-          arch: x86_64
-          profile: pixel_7
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.twa shortcuts
       # The notification player (Pause / Play on the shade) on the debug APK, with both kinds of voice: the page's own audio and the
       # OS speech (tools/emu-tray.js). Added 2026-10-08 after "Play in the notification does nothing" (an audio-focus race between the
       # plugin and the WebView) reached testers: a red test keeps the build out of the store.
@@ -1199,7 +1225,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24.20.0'
-      - name: Emulator, notification player
+      # One emulator for both scenarios (it used to boot twice, ~3 minutes each): the launcher shortcuts on the Play package,
+      # then the notification player on the debug one. The runner runs the lines in order and stops at the first that fails,
+      # as the second boot used to be skipped after a failed first one.
+      - name: Emulator (shortcuts, then the notification player)
+        env:
+          VIDEO: ${{ inputs.video && '1' || '0' }}
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 36
@@ -1209,6 +1240,8 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
+            bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.twa shortcuts
+            adb shell am force-stop gift.dhamma.twa
             TRAY_ENGINE=audio bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-audio gift.dhamma.mobile tray
             TRAY_ENGINE=native bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-native gift.dhamma.mobile tray
       - name: Verdict, notification player
@@ -1242,8 +1275,9 @@ jobs:
     uses: ./.github/workflows/play-release.yml
     with:
       app: Dhamma.Gift
+      version_code: ${{ needs.plan.outputs.dg_number }}
       package: gift.dhamma.twa
-      aab_artifact: dg-app-full-aab-release-${{ github.run_number }}
+      aab_artifact: dg-app-full-aab-release-${{ needs.plan.outputs.dg_number }}
     secrets:
       PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
 
@@ -1258,10 +1292,9 @@ jobs:
   # checkout (plus find on the page from dg-node), with no database to build. Here it is `npm ci`, two
   # shallow checkouts and the Gradle tasks, minutes instead of the better part of an hour.
   #
-  # versionCode comes from the run number, exactly as android-release above does it, and it must
-  # climb past what the TWA last uploaded under this package id (2 — Play refuses a code it has
-  # already seen). build.gradle carries 3 as the next free one for a local build; any CI run number
-  # is already far above both.
+  # versionCode is the dictionary's own build number (plan job, .github/scripts/build_numbers.py): above
+  # the highest code Play has for gift.dhamma.pali and the highest TestFlight build, independent of the
+  # other two apps. build.gradle carries 3 (the first code after the TWA's 2) for a local build.
   #
   # The APKs and the AAB stay workflow artifacts. They are deliberately NOT attached to the reader
   # app's GitHub release: that release already has two Android files that are easy to confuse, and
@@ -1353,6 +1386,19 @@ jobs:
       # from /static/, like the app's DgSitePlugin), not at the live dictionary; the bridge goes in at
       # document start, as MainActivity injects it. The tests load Playwright from the path it has on the dev server, so
       # that path is pointed at this app's own copy. Every dictionary upload waits for this job.
+      # The browsers are the same bytes for one Playwright version, so they are kept between runs, keyed by that version (the
+      # system libraries --with-deps adds still come from apt each time).
+      - name: Playwright version (the browsers' cache key)
+        id: pw
+        working-directory: dict
+        run: echo "version=$(node -p "require('./node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-pw-${{ steps.pw.outputs.version }}-chromium
+
       - name: Browser checks of the bundled page (offline start, updater, the app's rows)
         working-directory: dict
         env:
@@ -1407,13 +1453,13 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEYSTORE_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease -PdgVersionCode=${{ github.run_number }} --stacktrace
+        run: ./gradlew assembleRelease -PdgVersionCode=${{ needs.plan.outputs.dict_number }} --stacktrace
 
       - name: Upload release APK artifact
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: dg-dict-apk-release-${{ github.run_number }}
+          name: dg-dict-apk-release-${{ needs.plan.outputs.dict_number }}
           path: dict/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -1427,13 +1473,13 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
         # gift.dhamma.pali, not Dhamma.Gift's gift.dhamma.twa: this AAB updates the dictionary's
         # own listing, which is the one the TWA created.
-        run: ./gradlew bundleRelease -PdgVersionCode=${{ github.run_number }} --stacktrace
+        run: ./gradlew bundleRelease -PdgVersionCode=${{ needs.plan.outputs.dict_number }} --stacktrace
 
       - name: Upload release AAB artifact
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: dg-dict-aab-release-${{ github.run_number }}
+          name: dg-dict-aab-release-${{ needs.plan.outputs.dict_number }}
           path: dict/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
@@ -1448,19 +1494,18 @@ jobs:
     if: needs.plan.outputs.dict_launch == 'true'
     uses: ./.github/workflows/launch-check.yml
     with:
-      apk_artifact: dg-dict-apk-release-${{ github.run_number }}
+      apk_artifact: dg-dict-apk-release-${{ needs.plan.outputs.dict_number }}
       package: gift.dhamma.pali
 
   # ---------------------------------------------------------------------------------------------
   # The Uposatha calendar app (gift.dhamma.uposatha) — a Capacitor shell around the site's calendar
-  # page, living in uposatha/ of this repository. The same shape as dict-build above: no dg-node
-  # checkout, no database, `npm ci` plus Gradle. The page it shows is the live one (dhamma.gift
-  # for now, capacitor.config.json's server.url); this job builds only the layer around it — the
-  # reminders' plugins, the sounds in res/raw, the launcher shortcuts, the launch screens.
+  # page, living in uposatha/ of this repository. The same shape as dict-build above: no database,
+  # `npm ci` plus Gradle. The page is bundled from the pinned dg-node checkout (it opens offline) with
+  # the layer around it — the reminders' plugins, the sounds in res/raw, the launcher shortcuts, the
+  # launch screens.
   #
-  # Artifacts only, and no Play upload job: nothing here reaches a store. The signed release APK and
-  # AAB are built when the keystore secrets exist, exactly as for the dictionary, so the day the
-  # listing is created the file is already in the run.
+  # Artifacts only: the store uploads are uposatha-release (Play, closed testing) and uposatha-ios-release
+  # (TestFlight) below, on release = uposatha / uposatha-ios or an upo-v* tag.
   uposatha-build:
     name: Uposatha app (Android)
     needs: plan
@@ -1511,6 +1556,14 @@ jobs:
           git checkout -q FETCH_HEAD
           echo "dg-node = $(git rev-parse HEAD)"
 
+      # The page's icon bundle is generated in dg-node (gitignored there), from the same source and script as the site's and
+      # Dhamma.Gift's: one shared set, not a copy kept here. --ignore-scripts: only the icon package is needed, no native builds.
+      - name: Build dg-node's icon bundle (fontawesome-local.js)
+        working-directory: ${{ runner.temp }}/dg-node
+        run: |
+          npm ci --legacy-peer-deps --ignore-scripts --no-audit
+          npm run build-icons
+
       - name: Lay the calendar page out from dg-node
         working-directory: uposatha
         run: node tools/bundle-from-repo.js "$RUNNER_TEMP/dg-node"
@@ -1522,6 +1575,19 @@ jobs:
 
       # The edge-to-edge check below drives the bundled page in a real browser; the snapshot step that
       # used to install it is gone.
+      # The browsers are the same bytes for one Playwright version, so they are kept between runs, keyed by that version (the
+      # system libraries --with-deps adds still come from apt each time).
+      - name: Playwright version (the browsers' cache key)
+        id: pw
+        working-directory: uposatha
+        run: echo "version=$(node -p "require('./node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-pw-${{ steps.pw.outputs.version }}-chromium
+
       - name: Install the browser for the page checks
         working-directory: uposatha
         run: npx playwright install --with-deps chromium
@@ -1565,7 +1631,7 @@ jobs:
 
       - name: Build Debug APK
         working-directory: uposatha/android
-        run: ./gradlew assembleDebug -PdgVersionCode=${{ github.run_number }} --stacktrace
+        run: ./gradlew assembleDebug -PdgVersionCode=${{ needs.plan.outputs.uposatha_number }} --stacktrace
 
       - name: Upload debug APK artifact
         if: success()
@@ -1605,13 +1671,13 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEYSTORE_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease -PdgVersionCode=${{ github.run_number }} --stacktrace
+        run: ./gradlew assembleRelease -PdgVersionCode=${{ needs.plan.outputs.uposatha_number }} --stacktrace
 
       - name: Upload release APK artifact
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: dg-uposatha-apk-release-${{ github.run_number }}
+          name: dg-uposatha-apk-release-${{ needs.plan.outputs.uposatha_number }}
           path: uposatha/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -1623,13 +1689,13 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEYSTORE_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
-        run: ./gradlew bundleRelease -PdgVersionCode=${{ github.run_number }} --stacktrace
+        run: ./gradlew bundleRelease -PdgVersionCode=${{ needs.plan.outputs.uposatha_number }} --stacktrace
 
       - name: Upload release AAB artifact
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: dg-uposatha-aab-release-${{ github.run_number }}
+          name: dg-uposatha-aab-release-${{ needs.plan.outputs.uposatha_number }}
           path: uposatha/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
@@ -1640,7 +1706,7 @@ jobs:
     if: needs.plan.outputs.upo_launch == 'true'
     uses: ./.github/workflows/launch-check.yml
     with:
-      apk_artifact: dg-uposatha-apk-release-${{ github.run_number }}
+      apk_artifact: dg-uposatha-apk-release-${{ needs.plan.outputs.uposatha_number }}
       package: gift.dhamma.uposatha
 
   # The Uposatha app's Play release: the signed AAB uposatha-build made, uploaded to the closed testing (alpha) track of
@@ -1653,8 +1719,9 @@ jobs:
     uses: ./.github/workflows/play-release.yml
     with:
       app: Uposatha
+      version_code: ${{ needs.plan.outputs.uposatha_number }}
       package: gift.dhamma.uposatha
-      aab_artifact: dg-uposatha-aab-release-${{ github.run_number }}
+      aab_artifact: dg-uposatha-aab-release-${{ needs.plan.outputs.uposatha_number }}
     secrets:
       PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
 
@@ -1789,6 +1856,7 @@ jobs:
     uses: ./.github/workflows/testflight-release.yml
     with:
       app: uposatha
+      build_number: ${{ needs.plan.outputs.uposatha_number }}
       upload: true
     secrets:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -1805,6 +1873,7 @@ jobs:
     uses: ./.github/workflows/testflight-release.yml
     with:
       app: dict
+      build_number: ${{ needs.plan.outputs.dict_number }}
       upload: true
     secrets:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -1812,9 +1881,9 @@ jobs:
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-  # App Store screenshots for Uposatha (test/ios-sim/tour.js + drive.sh): the same page the APK ships, walked
-  # through its views on an iPhone 6.9" and an iPad 13" simulator. Started with `ios_checks`, same as the reader
-  # app's own screenshot job; these are for the store listing, never sent anywhere automatically.
+  # App Store screenshots for the dictionary (test/ios-sim/tour.js + drive.sh): the same page the APK ships, walked
+  # through its views on an iPhone 6.5" and an iPad 13" simulator. Started with `screenshots`, like the other two apps'
+  # screenshot jobs; uploaded to the listing unless screenshots_local, never sent for review.
   dict-ios-screenshots:
     name: Dictionary app iOS screenshots
     needs: dict-build
@@ -2092,8 +2161,9 @@ jobs:
     uses: ./.github/workflows/play-release.yml
     with:
       app: Dictionary
+      version_code: ${{ needs.plan.outputs.dict_number }}
       package: gift.dhamma.pali
-      aab_artifact: dg-dict-aab-release-${{ github.run_number }}
+      aab_artifact: dg-dict-aab-release-${{ needs.plan.outputs.dict_number }}
     secrets:
       PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
 
@@ -2540,6 +2610,7 @@ jobs:
     uses: ./.github/workflows/testflight-release.yml
     with:
       app: dg
+      build_number: ${{ needs.plan.outputs.dg_number }}
       upload: ${{ needs.plan.outputs.dg_ios == 'true' }}
     secrets:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

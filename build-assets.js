@@ -40,6 +40,21 @@ fs.copyFileSync = function (src, dest, ...rest) {
 const LEGACY_ROOT = path.dirname(LEGACY_ASSETS);
 const lr = rel => path.join(LEGACY_ROOT, rel);
 
+// A file or tree on the copy lists below that is not there is a SKIP: a warning on a workstation (a partial
+// checkout is normal there), an error in CI (CI=true, which GitHub Actions sets), because verifyReferencedAssets()
+// only sees what pages reference statically — a file loaded from JS goes missing silently. ABSENT_OK names the
+// entries that are legitimately absent, each with its reason (checked against a CI-shaped checkout, 2026-10-11).
+const ABSENT_OK = {
+    'asset file materials/cases.html': 'in no tree (legacy dg, dg-node): multiTool.html links it, the site answers 404 too',
+    'asset file materials/conjugations.html': 'in no tree (legacy dg, dg-node): multiTool.html links it, the site answers 404 too',
+    'asset file materials/pali_cases_ru.html': 'in no tree (legacy dg, dg-node): the site answers 404 too',
+};
+const skipped = [];
+function skip(what, why) {
+    console.warn(`SKIP ${what} — ${why}${ABSENT_OK[what] ? ' (expected: ' + ABSENT_OK[what] + ')' : ''}`);
+    if (!ABSENT_OK[what]) skipped.push(what);
+}
+
 function parseArgs() {
     const args = { langs: ['ru', 'en'] };
     for (const arg of process.argv.slice(2)) {
@@ -302,7 +317,7 @@ function copySvgIcons() {
 function copyReaderImages() {
     const srcDir = f('reader/images');
     if (!fs.existsSync(srcDir)) {
-        console.warn(`MISSING: reader/images directory does not exist`);
+        skip('reader/images', 'the directory does not exist');
         return;
     }
     const destDir = path.join(WWW, 'reader', 'images');
@@ -500,7 +515,7 @@ function copyAssetTrees() {
     for (const rel of ASSET_TREES) {
         const from = l(rel);
         if (!fs.existsSync(from)) {
-            console.warn(`SKIP asset tree ${rel} — not present in the legacy tree`);
+            skip(`asset tree ${rel}`, 'not present in the legacy tree');
             continue;
         }
         const dest = path.join(WWW, 'assets', rel);
@@ -583,7 +598,7 @@ function copyAssetLooseFiles() {
         const override = f(path.join('public', 'overrides', rel));
         const from = fs.existsSync(override) ? override : l(rel);
         if (!fs.existsSync(from)) {
-            console.warn(`SKIP asset file ${rel} — not present in the legacy tree`);
+            skip(`asset file ${rel}`, 'not present in the legacy tree');
             continue;
         }
         const dest = path.join(WWW, 'assets', rel);
@@ -858,7 +873,7 @@ function copyRootTrees() {
     let done = 0;
     for (const { url, from, legacy } of ROOT_TREES) {
         const src = legacy ? l(from) : f(from);
-        if (!fs.existsSync(src)) { console.warn(`SKIP root tree ${url} — ${src} missing`); continue; }
+        if (!fs.existsSync(src)) { skip(`root tree ${url} (${from})`, `${src} missing`); continue; }
         copyTree(src, path.join(WWW, url));
         done++;
     }
@@ -870,7 +885,7 @@ function copyRootFiles() {
     for (const { url, sources, legacy, root } of ROOT_FILES) {
         const resolve = p => (root ? lr(p) : legacy ? l(p) : f(p));
         const from = sources.map(resolve).find(p => fs.existsSync(p));
-        if (!from) { console.warn(`SKIP root file ${url} — no source among ${sources.join(', ')}`); continue; }
+        if (!from) { skip(`root file ${url}`, `no source among ${sources.join(', ')}`); continue; }
         const dest = path.join(WWW, url);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.copyFileSync(from, dest);
@@ -896,7 +911,8 @@ function copyMemoApp() {
     // sign-in works inside the WebView; Google blocks its popup sign-in in embedded WebViews. The same
     // /ru/ copy as memo: login.js takes its language from the path. sso.html is a debug page, not shipped.
     const login = path.join(NODEJS_ROOT, 'siteroot', 'login');
-    if (fs.existsSync(path.join(login, 'index.html'))) {
+    if (!fs.existsSync(path.join(login, 'index.html'))) skip('sign-in page siteroot/login', `${login}/index.html missing`);
+    else {
         for (const dest of [path.join(WWW, 'login'), path.join(WWW, 'ru', 'login')]) {
             copyTree(login, dest);
             fs.rmSync(path.join(dest, 'sso.html'), { force: true });
@@ -1114,6 +1130,14 @@ function main() {
     console.log(`Assets: ${ok} copied, ${missing} missing. +${memoCount} memo files, +${rootCount} root files, +${rootTreeCount} root trees, ${dirLinks} pages with directory links resolved, ${bridged} pages given native-bridge.js, +${treeCount} legacy trees, +${looseCount} loose legacy files, +${svgCount} svg icons, +${fontCount} fonts, +${nativeCount} native file(s), +${offlineCount} offline-layer entries from dg-node/public/offline, reader/images/, 2 generated bundles, mode-table.json (langs=${args.langs.join(',')}).`);
     console.log(`  app version: ${appVersion || 'unknown'}\n  dg-node: ${NODEJS_ROOT}\n  legacy assets: ${LEGACY_ASSETS}`);
     if (missing > 0) process.exitCode = 1;
+    if (skipped.length) {
+        if (process.env.CI === 'true') {
+            console.error(`::error::build-assets: ${skipped.length} file(s) on the copy lists are missing: ${skipped.join('; ')} (a deliberate absence goes into ABSENT_OK with its reason)`);
+            process.exitCode = 1;
+        } else {
+            console.warn(`  ${skipped.length} SKIP(s): ${skipped.join('; ')} — an error in CI`);
+        }
+    }
 }
 
 main();

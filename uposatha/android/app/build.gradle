@@ -7,8 +7,8 @@ file('../../version.properties').withInputStream { appVersion.load(it) }
 android {
     namespace = "gift.dhamma.uposatha"
     compileSdk = rootProject.ext.compileSdkVersion
-    // A new application on Play: the version code starts at 1 and climbs with the CI run number
-    // (-PdgVersionCode), exactly as the dictionary's does.
+    // 1 for a local build; CI passes -PdgVersionCode, Uposatha's own build number
+    // (.github/scripts/build_numbers.py), exactly as for the dictionary.
     defaultConfig {
         applicationId "gift.dhamma.uposatha"
         minSdkVersion rootProject.ext.minSdkVersion

@@ -36,7 +36,8 @@ def safe(label, fn, default=None):
 # ---------- GitHub: our latest builds ----------
 
 def latest_artifact(repo, prefix):
-    """Newest unexpired artifact whose name is prefix-<run number>: (run number, artifact url)."""
+    """Newest unexpired artifact whose name is prefix-<n>: (n, artifact url). For the signed APK/AAB/IPA n is the app's
+    build number (the code a store would get; the run number before 2026-10-11)."""
     arts = [a for page in (1, 2, 3, 4, 5) for a in gh(f"/repos/{repo}/actions/artifacts?per_page=100&page={page}")["artifacts"]]
     best = None
     for a in arts:

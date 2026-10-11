@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       www_run:
-        description: 'Run ID to take the web bundle from (default: the most recent run that has one)'
+        description: 'Run ID to take the web bundle from (default: the most recent run of this branch that has one)'
         required: false
         type: string
 
@@ -48,7 +48,8 @@ jobs:
           WWW_RUN: ${{ inputs.www_run }}
         run: |
           set -euo pipefail
-          runs="${WWW_RUN:-$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-app.yml/runs?per_page=20" --jq '.workflow_runs[].id')}"
+          # Only runs of this branch (head_branch): a bundle from another branch's run would put that branch's UI into this build.
+          runs="${WWW_RUN:-$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/build-app.yml/runs" -f branch="$GITHUB_REF_NAME" -F per_page=20 --jq '.workflow_runs[].id')}"
           for id in $runs; do
             name=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" \
                      --jq '.artifacts[] | select(.expired == false) | select(.name | startswith("www-")) | .name' | head -1)
@@ -59,7 +60,7 @@ jobs:
               exit 0
             fi
           done
-          echo "::error::No unexpired www-* artifact in the last 20 runs of build-app.yml — run that workflow once."
+          echo "::error::No unexpired www-* artifact in the last 20 runs of build-app.yml on $GITHUB_REF_NAME — run that workflow once on this branch (or pass www_run)."
           exit 1
 
       - name: Download the web bundle

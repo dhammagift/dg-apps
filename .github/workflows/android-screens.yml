@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       apk_artifact:
-        description: 'APK artifact name in that run (dg-app-full-apk-release-<run number>)'
+        description: 'APK artifact name in that run (dg-app-full-apk-release-<build number>, see the run summary; dg-app-full-apk-<run number> for the debug one)'
         required: true
         type: string
       api_level:

@@ -1,14 +1,15 @@
 # Send an IPA that an earlier Build App run already made to TestFlight, instead of building again —
 # the iOS twin of play-upload.yml (owner, 2026-10-01: "чтобы можно было Apple существующую сборку
-# отправить, а не новую собирать"). The build number is that run's number, the same as the Android
-# versionCode of the same run. Only on the owner's explicit yes (CLAUDE.md); production is the owner's step.
+# отправить, а не новую собирать"). The build number is the one that run gave the app (build-info,
+# .github/scripts/build_numbers.py), the same as the Android versionCode of that app in the same run.
+# Only on the owner's explicit yes (CLAUDE.md); production is the owner's step.
 name: iOS upload
 
 on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: 'build-app.yml run id whose IPA (dg-app-full-ipa / dg-dict-ipa / dg-uposatha-ipa -<run number>) to send to TestFlight'
+        description: 'build-app.yml run id whose IPA (dg-app-full-ipa / dg-dict-ipa / dg-uposatha-ipa -<build number>) to send to TestFlight'
         required: true
         type: string
       app:
@@ -49,12 +50,13 @@ jobs:
         env:
           RUN_ID: ${{ inputs.build_run_id }}
           CHECK: ${{ steps.app.outputs.check }}
+          APP: ${{ inputs.app }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: tools/check-build-run.sh "$RUN_ID" "$CHECK"
+        run: tools/check-build-run.sh "$RUN_ID" "$CHECK" "$APP"
 
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ steps.app.outputs.prefix }}-${{ steps.run.outputs.run_number }}
+          name: ${{ steps.app.outputs.prefix }}-${{ steps.run.outputs.build_number }}
           run-id: ${{ inputs.build_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ipa
@@ -76,5 +78,5 @@ jobs:
 
       - name: Summary
         env:
-          N: ${{ steps.run.outputs.run_number }}
+          N: ${{ steps.run.outputs.build_number }}
         run: echo "### build $N -> TestFlight (processing takes 5–15 minutes)" >> "$GITHUB_STEP_SUMMARY"

@@ -5,10 +5,11 @@
 # must have passed in it (a green run can have skipped it). Verified 2026-10-10: Uposatha 488 went to
 # Play from a failed run of a feature branch, and nothing here asked.
 #
-# Usage: tools/check-build-run.sh <run id> <name prefix of the check job that must have passed>
-# Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_OUTPUT. Writes run_number=<n> to $GITHUB_OUTPUT.
+# Usage: tools/check-build-run.sh <run id> <name prefix of the check job that must have passed> <dg|dict|uposatha>
+# Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_OUTPUT. Writes build_number=<n> to $GITHUB_OUTPUT: that app's build number in
+# that run (its signed artifacts are named by it), or the run number for a run made before each app had its own counter.
 set -euo pipefail
-RUN_ID=$1; CHECK=$2
+RUN_ID=$1; CHECK=$2; APP=$3
 fail() { echo "::error::run $RUN_ID: $*"; exit 1; }
 [[ "$RUN_ID" =~ ^[0-9]+$ ]] || fail "not a run id"
 run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
@@ -28,5 +29,6 @@ gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -n "build-info-$n" -D "$dir" >
   || fail "has no build-info-$n artifact (built before the check existed, or expired): build again"
 origin=$(jq -r .online_origin "$dir/build-info.json")
 [ "$origin" = https://dhamma.gift ] || fail "talks to $origin, not https://dhamma.gift"
-echo "dg-node $(jq -r .dg_node "$dir/build-info.json"), site $origin, '$CHECK' passed"
-echo "run_number=$n" >> "$GITHUB_OUTPUT"
+build=$(jq -r --arg app "$APP" '.build_numbers[$app] // .run_number' "$dir/build-info.json")
+echo "dg-node $(jq -r .dg_node "$dir/build-info.json"), site $origin, '$CHECK' passed, $APP build $build"
+echo "build_number=$build" >> "$GITHUB_OUTPUT"

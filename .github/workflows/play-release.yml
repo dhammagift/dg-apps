@@ -23,6 +23,10 @@ on:
         description: 'The calling run''s artifact holding app-release.aab'
         required: true
         type: string
+      version_code:
+        description: 'The versionCode that AAB was built with (the app''s build number, .github/scripts/build_numbers.py)'
+        required: true
+        type: string
     secrets:
       PLAY_SERVICE_ACCOUNT_JSON:
         required: false
@@ -80,10 +84,11 @@ jobs:
         env:
           APP: ${{ inputs.app }}
           PACKAGE: ${{ inputs.package }}
+          CODE: ${{ inputs.version_code }}
         run: |
           {
             echo "### $APP uploaded"
             echo ""
-            echo "versionCode $GITHUB_RUN_NUMBER is on the **closed testing (alpha)** track of \`$PACKAGE\`."
+            echo "versionCode $CODE is on the **closed testing (alpha)** track of \`$PACKAGE\`."
             echo "Testers get it within minutes. Production needs a promote in the Play Console."
           } >> "$GITHUB_STEP_SUMMARY"

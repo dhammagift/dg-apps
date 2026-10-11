@@ -61,19 +61,32 @@ final class ShareSheetTests: XCTestCase {
             return
         }
         share.tap()
-        attach("1-share-sheet", safari)
 
-        // The extension's row in the sheet. Apps sit in a horizontal strip that may need a swipe
-        // before a new one is visible; the label is the extension's CFBundleDisplayName.
+        // The extension's row in the sheet; the label is the extension's CFBundleDisplayName. The sheet
+        // can take seconds to come up after the More menu's Share (run 565: about 4 s), so it is waited
+        // for before anything else. Run 565 also showed why nothing may be swiped before then: the only
+        // hittable scroll view was Safari's own full-screen page, and swiping it dismissed the sheet the
+        // moment it appeared, with Dhamma.gift sitting in its app strip (the test's screen recording).
+        // A swipe, when one is needed at all, goes only to a short scroll view: the sheet's app strip.
         let ours = safari.descendants(matching: .any).matching(NSPredicate(format: "label == 'Dhamma.gift'")).firstMatch
+        var found = ours.waitForExistence(timeout: 20)
         var tries = 0
-        while !ours.exists && tries < 4 {
-            if let strip = safari.scrollViews.allElementsBoundByIndex.first(where: { $0.isHittable }) {
+        while !found && tries < 4 {
+            let window = safari.frame
+            if let strip = safari.scrollViews.allElementsBoundByIndex.first(where: {
+                $0.isHittable && $0.frame.height < window.height / 3
+            }) {
                 strip.swipeLeft()
             }
             tries += 1
+            found = ours.waitForExistence(timeout: 3)
         }
-        XCTAssertTrue(ours.waitForExistence(timeout: 10), "Dhamma.gift is not offered in the share sheet")
+        attach("1-share-sheet", safari)
+        if !found {
+            print("--- Safari accessibility tree (Dhamma.gift not in the share sheet) ---")
+            print(safari.debugDescription)
+        }
+        XCTAssertTrue(found, "Dhamma.gift is not offered in the share sheet")
         ours.tap()
 
         // Our ShareViewController: the Done button is native and ours; the web view is the app's

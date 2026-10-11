@@ -18,6 +18,8 @@ xcodebuild build-for-testing -project "$HERE/DgTourTests.xcodeproj" -scheme DgTo
   -destination "id=$UDID" -derivedDataPath "$HERE/DerivedData" CODE_SIGNING_ALLOWED=NO > "$OUT/dg-tour-build.log" 2>&1 \
   || { echo "dg-tour: the tests did not build"; tail -40 "$OUT/dg-tour-build.log"; exit 1; }
 
+# The share-sheet check before this leaves Safari in front with its sheet open (run 587's video): close it first.
+xcrun simctl terminate "$UDID" com.apple.mobilesafari >/dev/null 2>&1 || true
 xcrun simctl ui "$UDID" appearance light
 xcrun simctl io "$UDID" recordVideo --codec h264 --force "$OUT/dg-tour.mp4" >/dev/null 2>&1 &
 rec=$!

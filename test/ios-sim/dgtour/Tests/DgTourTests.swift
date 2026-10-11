@@ -78,6 +78,8 @@ final class DgTourTests: XCTestCase {
         look(prefix + "-reader-refreshed")
     }
 
+    // Every place is opened by a dhammagift:// link: in run 587 the self-test's quick window (/4as) held the search
+    // box, typing never reached it, and the tour stopped there. A link also closes whatever is open on the way.
     func test1_Light() {
         app.launch()
         XCTAssertTrue(page.waitForExistence(timeout: 40), "no web view")
@@ -85,51 +87,42 @@ final class DgTourTests: XCTestCase {
         Thread.sleep(forTimeInterval: 8)
         look("tour-01-start")
 
-        if box.waitForExistence(timeout: 10) {
-            box.tap()
-            if let v = box.value as? String, !v.isEmpty, v != box.placeholderValue {
-                box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: v.count))
-            }
-            box.typeText("kacchapa\n")
-            Thread.sleep(forTimeInterval: 4)
-        } else {
-            openLink("dhammagift://search?q=kacchapa")
-        }
+        openLink("dhammagift://search?q=kacchapa")
         look("tour-02-results")
         page.swipeUp(velocity: .slow)
         look("tour-03-results-scrolled")
         toTop()
         look("tour-04-results-top")
+        pullToRefresh()
+        look("tour-05-results-refreshed")
 
-        // The CI library has kacchapa in DN22 (drive.sh's selftest: search-kacchapa expect=dn22).
-        let dn22 = page.links.matching(NSPredicate(format: "label CONTAINS[c] 'dn22'")).firstMatch
-        if dn22.waitForExistence(timeout: 5) && dn22.isHittable {
-            dn22.tap()
-            Thread.sleep(forTimeInterval: 4)
-        } else {
-            openLink("dhammagift://dn22")
-        }
-        look("tour-05-reader")
-        readerScrolled("tour-06")
+        openLink("dhammagift://dn22")
+        look("tour-06-reader")
+        readerScrolled("tour-07")
 
-        openLink("dhammagift://route/settings")
-        look("tour-07-settings")
+        // The settings sheet over the results, as the burger opens it (home.js: #dg-settings opens it on load).
+        openLink("dhammagift://route/?q=kacchapa#dg-settings")
+        Thread.sleep(forTimeInterval: 3)
+        look("tour-08-settings")
         sideways(from: 0.75, to: 0.25)
-        look("tour-08-settings-swiped-left", 0.8)
+        look("tour-09-settings-swiped-left", 0.8)
         sideways(from: 0.25, to: 0.75)
-        look("tour-09-settings-swiped-right", 0.8)
+        look("tour-10-settings-swiped-right", 0.8)
         page.swipeUp(velocity: .slow)
-        look("tour-10-settings-scrolled")
+        look("tour-11-settings-scrolled")
     }
 
     func test2_Dark() {
-        app.activate()
-        XCTAssertTrue(page.waitForExistence(timeout: 20), "no web view")
-        look("tour-11-dark-settings")
         openLink("dhammagift://search?q=kacchapa")
+        XCTAssertTrue(page.waitForExistence(timeout: 20), "no web view")
         look("tour-12-dark-results")
         openLink("dhammagift://dn22")
         look("tour-13-dark-reader")
         readerScrolled("tour-14-dark")
+        openLink("dhammagift://route/?q=kacchapa#dg-settings")
+        Thread.sleep(forTimeInterval: 3)
+        look("tour-15-dark-settings")
+        sideways(from: 0.75, to: 0.25)
+        look("tour-16-dark-settings-swiped", 0.8)
     }
 }

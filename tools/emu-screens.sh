@@ -115,6 +115,8 @@ for k in ("edge_to_edge", "frame_top", "frame_bottom", "top_color", "bottom_colo
     print("v_%s=%s" % (k, str(v[k]).lower()))   # booleans as the shell compares them
 PY
 )"
+    # No values: the screenshot could not be read (an emulator that died gives an empty file); say so instead of dying on set -u.
+    [ -n "${v_page_bg:-}" ] || { ko "$1: no screenshot to judge (did the emulator stop answering?)"; return 0; }
     echo "$1: page_bg=$v_page_bg status_bar_rows=$v_status_rows top_bar_text=$v_text_top ink=$v_ink_ratio" >> "$res"
     # 0. The screenshot must be the page, not its background: a blank page would satisfy every edge
     #    test below (the only ink on it is the status bar's own clock). A cold start on a CI emulator

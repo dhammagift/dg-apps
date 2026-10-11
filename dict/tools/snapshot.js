@@ -1,5 +1,6 @@
 // Takes the dictionary's page (both languages) and everything it loads off a running site
-// (tools/snapshot-lib.js), so the app can bundle it and open with no network at all.
+// (tools/snapshot-lib.js). Builds no longer use it (tools/bundle-from-repo.js lays the page out from git); it is
+// how tools/page-files.json is re-recorded when the page starts loading a new file.
 //
 //   SITE=https://dict.dhamma.gift node tools/snapshot.js [outdir]           (default outdir: snapshot/)
 //   SITE=http://localhost:3003 PREFIX=/dict node tools/snapshot.js          (a dev copy that keeps the page under /dict)

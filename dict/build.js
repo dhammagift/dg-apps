@@ -37,8 +37,8 @@ function errorPageSource() {
 }
 module.exports = { bridgeSource, errorPageSource };
 
-// The snapshot of the dictionary's page (tools/snapshot.js: the page in both languages and everything it loads,
-// laid out as the site serves it) is what the app opens with no network at all: it becomes www/ (the page
+// The snapshot of the dictionary's page (tools/bundle-from-repo.js: the page in both languages and everything it
+// loads, laid out from ddg-ui and dg-node as the site serves it) is what the app opens with no network at all: it becomes www/ (the page
 // itself is www/index.html and www/ru/index.html), with a manifest of what is in it (site-manifest.json: the
 // paths and their SHA-256) that the updater compares the site against.
 const crypto = require('crypto');
@@ -55,7 +55,7 @@ function copyTree(from, to, list) {
 
 function bundleSnapshot() {
     if (!fs.existsSync(path.join(SNAPSHOT, 'index.html'))) {
-        throw new Error('dict/snapshot/ is missing: run  SITE=https://dict.dhamma.gift node tools/snapshot.js  first (CI does).');
+        throw new Error('dict/snapshot/ is missing: run  node tools/bundle-from-repo.js <ddg-ui dir> <dg-node dir>  first (CI does).');
     }
     const files = [];
     copyTree(SNAPSHOT, WWW, files);

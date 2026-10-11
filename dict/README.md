@@ -10,8 +10,10 @@ A thin shell. `capacitor.config.json` sets `server.url` to `https://dict.dhamma.
 IS the app's interface — the same UI a browser gets, with no second copy to keep in step. What the
 app adds is only what a web page cannot do.
 
-Nothing is bundled offline here; the dictionary's offline mode is a separate, much larger project
-(see ddg-ui#7).
+The home page (both languages) is bundled so the app opens with no network: the build lays it out from
+git — ddg-ui at `DDG_UI_REF` and dg-node at `DG_NODE_REF` (`tools/bundle-from-repo.js`, list in
+`tools/page-files.json`), not off the live site. A word's own page still comes from the site; the
+dictionary's full offline mode is a separate, much larger project (see ddg-ui#7).
 
 ## Why Capacitor and not the TWA
 

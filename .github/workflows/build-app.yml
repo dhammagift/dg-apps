@@ -993,16 +993,31 @@ jobs:
         run: npm ci
 
       # The app bundles the dictionary's page (both languages): it opens with no network, and updates itself from
-      # the site when there is one (dict/tools/snapshot.js). A real browser loads the page off the live site and
-      # records everything it fetches. Fails the job when the site cannot be reached: an APK with no page in it
-      # must never be built quietly.
-      - name: Take the dictionary's page off the site
-        working-directory: dict
-        env:
-          SITE: https://dict.dhamma.gift
+      # the site when there is one. The page is taken from git, not off a running site (as Uposatha's is): ddg-ui
+      # at DDG_UI_REF (dict.dhamma.gift is its public/ served as static files) and dg-node at DG_NODE_REF (Find on
+      # the page). What is edited on the server and not committed no longer reaches an app. Fails the job when a
+      # file of the page is not in git.
+      - name: Checkout ddg-ui and dg-node (the dictionary's page)
         run: |
-          npx playwright install --with-deps chromium
-          node tools/snapshot.js
+          fetch() {
+            mkdir -p "$RUNNER_TEMP/$1" && cd "$RUNNER_TEMP/$1"
+            git init -q
+            git remote add origin "https://github.com/dhammagift/$1.git"
+            git fetch --depth 1 origin "$2" -q
+            git checkout -q FETCH_HEAD
+            echo "$1@$2 = $(git rev-parse HEAD)"
+            cd "$GITHUB_WORKSPACE"
+          }
+          DDG="$(tr -d '[:space:]' < DDG_UI_REF)"
+          DGN="${{ inputs.dg_node_ref }}"
+          if [ -z "$DGN" ]; then DGN="$(tr -d '[:space:]' < DG_NODE_REF)"; fi
+          if [ -z "$DDG" ] || [ -z "$DGN" ]; then echo "::error::DDG_UI_REF or DG_NODE_REF is empty"; exit 1; fi
+          fetch ddg-ui "$DDG"
+          fetch dg-node "$DGN"
+
+      - name: Lay the dictionary's page out from ddg-ui and dg-node
+        working-directory: dict
+        run: node tools/bundle-from-repo.js "$RUNNER_TEMP/ddg-ui" "$RUNNER_TEMP/dg-node"
 
       # src/ -> www/ -> android/app/src/main/assets/public: the bundled page, dict-bridge.js and the
       # offline page where MainActivity and Capacitor read them from. Not optional: the asset sync is what

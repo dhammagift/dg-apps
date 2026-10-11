@@ -54,33 +54,21 @@ async function waitFor(js, sec = 10) {
   log('  not true after ' + sec + 's: ' + js);
   return false;
 }
-// A touch on an element's centre: first a real one (adb input tap; CSS px map to the screen as innerWidth to its width,
-// the WebView filling it edge to edge). If the page saw no pointerdown from it, the same tap goes in as a touchscreen tap
-// gesture over DevTools (Input.synthesizeTapGesture: the renderer's own input path, so buttons click and inputs focus),
-// and the first time that happens it is logged with the window that had the focus. (2026-10-11: on the CI emulator adb
-// taps did not reach the WebView at all in runs 566 and 569; a plain DevTools touch sequence did not click buttons.)
-let adbMissLogged = false;
+// A real touch (adb input tap) on an element's centre. Screen px = CSS px x zoom x (screen width / innerWidth), the
+// WebView filling the screen edge to edge. The page sets CSS zoom 110 % on <html>; an older WebView (113 on the CI
+// image) gives getBoundingClientRect without that zoom, a newer one (128+) with it: the factor is innerWidth over the
+// width <html> reports. (Runs 566-570, 2026-10-11: without it a tap on the menu button hit the history button next to it.)
 async function tapEl(sel, nth = 0) {
   const c = await ev(`(function(){
     var el = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]; if (!el) return null;
     el.scrollIntoView({ block: 'center' });
-    var r = el.getBoundingClientRect();
-    if (!window.__tourDown) { window.__tourDown = 0; addEventListener('pointerdown', function () { window.__tourDown++; }, true); }
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, iw: innerWidth, down: window.__tourDown };
+    var r = el.getBoundingClientRect(), f = innerWidth / document.documentElement.getBoundingClientRect().width;
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, f: f, iw: innerWidth };
   })()`);
   if (!c) { log('  nothing to tap: ' + sel); return false; }
-  const sx = Math.round(c.x * W / c.iw), sy = Math.round(c.y * W / c.iw);
-  adb(`shell input tap ${sx} ${sy}`);
-  await sleep(600);
-  if ((await ev('window.__tourDown')) > c.down) { await sleep(600); return true; }
-  if (!adbMissLogged) {
-    adbMissLogged = true;
-    log(`  adb tap ${sx},${sy} (${sel}) did not reach the page; focus: ` + (adb('shell dumpsys window').match(/mCurrentFocus=.*/) || [''])[0] + '; tapping over DevTools from here on when that happens');
-    adb('shell uiautomator dump /sdcard/miss.xml'); adb(`pull /sdcard/miss.xml ${path.join(OUT, 'adb-miss-ui.xml')}`);
-    sh(`adb exec-out screencap -p > ${path.join(OUT, 'adb-miss.png')}`);
-  }
-  await (await page()).send('Input.synthesizeTapGesture', { x: c.x, y: c.y, tapCount: 1, gestureSourceType: 'touch' });
-  await sleep(1200);
+  const k = (Math.abs(c.f - 1) < 0.02 ? 1 : c.f) * W / c.iw;
+  adb(`shell input tap ${Math.round(c.x * k)} ${Math.round(c.y * k)}`);
+  await sleep(1500);
   return true;
 }
 // Native screen (launcher, shade, system dialogs): uiautomator.

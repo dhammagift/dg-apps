@@ -193,90 +193,6 @@ struct UposathaDayWidget: Widget {
     }
 }
 
-#if DEBUG
-// PROBES (debug builds only, i.e. the simulator check uposatha-widget-ios.yml): every real widget came out black on a real iPhone and
-// on the simulator while the extension reported success, so each probe holds ONE suspect, to see which of them the system refuses
-// to draw. To be removed once the cause is fixed.
-struct ProbeEntry: TimelineEntry { let date: Date }
-
-struct ProbeProvider: TimelineProvider {
-    func placeholder(in context: Context) -> ProbeEntry { ProbeEntry(date: Date()) }
-    func getSnapshot(in context: Context, completion: @escaping (ProbeEntry) -> Void) { completion(ProbeEntry(date: Date())) }
-    func getTimeline(in context: Context, completion: @escaping (Timeline<ProbeEntry>) -> Void) {
-        completion(Timeline(entries: [ProbeEntry(date: Date())], policy: .never))
-    }
-}
-
-struct ProbeChrome: ViewModifier {
-    let color: Color
-    func body(content: Content) -> some View {
-        if #available(iOS 17.0, *) {
-            content.containerBackground(for: .widget) { color }
-        } else {
-            content.background(color)
-        }
-    }
-}
-
-func probe<V: View>(_ kind: String, _ color: Color = Color.blue, @ViewBuilder _ view: @escaping () -> V) -> some WidgetConfiguration {
-    StaticConfiguration(kind: kind, provider: ProbeProvider()) { _ in
-        view().modifier(ProbeChrome(color: color))
-    }
-    .configurationDisplayName(kind)
-    .description(kind)
-    .supportedFamilies([.systemSmall])
-}
-
-struct ProbePlain: Widget {
-    var body: some WidgetConfiguration { probe("ProbePlain") { Text("plain").foregroundColor(Color.white) } }
-}
-struct ProbeLato: Widget {
-    var body: some WidgetConfiguration { probe("ProbeLato") { Text(DgFonts.ready ? "Lato" : "NO LATO").font(dgFont(28, .bold)).foregroundColor(Color.white) } }
-}
-struct ProbeColor: Widget {
-    var body: some WidgetConfiguration { probe("ProbeColor", Color.dgSurface) { Text("colour").foregroundColor(Color.dgAccent) } }
-}
-struct ProbePhoto: Widget {
-    var body: some WidgetConfiguration { probe("ProbePhoto") { Image("moon").resizable().frame(width: 90, height: 90) } }
-}
-struct ProbeBlur: Widget {
-    var body: some WidgetConfiguration { probe("ProbeBlur") { Circle().fill(Color.red).frame(width: 80, height: 80).blur(radius: 5) } }
-}
-struct ProbeMoon: Widget {
-    var body: some WidgetConfiguration { probe("ProbeMoon") { MoonView(phase: 0.3, disc: 80) } }
-}
-struct ProbeGeo: Widget {
-    var body: some WidgetConfiguration {
-        probe("ProbeGeo") { GeometryReader { geo in Text(String(Int(geo.size.width))).foregroundColor(Color.white) } }
-    }
-}
-struct ProbeMargins: Widget {
-    var body: some WidgetConfiguration { probe("ProbeMargins") { Text("no margins").foregroundColor(Color.white) }.dgNoMargins() }
-}
-
-struct ProbeWidgets: WidgetBundle {
-    var body: some Widget {
-        ProbePlain()
-        ProbeLato()
-        ProbeColor()
-        ProbePhoto()
-        ProbeBlur()
-        ProbeMoon()
-        ProbeGeo()
-        ProbeMargins()
-    }
-}
-
-@main
-struct UposathaWidgetBundle: WidgetBundle {
-    var body: some Widget {
-        UposathaWidget()
-        UposathaMoonWidget()
-        UposathaDayWidget()
-        ProbeWidgets().body
-    }
-}
-#else
 @main
 struct UposathaWidgetBundle: WidgetBundle {
     var body: some Widget {
@@ -285,4 +201,3 @@ struct UposathaWidgetBundle: WidgetBundle {
         UposathaDayWidget()
     }
 }
-#endif

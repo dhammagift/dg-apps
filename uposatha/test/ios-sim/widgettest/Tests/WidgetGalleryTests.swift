@@ -90,16 +90,13 @@ final class WidgetGalleryTests: XCTestCase {
         sleep(4)
         tree("tree-5-previews")
 
-        // every preview: the Uposatha in three sizes, the Moon, Day & night, then the probes of a debug build
-        // (UposathaWidget.swift); a swipe past the last page changes nothing
-        let pages = 13
+        // every preview: the Uposatha in three sizes, the Moon, Day & night (a swipe past the last page changes nothing)
+        let pages = 5
         for page in 1...pages {
             shot("preview-\(page)")
-            // the five real widgets: the middle of the preview (every size covers it) is the card, not a black hole
-            if page <= 5 {
-                let share = black(0.5, 0.61, 0.16, 0.06)   // measured on the black run: 1.00 for all five, 0.00 for a drawn card
-                XCTAssertLessThan(share, 0.9, "preview \(page) is a black card: the system did not draw the widget")
-            }
+            // the middle of the preview (every size covers it) is the card, not a black hole
+            let share = black(0.5, 0.61, 0.16, 0.06)   // measured on the black run: 1.00 for all five, 0.00 for a drawn card
+            XCTAssertLessThan(share, 0.9, "preview \(page) is a black card: the system did not draw the widget")
             if page < pages {
                 board.swipeLeft()
                 sleep(2)

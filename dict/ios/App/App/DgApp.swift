@@ -92,9 +92,11 @@ class DgBridgeViewController: CAPBridgeViewController {
         }
     }
 
-    // The strip with the arrows and the check mark that iOS puts above the keyboard for a web page's field: the letters row sat on
-    // top of it with an empty gap between, and the strip does nothing the dictionary needs (one field). The web view's content
-    // view is given a subclass whose inputAccessoryView is nil - the same way the Capacitor Keyboard plugin hides it.
+    // The strip with the arrows and the check mark that iOS puts above the keyboard for a web page's field does nothing the
+    // dictionary needs (one field). The web view's content view is given a subclass whose inputAccessoryView is the Pāli
+    // letters row (DgPaliAccessory, below) - or nil when it is switched off in the menu: the row is part of the keyboard then,
+    // drawn and moved by iOS with it. (It used to be a row of the page, placed by script from the keyboard's height: on an
+    // iPhone it shook over the keyboard while the page scrolled, owner 2026-10-11 - "как трещотка трясется".)
     private func hideFormAccessoryBar() {
         guard let webView = webView else { return }
         for subview in webView.scrollView.subviews where String(describing: type(of: subview)).hasPrefix("WKContent") {
@@ -103,7 +105,12 @@ class DgBridgeViewController: CAPBridgeViewController {
             if target == nil, let base = object_getClass(subview), let created = objc_allocateClassPair(base, name, 0) {
                 let selector = #selector(getter: UIResponder.inputAccessoryView)
                 if let method = class_getInstanceMethod(UIView.self, selector) {
-                    let block: @convention(block) (AnyObject) -> AnyObject? = { _ in nil }
+                    let block: @convention(block) (AnyObject) -> AnyObject? = { content in
+                        guard DgPaliAccessory.enabled else { return nil }
+                        let bar = DgPaliAccessory.shared
+                        bar.target = content as? UIView
+                        return bar
+                    }
                     class_addMethod(created, selector, imp_implementationWithBlock(unsafeBitCast(block, to: AnyObject.self)), method_getTypeEncoding(method))
                 }
                 objc_registerClassPair(created)
@@ -160,6 +167,7 @@ class DgBridgeViewController: CAPBridgeViewController {
         }
         watchKeyboard()
         hideFormAccessoryBar()
+        webView?.configuration.userContentController.add(DgPaliSwitch(), name: "dgPaliBar")
 
         bridge?.registerPluginInstance(DgShortcutsPlugin())
         bridge?.registerPluginInstance(DgSitePlugin())
@@ -172,6 +180,124 @@ class DgBridgeViewController: CAPBridgeViewController {
         // which view is on screen; a release build's Capacitor.Plugins.DgSelfTest is undefined.
         bridge?.registerPluginInstance(DgSelfTestPlugin())
         #endif
+    }
+}
+
+// MARK: - The Pāli letters row on the keyboard
+
+// The letters row as part of the keyboard (inputAccessoryView of the web view's content view): the keyboard's own background
+// (UIInputView .keyboard), keys drawn like the keyboard's, and a tap types the letter the way a key does - insertText on the
+// content view, so the page gets the same input events as from the keyboard (Velthuis, suggestions). Paste reads the clipboard
+// only when tapped. "…" opens the second row. The same letters as src/pali-bar.js, which draws the row on Android.
+final class DgPaliAccessory: UIInputView {
+    static var enabled = true
+    static let shared = DgPaliAccessory()
+    weak var target: UIView?
+
+    private static let main = ["ā", "ī", "ū", "ṁ", "ṅ", "ñ", "ṭ", "ḍ", "ṇ", "ḷ"]
+    private static let more = ["ṃ", "ś", "ṣ", "ṛ", "ṝ", "ḹ", "ḥ"]
+    private let stack = UIStackView()
+    private let moreRow = UIStackView()
+    private var height: NSLayoutConstraint!
+
+    init() {
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 50), inputViewStyle: .keyboard)
+        allowsSelfSizing = true
+        translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.spacing = 6
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        let row = UIStackView()
+        row.spacing = 5
+        row.distribution = .fill
+        let paste = key(nil, symbol: "doc.on.clipboard")
+        paste.accessibilityLabel = "Paste"
+        paste.addAction(UIAction { [weak self] _ in
+            guard let text = UIPasteboard.general.string else { return }
+            self?.type(text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " "))
+        }, for: .touchUpInside)
+        paste.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        row.addArrangedSubview(paste)
+        let letters = UIStackView()
+        letters.spacing = 5
+        letters.distribution = .fillEqually
+        Self.main.forEach { letters.addArrangedSubview(letterKey($0)) }
+        row.addArrangedSubview(letters)
+        let dots = key("…", symbol: nil)
+        dots.accessibilityLabel = "More letters"
+        dots.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        dots.addAction(UIAction { [weak self] _ in self?.toggleMore() }, for: .touchUpInside)
+        row.addArrangedSubview(dots)
+        moreRow.spacing = 5
+        moreRow.distribution = .fillEqually
+        Self.more.forEach { moreRow.addArrangedSubview(letterKey($0)) }
+        moreRow.isHidden = true
+        stack.addArrangedSubview(row)
+        stack.addArrangedSubview(moreRow)
+        height = heightAnchor.constraint(equalToConstant: 50)
+        height.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            height,
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            stack.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 4),
+            stack.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -4),
+            row.heightAnchor.constraint(equalToConstant: 40),
+            moreRow.heightAnchor.constraint(equalToConstant: 40)
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    private func type(_ text: String) {
+        guard !text.isEmpty else { return }
+        UIDevice.current.playInputClick()
+        (target as? UIKeyInput)?.insertText(text)
+    }
+
+    private func toggleMore() {
+        moreRow.isHidden.toggle()
+        height.constant = moreRow.isHidden ? 50 : 96
+        target?.reloadInputViews()
+    }
+
+    private func letterKey(_ letter: String) -> UIButton {
+        let b = key(letter, symbol: nil)
+        // A sans-serif l with a dot under it reads as "!": these two are set in a serif face, as on Android.
+        if letter == "ḷ" || letter == "ḹ" { b.titleLabel?.font = UIFont(name: "Georgia", size: 23) }
+        b.addAction(UIAction { [weak self] _ in self?.type(letter) }, for: .touchUpInside)
+        return b
+    }
+
+    // Drawn like the keyboard's own keys: white on the light keyboard, grey on the dark one, rounded, a hairline shadow below.
+    private func key(_ title: String?, symbol: String?) -> UIButton {
+        let b = UIButton(type: .system)
+        if let title = title { b.setTitle(title, for: .normal) }
+        if let symbol = symbol { b.setImage(UIImage(systemName: symbol), for: .normal) }
+        b.titleLabel?.font = .systemFont(ofSize: 22)
+        b.tintColor = .label
+        b.setTitleColor(.label, for: .normal)
+        b.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.42, alpha: 1) : .white }
+        b.layer.cornerRadius = 6
+        b.layer.shadowColor = UIColor.black.cgColor
+        b.layer.shadowOpacity = 0.3
+        b.layer.shadowRadius = 0
+        b.layer.shadowOffset = CGSize(width: 0, height: 1)
+        return b
+    }
+}
+
+extension DgPaliAccessory: UIInputViewAudioFeedback {
+    var enableInputClicksWhenVisible: Bool { true }
+}
+
+// The menu's switch ("Pāli letters above the keyboard", src/pali-bar.js posts 'on'/'off'): the row is there only when it is on.
+final class DgPaliSwitch: NSObject, WKScriptMessageHandler {
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        let on = (message.body as? String) != "off"
+        if DgPaliAccessory.enabled == on { return }
+        DgPaliAccessory.enabled = on
+        DgPaliAccessory.shared.target?.reloadInputViews()
     }
 }
 

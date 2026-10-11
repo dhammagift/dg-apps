@@ -14,6 +14,16 @@
 
   function enabled() { try { return localStorage.getItem(FLAG) !== 'off'; } catch (e) { return true; } }
   function isRu() { return document.documentElement.lang === 'ru'; }
+
+  // iOS app: the row is the keyboard's own accessory, drawn natively (DgPaliAccessory, ios/App/App/DgApp.swift); a row of the
+  // page shook over the keyboard while the page scrolled. Here only the menu switch is passed on.
+  var nativeRow = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dgPaliBar;
+  if (nativeRow) {
+    var tell = function () { try { nativeRow.postMessage(enabled() ? 'on' : 'off'); } catch (e) {} };
+    tell();
+    window.addEventListener('dg:pali-bar', tell);
+    return;
+  }
   function zoom() { return parseFloat(document.documentElement.style.zoom) || 1; }
   function typable(el) {
     if (!el || el.disabled || el.readOnly) return false;

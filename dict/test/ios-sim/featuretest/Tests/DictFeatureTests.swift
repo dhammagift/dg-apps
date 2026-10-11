@@ -34,9 +34,16 @@ final class DictFeatureTests: XCTestCase {
 
     private func value(_ e: XCUIElement) -> String { (e.value as? String) ?? "" }
 
+    // The keyboard's one-time "slide to type" card (a fresh simulator shows it on the first keyboard) hides the page.
+    private func dismissKeyboardTips() {
+        let go = app.buttons["Continue"]
+        if go.waitForExistence(timeout: 1) { go.tap(); sleep(1) }
+    }
+
     private func clearAndFocus() {
         XCTAssertTrue(box.waitForExistence(timeout: 30), "no search box on the page")
         box.tap()
+        dismissKeyboardTips()
         let current = value(box)
         if !current.isEmpty && !current.hasPrefix("kacchapā, kacchapaa") {
             box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count + 2))
@@ -76,7 +83,8 @@ final class DictFeatureTests: XCTestCase {
             page.swipeDown(velocity: .slow)
             ys.append(a.frame.minY)
         }
-        let drift = ys.map { abs($0 - y0) }.max() ?? 0
+        // 0 = not on screen (a swipe down can put the keyboard away); where it is on screen it must be exactly where it was.
+        let drift = ys.filter { $0 > 0 }.map { abs($0 - y0) }.max() ?? 0
         XCTAssertLessThanOrEqual(drift, 1, "the letters row moved while the page scrolled: \(y0) -> \(ys)")
         if !box.exists || !box.isHittable { box.tap() }
         box.typeText("kacchap")

@@ -73,10 +73,12 @@ final class WidgetGalleryTests: XCTestCase {
         sleep(4)
         tree("tree-5-previews")
 
-        // every preview: the Uposatha in three sizes, the Moon, Day & night
-        for page in 1...5 {
+        // every preview: the Uposatha in three sizes, the Moon, Day & night, then the probes of a debug build
+        // (UposathaWidget.swift); a swipe past the last page changes nothing
+        let pages = 13
+        for page in 1...pages {
             shot("preview-\(page)")
-            if page < 5 {
+            if page < pages {
                 board.swipeLeft()
                 sleep(2)
             }

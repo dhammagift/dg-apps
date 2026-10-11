@@ -48,6 +48,10 @@ cp "$SHOTS"/* "$OUT"/ 2>/dev/null
 xcrun simctl spawn "$UDID" log show --start "$START" --style compact \
   --predicate 'process == "UposathaWidget" OR senderImagePath CONTAINS[c] "UposathaWidget" OR (process == "chronod" AND eventMessage CONTAINS[c] "uposatha")' \
   > "$OUT/widget-log.txt" 2>&1
+# The process that draws the archives (and whoever else names the widget): the reason an archive is refused is said there
+xcrun simctl spawn "$UDID" log show --start "$START" --style compact --info \
+  --predicate 'process CONTAINS[c] "WidgetRenderer" OR (process != "chronod" AND process != "UposathaWidget" AND eventMessage CONTAINS[c] "uposatha")' \
+  > "$OUT/widget-renderer-log.txt" 2>&1
 echo "widget-gallery: $(wc -l < "$OUT/widget-log.txt") log lines"
 grep -iE "crash|fatal|terminat|exception|error" "$OUT/widget-log.txt" | head -40
 CRASHES=0

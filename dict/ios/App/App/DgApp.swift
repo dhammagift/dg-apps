@@ -192,6 +192,11 @@ class DgBridgeViewController: CAPBridgeViewController {
 final class DgPaliAccessory: UIInputView {
     static var enabled = true
     static let shared = DgPaliAccessory()
+    // The page's theme, from src/pali-bar.js: the row is drawn on the page's own background, solid - on iOS 26 the keyboard is
+    // glass, and the row's .keyboard background came out see-through, letters on the bare page (owner, TestFlight 563).
+    static var dark = false {
+        didSet { if dark != oldValue { shared.paint() } }
+    }
     weak var target: UIView?
 
     private static let main = ["ā", "ī", "ū", "ṁ", "ṅ", "ñ", "ṭ", "ḍ", "ṇ", "ḷ"]
@@ -235,6 +240,7 @@ final class DgPaliAccessory: UIInputView {
         moreRow.isHidden = true
         stack.addArrangedSubview(row)
         stack.addArrangedSubview(moreRow)
+        paint()
         height = heightAnchor.constraint(equalToConstant: 50)
         height.priority = .defaultHigh
         NSLayoutConstraint.activate([
@@ -248,6 +254,15 @@ final class DgPaliAccessory: UIInputView {
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    func paint() {
+        let dark = Self.dark
+        backgroundColor = dark ? UIColor(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255, alpha: 1) : .white
+        overrideUserInterfaceStyle = dark ? .dark : .light
+        let keyColor = dark ? UIColor(white: 0.24, alpha: 1) : UIColor(white: 0.93, alpha: 1)
+        func keys(_ v: UIView) -> [UIButton] { (v as? UIButton).map { [$0] } ?? v.subviews.flatMap(keys) }
+        keys(stack).forEach { $0.backgroundColor = keyColor }
+    }
 
     private func type(_ text: String) {
         guard !text.isEmpty else { return }
@@ -277,7 +292,6 @@ final class DgPaliAccessory: UIInputView {
         b.titleLabel?.font = .systemFont(ofSize: 22)
         b.tintColor = .label
         b.setTitleColor(.label, for: .normal)
-        b.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.42, alpha: 1) : .white }
         b.layer.cornerRadius = 6
         b.layer.shadowColor = UIColor.black.cgColor
         b.layer.shadowOpacity = 0.3
@@ -294,7 +308,9 @@ extension DgPaliAccessory: UIInputViewAudioFeedback {
 // The menu's switch ("Pāli letters above the keyboard", src/pali-bar.js posts 'on'/'off'): the row is there only when it is on.
 final class DgPaliSwitch: NSObject, WKScriptMessageHandler {
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        let on = (message.body as? String) != "off"
+        let body = (message.body as? String) ?? "on"
+        DgPaliAccessory.dark = body.hasSuffix("dark")
+        let on = !body.hasPrefix("off")
         if DgPaliAccessory.enabled == on { return }
         DgPaliAccessory.enabled = on
         DgPaliAccessory.shared.target?.reloadInputViews()

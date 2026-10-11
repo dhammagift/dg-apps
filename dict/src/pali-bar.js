@@ -19,8 +19,13 @@
   // page shook over the keyboard while the page scrolled. Here only the menu switch is passed on.
   var nativeRow = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dgPaliBar;
   if (nativeRow) {
-    var tell = function () { try { nativeRow.postMessage(enabled() ? 'on' : 'off'); } catch (e) {} };
-    tell();
+    // 'on' / 'off' and the page's theme ('on dark'), so the row's background is the page's own black or white.
+    var tell = function () {
+      var dark = document.body && document.body.classList.contains('dark-mode');
+      try { nativeRow.postMessage((enabled() ? 'on' : 'off') + (dark ? ' dark' : ' light')); } catch (e) {}
+    };
+    var watch = function () { tell(); new MutationObserver(tell).observe(document.body, { attributes: true, attributeFilter: ['class'] }); };
+    if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
     window.addEventListener('dg:pali-bar', tell);
     return;
   }

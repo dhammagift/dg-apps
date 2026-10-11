@@ -1546,6 +1546,77 @@ jobs:
           path: tour
           retention-days: 14
 
+  # The same dictionary on an iPhone simulator (Dynamic Island), driven by XCUITest the way a thumb does it
+  # (dict/test/ios-sim/featuretest, run by dict/test/ios-sim/feature-tour.sh): typing with Velthuis, the letters row on the
+  # keyboard (must not move while the page scrolls under it), the strip under the clock once scrolled, pull to refresh with no
+  # blank frame, the Home Screen quick actions. One video per case. Every run that builds the dictionary: what the owner found
+  # on an iPhone on 2026-10-11 should have been found here first.
+  dict-ios-tour:
+    name: Dictionary app iOS feature tour (simulator)
+    needs: [plan, dict-build]
+    if: needs.plan.outputs.build_dict == 'true'
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: dict-www-${{ github.run_number }}
+          path: dict/www
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+      - name: Restore npm and SwiftPM caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ~/Library/Caches/org.swift.swiftpm
+            dict/ios/DerivedData/SourcePackages
+          key: ${{ runner.os }}-dict-ios-${{ hashFiles('dict/ios/App/CapApp-SPM/Package.swift', 'dict/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-dict-ios-
+      - name: Install the app's dependencies
+        working-directory: dict
+        run: npm ci
+      - name: Select Xcode
+        run: tools/select-xcode.sh
+      - name: Sync Capacitor into dict/ios
+        working-directory: dict
+        run: npx cap sync ios
+      - name: Build for the iOS Simulator
+        working-directory: dict/ios/App
+        run: |
+          set -o pipefail
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath ../DerivedData CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ../../ios-feature-build.log | tail -30
+      - name: Tools for the tour (xcodegen, ffmpeg, Pillow)
+        run: |
+          brew install xcodegen ffmpeg >/dev/null 2>&1 || brew install xcodegen ffmpeg
+          python3 -m pip install --user --quiet --break-system-packages pillow
+      - name: Feature tour on an iPhone simulator
+        working-directory: dict
+        run: test/ios-sim/feature-tour.sh ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app ios-tour
+      - name: Verdict
+        if: always()
+        run: |
+          { echo "### Dictionary iOS feature tour"; echo '```'; cat dict/ios-tour/results.txt 2>/dev/null || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dict-ios-tour-${{ github.run_number }}
+          path: |
+            dict/ios-tour/*.mp4
+            dict/ios-tour/*.png
+            dict/ios-tour/*.log
+            dict/ios-tour/results.txt
+            dict/ios-feature-build.log
+          retention-days: 14
+          if-no-files-found: warn
+
   # ---------------------------------------------------------------------------------------------
   # The Uposatha calendar app (gift.dhamma.uposatha) — a Capacitor shell around the site's calendar
   # page, living in uposatha/ of this repository. The same shape as dict-build above: no database,

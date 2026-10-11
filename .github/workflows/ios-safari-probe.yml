@@ -86,7 +86,7 @@ jobs:
           xcrun simctl install "$UDID" "$APP"
           xcrun simctl launch "$UDID" gift.dhamma.mobile; sleep 40
           xcrun simctl terminate "$UDID" gift.dhamma.mobile || true
-          xcrun simctl launch "$UDID" gift.dhamma.mobile; sleep 20
+          xcrun simctl terminate "$UDID" gift.dhamma.mobile || true
           DATA=$(xcrun simctl get_app_container "$UDID" gift.dhamma.mobile data)
           rm -f "$DATA/Documents/selftest.json"
           # A dhammagift:// link from outside is answered by iOS's «Open in "Dhamma.gift"?», which needs a tap: the

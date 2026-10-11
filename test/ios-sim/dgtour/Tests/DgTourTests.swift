@@ -117,6 +117,11 @@ final class DgTourTests: XCTestCase {
     // for the workflow's screenshot and the page's DgSelfTest report.
     func testOpenLinks() {
         let links = (ProcessInfo.processInfo.environment["DG_LINKS"] ?? "").split(separator: " ").map(String.init)
+        // Launched by the test itself: an app that simctl started is not one XCUITest can attach to ("has not
+        // loaded accessibility", the probe's first run). The first load of a session goes to /4as: let it settle.
+        app.launch()
+        _ = page.waitForExistence(timeout: 40)
+        Thread.sleep(forTimeInterval: 8)
         for link in links {
             openLink(link)
             let notNow = app.buttons["Not now"]

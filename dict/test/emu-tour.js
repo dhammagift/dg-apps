@@ -54,30 +54,18 @@ async function waitFor(js, sec = 10) {
   log('  not true after ' + sec + 's: ' + js);
   return false;
 }
-// A touch on an element, delivered to the page as a real touch sequence over DevTools (Input.dispatchTouchEvent at its
-// centre, in CSS px): the renderer handles it as a finger, focus and keyboard included. `adb input tap` on the computed
-// screen spot did not reach the page on the CI emulator (first run, 2026-10-11: the box never got focus), so the adb
-// spot is only logged once, next to what the page saw, to find out why.
-let adbProbe = true;
+// A real touch (adb input tap) on an element's centre. The page's CSS px map to the screen as innerWidth to the screen's
+// width (the WebView fills it edge to edge): getBoundingClientRect and innerWidth share one space, CSS zoom included.
+// (First run, 2026-10-11: devicePixelRatio times the zoom missed by 10 %; a touch sent over DevTools did not click buttons.)
 async function tapEl(sel, nth = 0) {
   const c = await ev(`(function(){
     var el = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]; if (!el) return null;
     el.scrollIntoView({ block: 'center' });
     var r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, dpr: devicePixelRatio, iw: innerWidth, ih: innerHeight, zoom: document.documentElement.style.zoom || '' };
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, iw: innerWidth };
   })()`);
   if (!c) { log('  nothing to tap: ' + sel); return false; }
-  if (adbProbe) {
-    adbProbe = false;
-    const sx = Math.round(c.x * W / c.iw), sy = Math.round(c.y * W / c.iw);
-    adb(`shell input tap ${sx} ${sy}`); await sleep(1200);
-    log(`  probe: ${sel} at css ${Math.round(c.x)},${Math.round(c.y)} (dpr ${c.dpr}, inner ${c.iw}x${c.ih}, zoom '${c.zoom}', screen ${W}x${H}) -> adb tap ${sx},${sy}; focused after: ` + await ev(`document.activeElement && (document.activeElement.id || document.activeElement.tagName)`));
-  }
-  const p = await page();
-  const pt = [{ x: c.x, y: c.y, id: 1 }];
-  await p.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt });
-  await sleep(60);
-  await p.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  adb(`shell input tap ${Math.round(c.x * W / c.iw)} ${Math.round(c.y * W / c.iw)}`);
   await sleep(1200);
   return true;
 }

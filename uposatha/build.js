@@ -25,7 +25,8 @@ function bridgeSource() {
     return fs.readFileSync(path.join(SRC, 'uposatha-bridge.js'), 'utf8')
         .replace(/^.*\/\/ @rate-prompt .*\n/m, () => block)
         .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'site-no-sw.js'), 'utf8') + fs.readFileSync(path.join(ROOT_SRC, 'site-updater.js'), 'utf8'))
-        .replace(/^.*\/\/ @launch-screens .*\n/m, () => launchScreens());
+        .replace(/^.*\/\/ @launch-screens .*\n/m, () => launchScreens())
+        .replace(/^.*\/\/ @pull-refresh .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'pull-refresh.js'), 'utf8'));
 }
 
 function errorPageSource() {

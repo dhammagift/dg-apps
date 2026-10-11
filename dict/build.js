@@ -26,6 +26,7 @@ function bridgeSource() {
         .replace(/^.*\/\/ @rate-prompt .*\n/m, () => block)
         .replace(/^.*\/\/ @pali-bar .*\n/m, () => fs.readFileSync(path.join(SRC, 'pali-bar.js'), 'utf8'))
         .replace(/^.*\/\/ @dict-edge .*\n/m, () => fs.readFileSync(path.join(SRC, 'dict-edge.js'), 'utf8'))
+        .replace(/^.*\/\/ @pull-refresh .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'pull-refresh.js'), 'utf8'))
         .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(ROOT_SRC, 'site-no-sw.js'), 'utf8') + fs.readFileSync(path.join(ROOT_SRC, 'site-updater.js'), 'utf8'));
 }
 

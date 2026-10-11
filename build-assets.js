@@ -699,7 +699,8 @@ function copyNativeFiles() {
     // The launch splash and "no connection" screen (docs/launch-screens/), and the mark they draw.
     fs.copyFileSync(path.join(SRC, 'launch-screens.js'), path.join(WWW, 'launch-screens.js'));
     fs.copyFileSync(path.join(SRC, 'assets', 'dg-full.png'), path.join(WWW, 'launch-dg-full.png'));
-    return 5;
+    fs.copyFileSync(path.join(SRC, 'pull-refresh.js'), path.join(WWW, 'pull-refresh.js'));
+    return 6;
 }
 
 // The ASSETS list above is hand-maintained, so a NEW <script>/<link> added to the site is copied

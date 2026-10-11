@@ -1124,3 +1124,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })();
+
+// @pull-refresh (inlined from ../src/pull-refresh.js by uposatha/build.js): a pull down from the top of the page reloads it

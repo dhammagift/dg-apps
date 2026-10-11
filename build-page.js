@@ -48,7 +48,9 @@ const APP_SCRIPTS = `<!-- Offline data shim: installs window.fetch interception 
 <script src="/deep-link.js"></script>
 <!-- Routes memo/login/mirror-link's external opens through the device's real browser instead of
      this app's own WebView — see native-bridge.js for why plain navigation doesn't work here. -->
-<script src="/native-bridge.js"></script>`;
+<script src="/native-bridge.js"></script>
+<!-- Pull down from the top of the page to reload it, as in a browser (src/pull-refresh.js, shared by all three apps). -->
+<script src="/pull-refresh.js"></script>`;
 
 const APP_SCRIPTS_MARKER = '<!-- dg:app-scripts -->';
 
@@ -103,7 +105,7 @@ function dropServiceWorker(html) {
 // build failure — it fails on the device, offline, where nobody is watching a console.
 function verify(html) {
     const problems = [];
-    for (const tag of ['/offline/platform.js', '/launch-screens.js', '/offline/app.js', '/offline/offline-status.js', '/native-bridge.js']) {
+    for (const tag of ['/offline/platform.js', '/launch-screens.js', '/offline/app.js', '/offline/offline-status.js', '/native-bridge.js', '/pull-refresh.js']) {
         const count = html.split(`src="${tag}"`).length - 1;
         if (count === 0) problems.push(`missing <script src="${tag}">`);
         else if (count > 1) problems.push(`duplicate <script src="${tag}"> (${count}x) — the offline layer would load twice`);

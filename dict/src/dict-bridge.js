@@ -480,6 +480,8 @@
 
 // @dict-edge (inlined from src/dict-edge.js by dict/build.js): edge to edge, the page's own strip behind the status bar
 
+// @pull-refresh (inlined from ../src/pull-refresh.js by dict/build.js): a pull down from the top of the page reloads it
+
 // A link to the main site (the compass's texts, "Open on Dhamma.Gift", Help) leaves the dictionary: dhamma.gift is
 // in allowNavigation, so a plain link loaded the whole site INTO this WebView - without this bridge, with white strips
 // round it and no way back but the Back button. Such links open in the in-app browser tab over the dictionary.

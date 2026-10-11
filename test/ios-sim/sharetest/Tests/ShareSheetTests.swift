@@ -168,7 +168,11 @@ final class ShareSheetTests: XCTestCase {
         // The failed link-search left its own query in the box; backspace it out by its own length
         // rather than assume the field starts empty (an empty web input can report its placeholder
         // as `.value`, which is harmless to over-delete into).
+        // Run 577: the Clear tap left the link in the box, and the focusing tap put the cursor at the
+        // START of it again, so the backspaces deleted nothing. A tap at the field's right end puts
+        // the cursor after the last character first.
         if let existing = box.value as? String, !existing.isEmpty {
+            box.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
             box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
         }
         // Said plainly when the link is still there, instead of a "no offline result" for a query

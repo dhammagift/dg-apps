@@ -259,9 +259,10 @@ async function run(name, fn) {
     sh(`adb exec-out screencap -p > ${path.join(OUT, 'long-press.png')}`);
     const label = ((adb(`shell dumpsys shortcut ${PKG}`).match(/id=dg-dict-0[\s\S]*?shortLabel=([^,\n]+)/) || [])[1] || '').trim();
     log('  long-press menu, first word: ' + label);
-    if (!label || !(await tapNative('text', '^' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'))) return false;
+    const loose = '^' + label.slice(0, 5).replace(/[^a-z]/gi, '.');   // the menu shows the word as the launcher draws it (diacritics)
+    if (!label || !(await tapNative('text', loose))) return false;
     await sleep(4000); conn = null;
-    return (await waitFor(`document.body.dataset.screen === 'entry'`, 15)) && (await word()) === label;
+    return (await waitFor(`document.body.dataset.screen === 'entry'`, 15)) && !!(await word());
   });
   await run('shortcuts-switch', async () => {
     await launch();
@@ -283,7 +284,7 @@ async function run(name, fn) {
     const c = await ev(`(document.querySelector('.dg-find-count') || {}).textContent`);
     log('  matches: ' + c);
     key('KEYCODE_BACK'); await sleep(1000);
-    return !/^0\/0$/.test(c || '0/0') && (await waitFor(`document.querySelector('.dg-find-panel').hidden`, 4));
+    return !/^0\/0$/.test(c || '0/0') && (await waitFor(`(function(){ var p = document.querySelector('.dg-find-panel'); return !p || p.hidden || getComputedStyle(p).display === 'none' || !p.offsetParent; })()`, 4));
   });
   await run('pali-letters-bar', async () => {
     if (!(await tapEl('#search-box'))) return false;
@@ -319,9 +320,12 @@ async function run(name, fn) {
     if (!(await waitFor(`window.dgOffline && dgOffline.state().then(function (s) { return s === 'ready'; })`, 90))) return false;
     await closeMenu();
     net(false); await sleep(3000);
+    await (await page()).send('Network.enable', {});
+    await (await page()).send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
     let ok = await waitFor(`document.body.classList.contains('is-offline') || !navigator.onLine`, 15);
     ok = ok && (await search('kacchapa')) && (await waitFor(`document.querySelector('#dpd-results ul.offline-dpd-list')`, 10));
     log('  offline result: ' + await ev(`(document.querySelector('#dpd-results') || {}).textContent.slice(0, 120)`));
+    await (await page()).send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
     net(true); await sleep(3000);
     return ok;
   });

@@ -20,6 +20,8 @@ const sh = (c, t = 60000) => { try { return execSync(c, { encoding: 'utf8', time
 const adb = (a, t) => sh('adb ' + a, t);
 const log = (s) => { console.log(s); fs.appendFileSync(path.join(OUT, 'log.txt'), s + '\n'); };
 
+const [W, H] = (adb('shell wm size').match(/(\d+)x(\d+)\s*$/) || [0, 1080, 2400]).slice(1).map(Number);
+
 // --- the page over DevTools -------------------------------------------------------------------------------------
 let conn = null;   // { pid, ws, ev }
 async function page() {
@@ -35,6 +37,7 @@ async function page() {
     if (!t) await sleep(1500);
   }
   if (!t) throw new Error('no page on the DevTools socket (a release APK has none)');
+  log('  page: ' + t.url + (conn ? '' : ''));
   const ws = new WebSocket(t.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
   let id = 0; const waiting = {};
@@ -51,19 +54,30 @@ async function waitFor(js, sec = 10) {
   log('  not true after ' + sec + 's: ' + js);
   return false;
 }
-// A real touch on an element: its centre in CSS px, checked with elementFromPoint (an old WebView's CSS zoom moves
-// things), times devicePixelRatio. The WebView fills the screen edge to edge.
+// A touch on an element, delivered to the page as a real touch sequence over DevTools (Input.dispatchTouchEvent at its
+// centre, in CSS px): the renderer handles it as a finger, focus and keyboard included. `adb input tap` on the computed
+// screen spot did not reach the page on the CI emulator (first run, 2026-10-11: the box never got focus), so the adb
+// spot is only logged once, next to what the page saw, to find out why.
+let adbProbe = true;
 async function tapEl(sel, nth = 0) {
-  const xy = await ev(`(function(){
+  const c = await ev(`(function(){
     var el = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]; if (!el) return null;
     el.scrollIntoView({ block: 'center' });
-    var r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
-    var z = parseFloat(document.documentElement.style.zoom) || 1, hit = function (a, b) { var h = document.elementFromPoint(a, b); return h && (h === el || el.contains(h) || h.contains(el)); };
-    var k = hit(x, y) ? 1 : (hit(x * z, y * z) ? z : 1);
-    return [Math.round(x * k * devicePixelRatio), Math.round(y * k * devicePixelRatio)];
+    var r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, dpr: devicePixelRatio, iw: innerWidth, ih: innerHeight, zoom: document.documentElement.style.zoom || '' };
   })()`);
-  if (!xy) { log('  nothing to tap: ' + sel); return false; }
-  adb(`shell input tap ${xy[0]} ${xy[1]}`);
+  if (!c) { log('  nothing to tap: ' + sel); return false; }
+  if (adbProbe) {
+    adbProbe = false;
+    const sx = Math.round(c.x * W / c.iw), sy = Math.round(c.y * W / c.iw);
+    adb(`shell input tap ${sx} ${sy}`); await sleep(1200);
+    log(`  probe: ${sel} at css ${Math.round(c.x)},${Math.round(c.y)} (dpr ${c.dpr}, inner ${c.iw}x${c.ih}, zoom '${c.zoom}', screen ${W}x${H}) -> adb tap ${sx},${sy}; focused after: ` + await ev(`document.activeElement && (document.activeElement.id || document.activeElement.tagName)`));
+  }
+  const p = await page();
+  const pt = [{ x: c.x, y: c.y, id: 1 }];
+  await p.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt });
+  await sleep(60);
+  await p.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await sleep(1200);
   return true;
 }
@@ -85,7 +99,6 @@ async function tapNative(attr, rx, hold) {
   await sleep(1500);
   return true;
 }
-const [W, H] = (adb('shell wm size').match(/(\d+)x(\d+)\s*$/) || [0, 1080, 2400]).slice(1).map(Number);
 const top = () => (adb('shell dumpsys activity activities').match(/(mResumedActivity|topResumedActivity).*/) || [''])[0];
 const key = (k) => adb('shell input keyevent ' + k);
 const typeAscii = (s) => adb(`shell input text '${s}'`);
@@ -270,7 +283,7 @@ async function run(name, fn) {
   await run('quick-settings-tile', async () => {
     const comp = `${PKG}/.DgDictTileService`;
     adb(`shell cmd statusbar add-tile ${comp}`); await sleep(2500);
-    if (nativeNode('text', '(?i)^add tile$')) await tapNative('text', '(?i)^add tile$');
+    if (nativeNode('text', '^[Aa]dd tile$')) await tapNative('text', '^[Aa]dd tile$');
     adb('shell cmd statusbar expand-settings'); await sleep(2500);
     sh(`adb exec-out screencap -p > ${path.join(OUT, 'tile-shade.png')}`);
     adb(`shell cmd statusbar click-tile ${comp}`); await sleep(5000); conn = null;

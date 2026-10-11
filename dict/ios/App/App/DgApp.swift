@@ -599,6 +599,10 @@ final class DgPullHold: NSObject, WKScriptMessageHandler {
         super.init()
         guard let web = web else { return }
         // A short page (Uposatha's tabs, an empty search) is pulled too, as in Safari.
+        // Capacitor turns the scroll view's bounce off when it creates the web view (CAPBridgeViewController:
+        // `scrollView.bounces = false`); without it nothing can be pulled past the top and the control never
+        // fires (run 589's video: the pull did nothing). Bounce on, as in Safari.
+        web.scrollView.bounces = true
         web.scrollView.alwaysBounceVertical = true
         web.scrollView.refreshControl = control
         control.addTarget(self, action: #selector(pulled), for: .valueChanged)

@@ -147,6 +147,8 @@ class DgBridgeViewController: CAPBridgeViewController {
         // No scroll indicators: the page is the whole interface.
         webView?.scrollView.showsVerticalScrollIndicator = false
         webView?.scrollView.showsHorizontalScrollIndicator = false
+        // Pull to refresh holds the page on screen while it reloads (DgPullHold below, src/pull-refresh.js).
+        webView?.configuration.userContentController.add(DgPullHold(webView), name: "dgPullHold")
 
         // The bridge (www/uposatha-bridge.js, the same file Android injects) runs before the page's own scripts. Added here and not
         // in webViewConfiguration(for:), because Capacitor replaces the user content controller after that call.
@@ -741,5 +743,58 @@ public class DgWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
         defaults.set(json, forKey: "data")
         WidgetCenter.shared.reloadAllTimelines()
         call.resolve()
+    }
+}
+
+// Pull to refresh with the page held on screen (src/pull-refresh.js; the same class in all three apps, as
+// Android's DgPullHoldPlugin.java). Owner, 2026-10-11: the page should stay exactly as it is and the new
+// content just appear; a bare reload painted blank and jumped, a fade over it was "дорогое мелькание".
+// "hold" puts a picture of the web view over it, with the page's spinner cut out of the picture and turning,
+// and reloads the page under it; "release", sent by the new page once it has loaded with its fonts, takes
+// the picture away, so the next frame is the new page, whole.
+final class DgPullHold: NSObject, WKScriptMessageHandler {
+    private weak var web: WKWebView?
+    private var shot: UIView?
+    private var token = 0
+
+    init(_ web: WKWebView?) { self.web = web }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        let body = message.body as? [String: Any] ?? [:]
+        release()
+        guard body["op"] as? String == "hold", let web = web else { return }
+        let mine = token
+        guard let parent = web.superview, let picture = web.snapshotView(afterScreenUpdates: false) else { web.reload(); return }
+        picture.frame = web.frame
+        parent.insertSubview(picture, aboveSubview: web)
+        shot = picture
+        // The spinner's square, in CSS px from the viewport's top left: points in the web view, past any inset.
+        if let x = body["x"] as? Double, let y = body["y"] as? Double, let size = body["size"] as? Double, size > 0 {
+            let inset = web.scrollView.adjustedContentInset
+            let square = CGRect(x: x + inset.left, y: y + inset.top, width: size, height: size)
+            if let ring = web.resizableSnapshotView(from: square, afterScreenUpdates: false, withCapInsets: .zero) {
+                ring.frame = square
+                ring.layer.cornerRadius = size / 2
+                ring.clipsToBounds = true
+                let turn = CABasicAnimation(keyPath: "transform.rotation.z")
+                turn.fromValue = 0
+                turn.toValue = Double.pi * 2
+                turn.duration = 0.7
+                turn.repeatCount = .infinity
+                ring.layer.add(turn, forKey: "spin")
+                picture.addSubview(ring)
+            }
+        }
+        web.reload()
+        // A page that never says it is ready (an error, a page without pull-refresh.js) is not held for ever.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            if self?.token == mine { self?.release() }
+        }
+    }
+
+    private func release() {
+        token += 1
+        shot?.removeFromSuperview()
+        shot = nil
     }
 }

@@ -76,6 +76,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgSitePlugin.class);
         // Paste for the Pali letters row (src/pali-bar.js): reads the clipboard only when the key is tapped.
         registerPlugin(DgClipboardPlugin.class);
+        // Pull to refresh holds the page on screen while it reloads (DgPullHoldPlugin, src/pull-refresh.js).
+        registerPlugin(DgPullHoldPlugin.class);
         // The launch splash is the animated mark (res/drawable/dg_splash_icon.xml, 900 ms). The system takes the
         // splash down the moment the first frame is ready, which on a warm start is before the mark has drawn;
         // holding it for the length of the animation is what lets it play, and costs a cold start nothing it

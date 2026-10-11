@@ -61,6 +61,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgSitePlugin.class);
         // Native Google sign-in (dg-apps#43): the account sheet, not a browser page with a second button.
         registerPlugin(DgGoogleSignInPlugin.class);
+        // Pull to refresh holds the page on screen while it reloads (DgPullHoldPlugin, src/pull-refresh.js).
+        registerPlugin(DgPullHoldPlugin.class);
         // OS-level search: the offline library's metadata into Android's own AppSearch, so a sutta
         // is findable from the phone's search. Platform API only, so it adds no dependency and no
         // APK weight. Registered only from Android 12 (where android.app.appsearch exists at all)

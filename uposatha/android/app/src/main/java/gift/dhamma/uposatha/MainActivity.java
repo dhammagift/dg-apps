@@ -72,6 +72,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DgSharePlugin.class);
         // The home-screen widget's data (WidgetProvider draws it, uposatha/widget/WIDGET.md).
         registerPlugin(DgWidgetPlugin.class);
+        // Pull to refresh holds the page on screen while it reloads (DgPullHoldPlugin, src/pull-refresh.js).
+        registerPlugin(DgPullHoldPlugin.class);
         // No DgBars any more (dg-apps#41): the page runs edge to edge under transparent system bars
         // (viewport-fit=cover, set by uposatha-bridge.js; capacitor.config.json -> SystemBars passes
         // the insets through to the page).

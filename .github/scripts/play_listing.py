@@ -7,6 +7,10 @@ changed, the edit committed; nothing else in the edit). Run by play-listing.yml 
                                                     from {"play": {"title": .., "shortDescription": .., "fullDescription": ..}}
   play_listing.py <package> notes <json file> <lang> <track>  "What's new" of the newest release on that track, for that
                                                     language, from {"play": {"releaseNotes": ..}} (the release itself is untouched)
+  play_listing.py <package> names [apply]           every release on every track named "<build> (<version>)" like the
+                                                    console's own (432 (1.18)); an API upload without a name showed only
+                                                    the version. Only the name changes, nothing is uploaded; without
+                                                    "apply" it only prints what it would rename
 """
 import json, os, sys
 
@@ -46,6 +50,30 @@ try:
         api.edits().commit(packageName=pkg, editId=edit).execute()
         edit = None
         print(f"{track}: release {rel.get('name')} ({rel.get('versionCodes')}, {rel.get('status')}): What's new set for {lang} and committed")
+    elif action == "names":
+        import re
+        changed = False
+        for t in api.edits().tracks().list(packageName=pkg, editId=edit).execute().get("tracks", []):
+            touched = False
+            for rel in t.get("releases", []):
+                codes = [int(c) for c in rel.get("versionCodes", [])]
+                name = rel.get("name", "")
+                # An unnamed upload is named after its version (1.19); one already "<build> (<version>)" stays.
+                if not codes or re.match(r"^\d+ \(", name):
+                    continue
+                new = f"{max(codes)} ({name})"
+                print(f"{t['track']}: {name!r} -> {new!r} ({rel.get('status')})")
+                rel["name"] = new
+                touched = True
+            if touched:
+                api.edits().tracks().update(packageName=pkg, editId=edit, track=t["track"], body=t).execute()
+                changed = True
+        if changed and rest[:1] == ["apply"]:
+            api.edits().commit(packageName=pkg, editId=edit).execute()
+            edit = None
+            print("committed")
+        else:
+            print("nothing committed" + ("" if changed else " (nothing to rename)"))
     else:
         sys.exit("unknown action " + action)
 finally:

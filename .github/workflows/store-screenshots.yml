@@ -1,0 +1,87 @@
+name: Store screenshots (App Store Connect)
+
+# Puts a prepared set of screenshots (PNG files at a public address, in the order of their names) into an app's App Store Connect
+# version: replaces the set of one display type of one locale. Never sends anything for review, and touches nothing when the
+# version is not editable (waiting for review, in review, live): uposatha/tools/asc-screenshots.py says so and stops.
+# Started by hand only (owner, 2026-10-12: his own screenshots from the phone, 1320x2868, instead of the simulator tour's).
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Which app's listing
+        required: true
+        type: choice
+        options: [uposatha, dict]
+      files:
+        description: Space-separated PNG file names, uploaded in the order of their names
+        required: true
+        type: string
+      base_url:
+        description: 'Where the files are (default: https://test.dhamma.gift/assets/shots/store/<app>/)'
+        required: false
+        type: string
+      display_type:
+        description: 'App Store Connect display type (APP_IPHONE_67 = 6.7"/6.9": 1290x2796 or 1320x2868)'
+        required: false
+        type: string
+        default: APP_IPHONE_67
+      version:
+        required: false
+        type: string
+        default: '1.0'
+      locale:
+        required: false
+        type: string
+        default: en-US
+
+concurrency:
+  group: store-screenshots-${{ inputs.app }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: Screenshots to App Store Connect
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch the files
+        env:
+          APP: ${{ inputs.app }}
+          FILES: ${{ inputs.files }}
+          BASE: ${{ inputs.base_url }}
+        run: |
+          set -euo pipefail
+          BASE="${BASE:-https://test.dhamma.gift/assets/shots/store/$APP/}"
+          mkdir -p shots
+          for f in $FILES; do
+            case "$f" in */*|*..*) echo "::error::bad file name $f"; exit 1 ;; esac
+            curl -fsSL "${BASE%/}/$f" -o "shots/$f"
+            file "shots/$f" | grep -q "PNG image data" || { echo "::error::$f is not a PNG"; exit 1; }
+            file "shots/$f"
+          done
+
+      - name: Upload (never sent for review)
+        env:
+          APP: ${{ inputs.app }}
+          TYPE: ${{ inputs.display_type }}
+          VERSION: ${{ inputs.version }}
+          LOCALE: ${{ inputs.locale }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          case "$APP" in
+            uposatha) ID=6816601259 ;;
+            dict) ID=6816639947 ;;
+          esac
+          pip3 install --quiet --break-system-packages cryptography
+          python3 uposatha/tools/asc-screenshots.py --app-id "$ID" --version "$VERSION" --locale "$LOCALE" --set "$TYPE=shots"

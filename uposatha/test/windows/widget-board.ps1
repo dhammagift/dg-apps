@@ -107,14 +107,18 @@ Set-ItemProperty $dev -Name AllowAllTrustedApps -Value 1 -Type DWord
 Log 'Developer Mode: on'
 $rt = Get-AppxPackage | Where-Object { $_.Name -match 'WindowsAppRuntime|WinAppRuntime' }
 Log ("Windows App SDK runtime before: " + $(if ($rt) { ($rt | ForEach-Object { $_.Name + ' ' + $_.Version }) -join '; ' } else { 'none' }))
-if (-not ($rt | Where-Object { $_.Name -match 'WindowsAppRuntime\.1\.' })) {
-  try {
-    $arch = if ($env:PROCESSOR_ARCHITECTURE -match 'ARM') { 'arm64' } else { 'x64' }
-    $exe = "$env:TEMP\windowsappruntimeinstall.exe"
-    Invoke-WebRequest "https://aka.ms/windowsappsdk/1.6/latest/windowsappruntimeinstall-$arch.exe" -OutFile $exe -UseBasicParsing
-    $p = Start-Process $exe -ArgumentList '--quiet' -Wait -PassThru
-    Log "Windows App SDK runtime installer ($arch): exit $($p.ExitCode)"
-  } catch { Log "Windows App SDK runtime: not installed: $_" }
+# Microsoft's guide names version 1.2 (run 6: with 1.6, 1.8 and 2.x there and Developer Mode on, the picker still had no PWA widget)
+if (-not ($rt | Where-Object { $_.Name -match 'WindowsAppRuntime\.1\.2' })) {
+  $arch = if ($env:PROCESSOR_ARCHITECTURE -match 'ARM') { 'arm64' } else { 'x64' }
+  foreach ($u in @("https://aka.ms/windowsappsdk/1.2/latest/windowsappruntimeinstall-$arch.exe", "https://aka.ms/windowsappsdk/1.2/1.2.230313.1/windowsappruntimeinstall-$arch.exe")) {
+    try {
+      $exe = "$env:TEMP\windowsappruntimeinstall.exe"
+      Invoke-WebRequest $u -OutFile $exe -UseBasicParsing
+      $p = Start-Process $exe -ArgumentList '--quiet' -Wait -PassThru
+      Log "Windows App SDK 1.2 runtime installer ($arch, $u): exit $($p.ExitCode)"
+      if ($p.ExitCode -eq 0) { break }
+    } catch { Log "Windows App SDK 1.2 runtime from $u : $_" }
+  }
   $rt = Get-AppxPackage | Where-Object { $_.Name -match 'WindowsAppRuntime|WinAppRuntime' }
   Log ("Windows App SDK runtime after: " + $(if ($rt) { ($rt | ForEach-Object { $_.Name + ' ' + $_.Version }) -join '; ' } else { 'none' }))
 }
@@ -123,7 +127,9 @@ if (-not ($rt | Where-Object { $_.Name -match 'WindowsAppRuntime\.1\.' })) {
 $k = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
 New-Item -Force $k | Out-Null
 Set-ItemProperty $k -Name HideFirstRunExperience -Value 1 -Type DWord
-Set-ItemProperty $k -Name WebAppInstallForceList -Value ('[{"url":"' + $Url + '","default_launch_container":"window","create_desktop_shortcut":true}]')
+# Microsoft's own demo PWA with a widget goes in beside ours: the control. Its widget in the picker and ours not = our manifest or
+# worker; neither = this machine (or an app installed by policy) gets no PWA widgets at all.
+Set-ItemProperty $k -Name WebAppInstallForceList -Value ('[{"url":"' + $Url + '","default_launch_container":"window","create_desktop_shortcut":true},{"url":"https://microsoftedge.github.io/Demos/pwamp/","default_launch_container":"window","create_desktop_shortcut":true}]')
 Start-Process $edge -ArgumentList '--no-first-run', $Url
 Start-Sleep 45
 Shot 'edge'; Tree 'edge'
@@ -131,8 +137,10 @@ Get-ChildItem "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Web Applicatio
 Get-ChildItem "$env:USERPROFILE\Desktop", "$env:PUBLIC\Desktop" -ErrorAction SilentlyContinue | Select-Object FullName | Out-File -Append "$Out\web-applications.txt" -Width 400
 Get-AppxPackage | Where-Object { $_.Name -match 'edge|uposatha|dhamma|pwa' } | Select-Object Name, Version, PackageFamilyName | Format-Table -AutoSize | Out-File -Append "$Out\web-applications.txt" -Width 400
 # the app's own window once, so that its worker is running
-$lnk = Get-ChildItem "$env:USERPROFILE\Desktop\*.lnk" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'Uposatha' } | Select-Object -First 1
-if ($lnk) { Start-Process $lnk.FullName; Start-Sleep 25; Shot 'app-window' } else { Log 'no Uposatha shortcut on the desktop: the PWA was not installed' }
+foreach ($app in 'PWAmp', 'Uposatha') {
+  $lnk = Get-ChildItem "$env:USERPROFILE\Desktop\*.lnk" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $app } | Select-Object -First 1
+  if ($lnk) { Start-Process $lnk.FullName; Start-Sleep 20; Shot "app-window-$app" } else { Log "no $app shortcut on the desktop: that PWA was not installed" }
+}
 
 # 3. The Widgets Board
 Dismiss
@@ -144,6 +152,10 @@ Start-Sleep 12
 Shot 'board'
 if (Tap '^Widgets$' '^Add widgets$') { Start-Sleep 8; Shot 'board-add'; Tree 'board-add' } else { Tree 'board' }
 # the picker lists the apps that have widgets; ours is there only when Windows took the PWA's widgets
+$names = @()
+try { foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.Name -match 'WidgetPicker') { foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.ControlType.ProgrammaticName -match 'ListItem') { $names += $e.Current.Name } } } } } catch { }
+Log ("picker lists: " + ($names -join ' | '))
+Log ("PWAmp (the control) in the picker: " + [bool]($names -match 'PWAmp') + "; Uposatha: " + [bool]($names -match 'Uposatha|Day & night|^Month$'))
 if (Tap 'WidgetPicker' 'Uposatha|Day & night|^Month$') {
   Start-Sleep 8; Shot 'picker-uposatha'; Tree 'picker-uposatha'
   if (Tap 'WidgetPicker' '^Pin$') { Start-Sleep 15; Shot 'board-pinned'; Tree 'board-pinned' }

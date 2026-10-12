@@ -247,7 +247,7 @@ if ($Size) {
     $hit = $false
     foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
       foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) {
-        if (-not $hit -and $e.Current.Name -match ('^' + $Size + '$')) { $p = $null; if ($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); $hit = $true; Log "size $Size chosen" } }
+        if (-not $hit -and $e.Current.Name -match ('^' + $Size + '( |$)')) { $p = $null; if ($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); $hit = $true; Log "size $Size chosen" } }
       }
     }
     if (-not $hit) { Log "no menu item $Size" }

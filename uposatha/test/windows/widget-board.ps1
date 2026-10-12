@@ -1,7 +1,7 @@
 # The Uposatha PWA widget on a real Windows 11 Widgets Board (a GitHub runner): installs the PWA into Edge by policy, opens the
 # board (Win+W), tries to add the widget, and leaves a screenshot and the board's element tree after every step.
 # A probe: it fails nothing; what it found is read from the artifact (owner, 2026-10-11: is there a way to test the Windows widget).
-param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '')
+param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '', [int]$Only = -1)
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
@@ -211,6 +211,7 @@ function TapNth([string]$window, [string]$pattern, [int]$n) {
 # every widget of ours is pinned: the picker is opened anew for each (it closes after a pin); every step is tried a few times,
 # because the board and the picker close when they lose the focus
 for ($n = 0; $n -lt 3; $n++) {
+  if ($Only -ge 0 -and $n -ne $Only) { continue }   # one widget alone is the first in the board's column, where a screenshot shows it
   $done = $false
   for ($try = 1; $try -le 3 -and -not $done; $try++) {
     $inPicker = $false

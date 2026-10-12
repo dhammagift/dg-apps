@@ -11,9 +11,9 @@ on:
         options: [dict, uposatha, dg, noapp]
         default: dict
       action:
-        description: 'status (read only) / set'
+        description: "status (read only) / set (the texts) / notes (What's new of the newest release on the alpha track)"
         type: choice
-        options: [status, set]
+        options: [status, set, notes]
         default: status
       file:
         description: 'set: the JSON file with a "play" block (e.g. dict/store/listing.json)'
@@ -51,5 +51,6 @@ jobs:
           pip install --quiet google-api-python-client google-auth
           case "$APP" in dict) P=gift.dhamma.pali ;; uposatha) P=gift.dhamma.uposatha ;; dg) P=gift.dhamma.twa ;; noapp) P=gift.dhamma.noapp ;; esac
           if [ "$ACTION" = set ]; then python3 .github/scripts/play_listing.py "$P" set "$FILE" "$LANG_CODE" | tee out.txt
+          elif [ "$ACTION" = notes ]; then python3 .github/scripts/play_listing.py "$P" notes "$FILE" "$LANG_CODE" alpha | tee out.txt
           else python3 .github/scripts/play_listing.py "$P" status | tee out.txt; fi
           { echo "### Play listing: $ACTION ($APP)"; echo '```'; cat out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

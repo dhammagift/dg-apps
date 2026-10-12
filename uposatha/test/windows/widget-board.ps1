@@ -268,6 +268,10 @@ Shot 'board-after-pins'; BoardTexts 'now'
 Start-Sleep 45
 OpenBoard | Out-Null
 Shot 'board-a-minute-later'; BoardTexts 'later'
+# A tap on the card (its selectAction is a button named after the widget): the app is to open on that widget's tab. The worker asks
+# for /uposatha-calendar?...&source=widget&tab=..., which the test site's access log shows; the screenshot shows the window.
+OpenBoard | Out-Null
+if (TapNth '^Widgets$' '^(Uposatha|Day & night|Month)$' 0) { Start-Sleep 15; Shot 'after-tap'; Tree 'after-tap' } else { Log 'no card button to tap' }
 Start-Sleep 5
 Shot 'end'
 Get-ChildItem $Out | Select-Object Name, Length

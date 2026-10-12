@@ -1,7 +1,7 @@
 # The Uposatha PWA widget on a real Windows 11 Widgets Board (a GitHub runner): installs the PWA into Edge by policy, opens the
 # board (Win+W), tries to add the widget, and leaves a screenshot and the board's element tree after every step.
 # A probe: it fails nothing; what it found is read from the artifact (owner, 2026-10-11: is there a way to test the Windows widget).
-param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '', [int]$Only = -1, [string]$Size = '')
+param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '', [int]$Only = -1, [string]$Size = '', [string]$Theme = '')
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
@@ -86,6 +86,15 @@ function Dismiss {
     Shot "first-run-click-$i"
   }
   Log ('first-run screens: ' + $(if (FirstRunThere) { 'still there' } else { 'gone' }))
+}
+
+# 0. Windows in the dark theme, when asked (the board tells a widget its theme: $host.hostTheme)
+if ($Theme -eq 'dark') {
+  $t = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+  New-Item -Force $t | Out-Null
+  Set-ItemProperty $t -Name AppsUseLightTheme -Value 0 -Type DWord
+  Set-ItemProperty $t -Name SystemUsesLightTheme -Value 0 -Type DWord
+  Log 'Windows theme: dark'
 }
 
 # 1. What this machine is

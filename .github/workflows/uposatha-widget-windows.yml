@@ -22,6 +22,11 @@ on:
         required: false
         type: string
         default: ''
+      theme:
+        description: 'dark = switch Windows to the dark theme first; empty = as it is (light)'
+        required: false
+        type: string
+        default: ''
       package:
         description: 'A PWABuilder Windows package (zip with *.sideload.msix and utils/pwainstaller.exe) to install as well; empty = none'
         required: false
@@ -47,7 +52,7 @@ jobs:
 
       - name: Install the PWA, open the board, add the widget
         shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./uposatha/test/windows/widget-board.ps1 -Url '${{ inputs.url }}' -Out win-shots -Package '${{ inputs.package }}' -Only ${{ inputs.only }} -Size '${{ inputs.size }}'
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./uposatha/test/windows/widget-board.ps1 -Url '${{ inputs.url }}' -Out win-shots -Package '${{ inputs.package }}' -Only ${{ inputs.only }} -Size '${{ inputs.size }}' -Theme '${{ inputs.theme }}'
 
       - name: Upload the screenshots and the trees
         if: always()

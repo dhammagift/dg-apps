@@ -170,13 +170,22 @@ if ($Package) {
 Dismiss
 # Whatever is open over the desktop (run 5: the Start menu) is closed first; the board itself closes as soon as it loses the
 # focus, so its button is pressed before anything slow (the element tree) is done.
-[System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 1
-[Keys]::WinPlus(0x57)   # Win+W
-Start-Sleep 12
+function BoardThere { foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.Name -match '^Widgets$') { return $true } }; return $false }
+# Win+W toggles the board, so it is pressed only while the board is not there (run 11: one press opened nothing)
+function OpenBoard {
+  for ($i = 1; $i -le 4; $i++) {
+    if (BoardThere) { return $true }
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 1
+    [Keys]::WinPlus(0x57)   # Win+W
+    Start-Sleep 10
+  }
+  $there = BoardThere; if (-not $there) { Log 'the Widgets Board did not open' }; return $there
+}
+OpenBoard | Out-Null
 Shot 'board'
 # the board's content is a web page and may still be loading (run 7: the window was there, the button not yet)
 $opened = $false
-for ($i = 1; $i -le 8 -and -not $opened; $i++) { if (Tap '^Widgets$' '^Add widgets$') { $opened = $true } else { Start-Sleep 5 } }
+for ($i = 1; $i -le 8 -and -not $opened; $i++) { OpenBoard | Out-Null; if (Tap '^Widgets$' '^Add widgets$') { $opened = $true } else { Start-Sleep 5 } }
 if ($opened) { Start-Sleep 8; Shot 'board-add'; Tree 'board-add' } else { Shot 'board-no-button'; Tree 'board' }
 # the picker lists the apps that have widgets; ours is there only when Windows took the PWA's widgets
 $names = @()
@@ -197,7 +206,7 @@ function TapNth([string]$window, [string]$pattern, [int]$n) {
 }
 # every widget of ours is pinned: the picker is opened anew for each (it closes after a pin)
 for ($n = 0; $n -lt 3; $n++) {
-  if ($n -gt 0) { for ($i = 1; $i -le 6; $i++) { if (Tap '^Widgets$' '^Add widgets$') { break } else { Start-Sleep 4 } }; Start-Sleep 6 }
+  if ($n -gt 0) { for ($i = 1; $i -le 6; $i++) { OpenBoard | Out-Null; if (Tap '^Widgets$' '^Add widgets$') { break } else { Start-Sleep 4 } }; Start-Sleep 6 }
   if (-not (Tap 'WidgetPicker' '^Uposatha by the Suttas$')) { Log "the picker does not list Uposatha (widget $n)"; break }
   Start-Sleep 6
   if ($n -eq 0) { Shot 'picker-uposatha'; Tree 'picker-uposatha' }
@@ -209,8 +218,10 @@ function BoardTexts([string]$name) {
   $t | Out-File "$Out\board-texts-$name.txt" -Encoding utf8
   Log ("board texts ($name): " + $t.Count + "; PROBE-MIN: " + [bool]($t -match 'PROBE-MIN') + "; PROBE-NOSIZE: " + [bool]($t -match 'PROBE-NOSIZE') + "; main card (day . coming/now): " + [bool]($t -match 'day . (coming|now)|день . (скоро|сейчас)') + "; our titles: " + (($t -match 'Uposatha \+ kala|Day & night|^Text \| Month$').Count))
 }
+OpenBoard | Out-Null
 Shot 'board-after-pins'; BoardTexts 'now'
 Start-Sleep 45
+OpenBoard | Out-Null
 Shot 'board-a-minute-later'; BoardTexts 'later'
 Start-Sleep 5
 Shot 'end'

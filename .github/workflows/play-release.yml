@@ -60,6 +60,27 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # The release is named "<build> (<version>)", as the console names one (production 432 (1.18)): without a name Play shows only
+      # the version, the same 1.19 for hundreds of builds (owner, 2026-10-12).
+      - uses: actions/checkout@v4
+        if: steps.play.outputs.have == 'yes'
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            version.properties
+            dict/version.properties
+            uposatha/version.properties
+          sparse-checkout-cone-mode: false
+      - name: Release name
+        if: steps.play.outputs.have == 'yes'
+        id: name
+        env:
+          PKG: ${{ inputs.package }}
+          CODE: ${{ inputs.version_code }}
+        run: |
+          case "$PKG" in gift.dhamma.pali) f=dict/version.properties ;; gift.dhamma.uposatha) f=uposatha/version.properties ;; *) f=version.properties ;; esac
+          echo "name=$CODE ($(sed -n 's/^version=//p' "$f"))" | tee -a "$GITHUB_OUTPUT"
+
       # The artifact the build job uploaded, not a rebuild: the bytes that go to Play are the same
       # ones the checks ran against.
       - name: Download the signed AAB
@@ -77,6 +98,7 @@ jobs:
           packageName: ${{ inputs.package }}
           releaseFiles: aab/app-release.aab
           track: alpha
+          releaseName: ${{ steps.name.outputs.name }}
           status: completed
 
       - name: Say what went to Play

@@ -1,7 +1,7 @@
 # The Uposatha PWA widget on a real Windows 11 Widgets Board (a GitHub runner): installs the PWA into Edge by policy, opens the
 # board (Win+W), tries to add the widget, and leaves a screenshot and the board's element tree after every step.
 # A probe: it fails nothing; what it found is read from the artifact (owner, 2026-10-11: is there a way to test the Windows widget).
-param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots')
+param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '')
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
@@ -144,6 +144,28 @@ foreach ($app in 'PWAmp', 'Uposatha') {
   if ($lnk) { Start-Process $lnk.FullName; Start-Sleep 20; Shot "app-window-$app" } else { Log "no $app shortcut on the desktop: that PWA was not installed" }
 }
 
+# 2b. The same PWA as a Windows package (PWABuilder's test package, what goes to the Microsoft Store in its signed form). Windows
+# reads a widget provider and its widgets from a PACKAGE's manifest (AppExtension com.microsoft.windows.widgets); a PWA installed
+# from the browser has no package, which is why runs 4-9 never saw a PWA widget in the picker, Microsoft's own demo included.
+if ($Package) {
+  try {
+    $zip = "$env:TEMP\upo-package.zip"; $dir = "$env:TEMP\upo-package"
+    Invoke-WebRequest $Package -OutFile $zip -UseBasicParsing
+    Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+    Expand-Archive $zip -DestinationPath $dir -Force
+    Get-ChildItem $dir -Recurse | Select-Object FullName, Length | Out-File "$Out\package.txt" -Width 300
+    $msix = Get-ChildItem $dir -Recurse -Filter '*.sideload.msix' | Select-Object -First 1
+    $inst = Get-ChildItem $dir -Recurse -Filter 'pwainstaller.exe' | Select-Object -First 1
+    $p = Start-Process $inst.FullName -ArgumentList ('"' + $msix.FullName + '"') -Wait -PassThru
+    Log "package installer: exit $($p.ExitCode)"
+    Start-Sleep 5
+    $pkg = Get-AppxPackage | Where-Object { $_.Name -match 'Uposatha' }
+    Log ("package installed: " + $(if ($pkg) { $pkg.PackageFullName } else { 'NO' }))
+    $app = Get-StartApps | Where-Object { $_.Name -match 'Uposatha by the Suttas' } | Select-Object -Last 1
+    if ($app) { Start-Process ("shell:AppsFolder\" + $app.AppID); Start-Sleep 25; Shot 'packaged-app' } else { Log 'the packaged app is not in the Start menu' }
+  } catch { Log "package: $_" }
+}
+
 # 3. The Widgets Board
 Dismiss
 # Whatever is open over the desktop (run 5: the Start menu) is closed first; the board itself closes as soon as it loses the
@@ -163,7 +185,10 @@ Log ("picker lists: " + ($names -join ' | '))
 Log ("PWAmp (the control) in the picker: " + [bool]($names -match 'PWAmp') + "; Uposatha: " + [bool]($names -match 'Uposatha|Day & night|^Month$'))
 if (Tap 'WidgetPicker' 'Uposatha|Day & night|^Month$') {
   Start-Sleep 8; Shot 'picker-uposatha'; Tree 'picker-uposatha'
-  if (Tap 'WidgetPicker' '^Pin$') { Start-Sleep 15; Shot 'board-pinned'; Tree 'board-pinned' }
+  if (Tap 'WidgetPicker' '^Pin$') {
+    Start-Sleep 15; Shot 'board-pinned'; Tree 'board-pinned'
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 6; Shot 'board-with-widget'
+  }
 } else { Log 'the picker does not list Uposatha' }
 Start-Sleep 5
 Shot 'end'

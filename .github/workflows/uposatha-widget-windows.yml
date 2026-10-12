@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa'
+      package:
+        description: 'A PWABuilder Windows package (zip with *.sideload.msix and utils/pwainstaller.exe) to install as well; empty = none'
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: uposatha-widget-windows
@@ -32,7 +37,7 @@ jobs:
 
       - name: Install the PWA, open the board, add the widget
         shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./uposatha/test/windows/widget-board.ps1 -Url '${{ inputs.url }}' -Out win-shots
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./uposatha/test/windows/widget-board.ps1 -Url '${{ inputs.url }}' -Out win-shots -Package '${{ inputs.package }}'
 
       - name: Upload the screenshots and the trees
         if: always()

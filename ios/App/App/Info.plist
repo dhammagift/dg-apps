@@ -99,15 +99,14 @@
 	<array>
 		<string>audio</string>
 	</array>
-	<!-- Static Home Screen quick actions, long-press the icon. Same four, same order as
-	     android/app/src/main/res/xml/shortcuts.xml (owner's order, 2026-09-20: favourites first). Each one carries
-	     the SPA route the app must open; AppDelegate turns it into ?_nativeRoute=..., which the
-	     page rewrites into the visible URL before its own bootstrap reads window.location —
-	     the same mechanism the Android MainActivity.handleIntent uses for its "route" extra.
-	     iOS shows at most four, so dynamic "recently read" actions (DgShortcutsPlugin.swift)
-	     compete for the same slots; the static ones win because they are declared here.
-	     Titles are English-only for now: localizing them needs InfoPlist.strings variant
-	     groups inside the Xcode project, which is a separate change. -->
+	<!-- Static Home Screen quick action, long-press the icon: ONE, as in android/app/src/main/res/xml/shortcuts.xml
+	     (Favorites & History). It carries the SPA route the app must open; AppDelegate turns it into ?_nativeRoute=...,
+	     which the page rewrites into the visible URL before its own bootstrap reads window.location.
+	     iOS shows at most four quick actions in total, statics first: with Contents, Memo and Dictionary also declared
+	     here the three "recently read" texts (DgShortcutsPlugin.swift) never reached the menu (owner, 2026-10-12: the
+	     history shows on Android, not on the iPhone). Those three are pushed by the page instead when the settings
+	     switch turns the recent texts off, the same as on Android.
+	     Title is English-only for now: localizing it needs InfoPlist.strings variant groups inside the Xcode project. -->
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>
@@ -121,45 +120,6 @@
 			<dict>
 				<key>route</key>
 				<string>/4as</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>route</string>
-			<key>UIApplicationShortcutItemIconType</key>
-			<string>UIApplicationShortcutIconTypeBookmark</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>Table of Contents</string>
-			<key>UIApplicationShortcutItemUserInfo</key>
-			<dict>
-				<key>route</key>
-				<string>/toc</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>route</string>
-			<key>UIApplicationShortcutItemIconType</key>
-			<string>UIApplicationShortcutIconTypeCompose</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>Memo</string>
-			<key>UIApplicationShortcutItemUserInfo</key>
-			<dict>
-				<key>route</key>
-				<string>/memo</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>route</string>
-			<key>UIApplicationShortcutItemIconType</key>
-			<string>UIApplicationShortcutIconTypeSearch</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>Dictionary</string>
-			<key>UIApplicationShortcutItemUserInfo</key>
-			<dict>
-				<key>route</key>
-				<string>/dict</string>
 			</dict>
 		</dict>
 	</array>

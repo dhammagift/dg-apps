@@ -512,9 +512,8 @@
     // Three slots (owner, 2026-09-24). The launcher's long-press menu shows four entries in total,
     // and res/xml/shortcuts.xml now declares exactly ONE static one (Favorites & History) so three
     // "recently read" texts fit — with four statics only two did, which is the report this answers
-    // ("должны быть 3 пункта под историю... почему-то всё ещё два"). Android only in practice: iOS
-    // shows four quick actions IN TOTAL and all four static ones are declared in Info.plist, so
-    // nothing dynamic reaches the screen there however many we push.
+    // ("должны быть 3 пункта под историю... почему-то всё ещё два"). iOS the same since 2026-10-12: it
+    // shows four quick actions in total, and Info.plist now declares the one static entry too.
     var SHORTCUTS_MAX = 3;
     // Settings switch "Recent texts in app shortcuts" (dg-app-full#4). 'off' disables them; any
     // other value (including none) keeps the default, on. Static shortcuts are unaffected.

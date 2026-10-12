@@ -13,13 +13,12 @@ import Capacitor
 // check — the mapping, the SPA rewrite and the reload-loop guard all apply, and the app grows no
 // second way to open a page.
 //
-// The same handler serves the four STATIC quick actions declared in the app's Info.plist, which until
-// now did nothing at all on iOS: their userInfo carries the same "route" key.
+// The same handler serves the STATIC quick action declared in the app's Info.plist, which until
+// now did nothing at all on iOS: its userInfo carries the same "route" key.
 //
-// The ceiling, named rather than discovered later: iOS shows at most FOUR quick actions, and the four
-// statics already occupy them. Dynamic items are still set (they are what the system lists first, and
-// set([]) is what clears them), but with all four statics present the reader may not see them —
-// trimming that set is the owner's product decision, not something this plugin should do silently.
+// iOS shows at most FOUR quick actions, statics first. Info.plist declares one (Favorites & History),
+// as Android does, so the three "recently read" texts fit; with four statics they never showed
+// (owner, 2026-10-12).
 @objc(DgShortcutsPlugin)
 public class DgShortcutsPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "DgShortcutsPlugin"
@@ -70,11 +69,13 @@ public class DgShortcutsPlugin: CAPPlugin, CAPBridgedPlugin {
             if let rawLabel = item["label"], let given = rawLabel as? String, !given.isEmpty {
                 label = given
             }
+            var iconName: String?
+            if let rawIcon = item["icon"], let given = rawIcon as? String { iconName = given }
             return UIApplicationShortcutItem(
                 type: Self.itemType,
                 localizedTitle: Self.clamp(label),
                 localizedSubtitle: nil,
-                icon: UIApplicationShortcutIcon(type: .bookmark),
+                icon: UIApplicationShortcutIcon(type: Self.icon(iconName)),
                 // NSString, not String: the parameter wants NSSecureCoding, and String bridges to it
                 // only through NSString.
                 userInfo: [Self.routeKey: route as NSString]
@@ -83,6 +84,16 @@ public class DgShortcutsPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async {
             UIApplication.shared.shortcutItems = shortcuts
             call.resolve(["count": shortcuts.count])
+        }
+    }
+
+    // The page names Android drawables (native-bridge.js PROGRAMMED); the same entries get the system
+    // icons they had while they were static here. A recent text has none and gets the bookmark.
+    static func icon(_ name: String?) -> UIApplicationShortcutIcon.IconType {
+        switch name {
+        case "shortcut_1": return .search    // Dictionary
+        case "shortcut_3": return .compose   // Memo
+        default: return .bookmark            // Table of Contents, recent texts
         }
     }
 

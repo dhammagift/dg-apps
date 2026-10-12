@@ -171,9 +171,9 @@ if ($Package) {
     $p = Start-Process $inst.FullName -ArgumentList ('"' + $msix.FullName + '"') -Wait -PassThru
     Log "package installer: exit $($p.ExitCode)"
     Start-Sleep 5
-    $pkg = Get-AppxPackage | Where-Object { $_.Name -match 'Uposatha' }
+    $pkg = Get-AppxPackage | Where-Object { $_.Name -match 'Uposatha|Dhamma' }
     Log ("package installed: " + $(if ($pkg) { $pkg.PackageFullName } else { 'NO' }))
-    $app = Get-StartApps | Where-Object { $_.Name -match 'Uposatha by the Suttas' } | Select-Object -Last 1
+    $app = Get-StartApps | Where-Object { $_.Name -match '^(Uposatha by the Suttas|Dhamma\.Gift)$' } | Select-Object -Last 1
     if ($app) { Start-Process ("shell:AppsFolder\" + $app.AppID); Start-Sleep 25; Shot 'packaged-app' } else { Log 'the packaged app is not in the Start menu' }
   } catch { Log "package: $_" }
 }

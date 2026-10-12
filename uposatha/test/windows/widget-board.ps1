@@ -130,29 +130,19 @@ Shot 'edge'; Tree 'edge'
 Get-ChildItem "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Web Applications" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object FullName | Out-File "$Out\web-applications.txt" -Width 400
 Get-ChildItem "$env:USERPROFILE\Desktop", "$env:PUBLIC\Desktop" -ErrorAction SilentlyContinue | Select-Object FullName | Out-File -Append "$Out\web-applications.txt" -Width 400
 Get-AppxPackage | Where-Object { $_.Name -match 'edge|uposatha|dhamma|pwa' } | Select-Object Name, Version, PackageFamilyName | Format-Table -AutoSize | Out-File -Append "$Out\web-applications.txt" -Width 400
-# What Edge itself knows about the installed app (its manifest as parsed, the widgets among it): the page's text
-Start-Process $edge -ArgumentList '--new-window', 'edge://web-app-internals'
-Start-Sleep 10
-Shot 'web-app-internals'
-try {
-  $txt = @()
-  foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
-    if ($w.Current.Name -notmatch 'web-app-internals|Web App Internals') { continue }
-    foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.Name -and $e.Current.Name.Length -gt 40) { $txt += $e.Current.Name } }
-  }
-  ($txt -join "`n") | Out-File "$Out\web-app-internals.txt" -Encoding utf8
-  Log "web-app-internals: $($txt.Count) text block(s), widgets mentioned: $((($txt -join ' ') -split 'widget').Count - 1) time(s)"
-} catch { Log "web-app-internals: $_" }
 # the app's own window once, so that its worker is running
 $lnk = Get-ChildItem "$env:USERPROFILE\Desktop\*.lnk" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'Uposatha' } | Select-Object -First 1
 if ($lnk) { Start-Process $lnk.FullName; Start-Sleep 25; Shot 'app-window' } else { Log 'no Uposatha shortcut on the desktop: the PWA was not installed' }
 
 # 3. The Widgets Board
 Dismiss
+# Whatever is open over the desktop (run 5: the Start menu) is closed first; the board itself closes as soon as it loses the
+# focus, so its button is pressed before anything slow (the element tree) is done.
+[System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 1
 [Keys]::WinPlus(0x57)   # Win+W
 Start-Sleep 12
-Shot 'board'; Tree 'board'
-if (Tap 'Widget' '^Add widgets$') { Start-Sleep 8; Shot 'board-add'; Tree 'board-add' }   # run 3: the board opens without a sign-in and has this button
+Shot 'board'
+if (Tap '^Widgets$' '^Add widgets$') { Start-Sleep 8; Shot 'board-add'; Tree 'board-add' } else { Tree 'board' }
 # the picker lists the apps that have widgets; ours is there only when Windows took the PWA's widgets
 if (Tap 'WidgetPicker' 'Uposatha|Day & night|^Month$') {
   Start-Sleep 8; Shot 'picker-uposatha'; Tree 'picker-uposatha'

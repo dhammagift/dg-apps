@@ -239,7 +239,7 @@ function BoardTexts([string]$name) {
   Log ("board texts ($name): " + $t.Count + "; PROBE lines: " + (($t -match 'PROBE-') -join ' / ') + "; main card (day . coming/now): " + [bool]($t -match 'day . (coming|now)|день . (скоро|сейчас)') + "; our titles: " + (($t -match 'Uposatha \+ kala|Day & night|^Text \| Month$').Count))
 }
 # One of our widgets in another size (Small / Medium / Large): its own "More options" is the first such button after its title
-if ($Size) {
+if ($Size -and $Size -ne 'asis') {   # an empty argument in the middle of the command line breaks the call (run 26), so the defaults are words
   OpenBoard | Out-Null
   try {
     $seen = $false; $done = $false

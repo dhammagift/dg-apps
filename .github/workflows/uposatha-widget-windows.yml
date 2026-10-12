@@ -18,15 +18,15 @@ on:
         type: string
         default: '-1'
       size:
-        description: 'Change our pinned widget to this size (Small, Medium, Large); empty = as pinned'
+        description: 'Change our pinned widget to this size (Small, Medium, Large); asis = as pinned'
         required: false
         type: string
-        default: ''
+        default: 'asis'
       theme:
-        description: 'dark = switch Windows to the dark theme first; empty = as it is (light)'
+        description: 'dark = switch Windows to the dark theme first; light = as it is'
         required: false
         type: string
-        default: ''
+        default: 'light'
       package:
         description: 'A PWABuilder Windows package (zip with *.sideload.msix and utils/pwainstaller.exe) to install as well; empty = none'
         required: false

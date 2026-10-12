@@ -63,7 +63,7 @@ jobs:
           mkdir -p shots
           for f in $FILES; do
             case "$f" in */*|*..*) echo "::error::bad file name $f"; exit 1 ;; esac
-            curl -fsSL "${BASE%/}/$f" -o "shots/$f"
+            curl -fsSL --retry 6 --retry-all-errors --retry-delay 4 "${BASE%/}/$f" -o "shots/$f"   # the test server answers 503 now and then
             file "shots/$f" | grep -q "PNG image data" || { echo "::error::$f is not a PNG"; exit 1; }
             file "shots/$f"
           done

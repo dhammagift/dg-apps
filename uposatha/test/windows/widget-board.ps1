@@ -208,18 +208,25 @@ function TapNth([string]$window, [string]$pattern, [int]$n) {
   Log "no window /$window/ for button $n"
   return $false
 }
-# every widget of ours is pinned: the picker is opened anew for each (it closes after a pin)
+# every widget of ours is pinned: the picker is opened anew for each (it closes after a pin); every step is tried a few times,
+# because the board and the picker close when they lose the focus
 for ($n = 0; $n -lt 3; $n++) {
-  if ($n -gt 0) { for ($i = 1; $i -le 6; $i++) { OpenBoard | Out-Null; if (Tap '^Widgets$' '^Add widgets$') { break } else { Start-Sleep 4 } }; Start-Sleep 6 }
-  if (-not (Tap 'WidgetPicker' '^Uposatha by the Suttas$')) { Log "the picker does not list Uposatha (widget $n)"; break }
-  Start-Sleep 6
-  if (TapNth 'WidgetPicker' '^Pin$' $n) { Start-Sleep 12; Shot "pinned-$n" }
+  $done = $false
+  for ($try = 1; $try -le 3 -and -not $done; $try++) {
+    $inPicker = $false
+    foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.Name -match 'WidgetPicker') { $inPicker = $true } }
+    if (-not $inPicker) { OpenBoard | Out-Null; Start-Sleep 2; if (-not (Tap '^Widgets$' '^Add widgets$')) { Start-Sleep 4; continue }; Start-Sleep 6 }
+    if (-not (Tap 'WidgetPicker' '^Uposatha by the Suttas$')) { Start-Sleep 3; continue }
+    Start-Sleep 4
+    if (TapNth 'WidgetPicker' '^Pin$' $n) { $done = $true; Start-Sleep 12; Shot "pinned-$n" }
+  }
+  if (-not $done) { Log "widget $n was not pinned" }
 }
 # what the board says in our widgets, now and a minute later (a drawn card's texts are in the element tree, wherever it is scrolled)
 function BoardTexts([string]$name) {
   $t = @(); try { foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.Name -match '^Widgets$') { foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.Name) { $t += ($e.Current.ControlType.ProgrammaticName -replace 'ControlType\.', '') + ' | ' + $e.Current.Name } } } } } catch { }
   $t | Out-File "$Out\board-texts-$name.txt" -Encoding utf8
-  Log ("board texts ($name): " + $t.Count + "; PROBE-MIN: " + ($t -match 'PROBE-MIN').Count + "; PROBE-BOUND: " + (($t -match 'PROBE-BOUND') -join ' / ') + "; PROBE-NOSIZE: " + [bool]($t -match 'PROBE-NOSIZE') + "; main card (day . coming/now): " + [bool]($t -match 'day . (coming|now)|день . (скоро|сейчас)') + "; our titles: " + (($t -match 'Uposatha \+ kala|Day & night|^Text \| Month$').Count))
+  Log ("board texts ($name): " + $t.Count + "; PROBE lines: " + (($t -match 'PROBE-') -join ' / ') + "; main card (day . coming/now): " + [bool]($t -match 'day . (coming|now)|день . (скоро|сейчас)') + "; our titles: " + (($t -match 'Uposatha \+ kala|Day & night|^Text \| Month$').Count))
 }
 OpenBoard | Out-Null
 Shot 'board-after-pins'; BoardTexts 'now'

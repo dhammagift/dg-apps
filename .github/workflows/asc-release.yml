@@ -13,9 +13,9 @@ on:
         options: [dict, uposatha, dg]
         default: dict
       action:
-        description: 'status (read only) / cancel / set-build / set-text / submit'
+        description: 'status (read only) / testflight (read only: groups, public link, builds) / cancel / set-build / set-text / submit'
         type: choice
-        options: [status, cancel, set-build, set-text, screenshots, delete-locale, submit]
+        options: [status, testflight, cancel, set-build, set-text, screenshots, delete-locale, submit]
         default: status
       arg:
         description: 'set-build: the build number; set-text: the JSON file (e.g. dict/store/listing.json); screenshots: TYPE=dir (e.g. APP_IPHONE_69=dict/store/iphone69), replaces that set in en-US'

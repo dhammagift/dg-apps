@@ -150,7 +150,10 @@ Dismiss
 [Keys]::WinPlus(0x57)   # Win+W
 Start-Sleep 12
 Shot 'board'
-if (Tap '^Widgets$' '^Add widgets$') { Start-Sleep 8; Shot 'board-add'; Tree 'board-add' } else { Tree 'board' }
+# the board's content is a web page and may still be loading (run 7: the window was there, the button not yet)
+$opened = $false
+for ($i = 1; $i -le 8 -and -not $opened; $i++) { if (Tap '^Widgets$' '^Add widgets$') { $opened = $true } else { Start-Sleep 5 } }
+if ($opened) { Start-Sleep 8; Shot 'board-add'; Tree 'board-add' } else { Shot 'board-no-button'; Tree 'board' }
 # the picker lists the apps that have widgets; ours is there only when Windows took the PWA's widgets
 $names = @()
 try { foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.Name -match 'WidgetPicker') { foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.ControlType.ProgrammaticName -match 'ListItem') { $names += $e.Current.Name } } } } } catch { }

@@ -2,7 +2,7 @@
 # Screens of the built Dhamma.Gift APK on an Android emulator (workflow android-screens.yml), so a
 # change can be looked at on a real Android WebView before it reaches the owner or a store
 # (owner, 2026-09-29: "сними себе сам ... проверь, пришли скриншоты").
-# Usage: tools/emu-screens.sh <apk> <out-dir> [package] [screens|shortcuts|edgetoedge|tray|widget]
+# Usage: tools/emu-screens.sh <apk> <out-dir> [package] [screens|shortcuts|edgetoedge|tray|widget|icons]
 set -u
 APK=$1; OUT=$2; PKG=${3:-gift.dhamma.mobile}
 REPO=$(cd "$(dirname "$0")/.." && pwd)
@@ -315,6 +315,19 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb logcat -d | grep -iE "dg-offline|DgDownload|FATAL" | tail -40 > "$OUT/download-logcat.txt"
   grep -qi "FATAL" "$OUT/download-logcat.txt" && ko "a crash is in the log" || ok "no crash in the log"
   cat "$res"; exit $fail
+fi
+if [ "${4:-}" = icons ] && [ "$PKG" = gift.dhamma.mobile ]; then
+  # Reader toolbar icons after the dictionary / variants toggles (tools/emu-icons.js, debug APK, DevTools).
+  [ "${VIDEO:-0}" = 1 ] && adb shell screenrecord --bit-rate 6000000 --time-limit 170 /sdcard/icons.mp4 &
+  RECPID=$!
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
+  adb shell input tap 309 2184; sleep 2
+  pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')
+  adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
+  node "$REPO/tools/emu-icons.js" "$OUT"; code=$?
+  if [ "${VIDEO:-0}" = 1 ]; then adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null; adb pull /sdcard/icons.mp4 "$OUT/icons.mp4" > /dev/null; fi
+  adb logcat -d -s Capacitor/Console:* chromium:* > "$OUT/logcat.txt" 2>/dev/null || true
+  exit $code
 fi
 if [ "${4:-}" = tray ] && [ "$PKG" = gift.dhamma.mobile ]; then
   # The notification player (Pause / Play on the shade) end to end, on the debug APK (tools/emu-tray.js reads the page over DevTools).

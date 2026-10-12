@@ -98,6 +98,27 @@ Shot 'desktop'; Tree 'desktop'
 Dismiss
 Shot 'desktop-clear'
 
+# 1b. What Microsoft's guide asks of a machine that shows a PWA's widgets before the app is in the Store: Developer Mode and the
+# Windows App SDK runtime (run 4: the PWA was installed, the board's picker listed Microsoft's own widgets only)
+$dev = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock'
+New-Item -Force $dev | Out-Null
+Set-ItemProperty $dev -Name AllowDevelopmentWithoutDevLicense -Value 1 -Type DWord
+Set-ItemProperty $dev -Name AllowAllTrustedApps -Value 1 -Type DWord
+Log 'Developer Mode: on'
+$rt = Get-AppxPackage | Where-Object { $_.Name -match 'WindowsAppRuntime|WinAppRuntime' }
+Log ("Windows App SDK runtime before: " + $(if ($rt) { ($rt | ForEach-Object { $_.Name + ' ' + $_.Version }) -join '; ' } else { 'none' }))
+if (-not ($rt | Where-Object { $_.Name -match 'WindowsAppRuntime\.1\.' })) {
+  try {
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -match 'ARM') { 'arm64' } else { 'x64' }
+    $exe = "$env:TEMP\windowsappruntimeinstall.exe"
+    Invoke-WebRequest "https://aka.ms/windowsappsdk/1.6/latest/windowsappruntimeinstall-$arch.exe" -OutFile $exe -UseBasicParsing
+    $p = Start-Process $exe -ArgumentList '--quiet' -Wait -PassThru
+    Log "Windows App SDK runtime installer ($arch): exit $($p.ExitCode)"
+  } catch { Log "Windows App SDK runtime: not installed: $_" }
+  $rt = Get-AppxPackage | Where-Object { $_.Name -match 'WindowsAppRuntime|WinAppRuntime' }
+  Log ("Windows App SDK runtime after: " + $(if ($rt) { ($rt | ForEach-Object { $_.Name + ' ' + $_.Version }) -join '; ' } else { 'none' }))
+}
+
 # 2. The PWA, installed by policy when Edge starts
 $k = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
 New-Item -Force $k | Out-Null
@@ -109,6 +130,19 @@ Shot 'edge'; Tree 'edge'
 Get-ChildItem "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Web Applications" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object FullName | Out-File "$Out\web-applications.txt" -Width 400
 Get-ChildItem "$env:USERPROFILE\Desktop", "$env:PUBLIC\Desktop" -ErrorAction SilentlyContinue | Select-Object FullName | Out-File -Append "$Out\web-applications.txt" -Width 400
 Get-AppxPackage | Where-Object { $_.Name -match 'edge|uposatha|dhamma|pwa' } | Select-Object Name, Version, PackageFamilyName | Format-Table -AutoSize | Out-File -Append "$Out\web-applications.txt" -Width 400
+# What Edge itself knows about the installed app (its manifest as parsed, the widgets among it): the page's text
+Start-Process $edge -ArgumentList '--new-window', 'edge://web-app-internals'
+Start-Sleep 10
+Shot 'web-app-internals'
+try {
+  $txt = @()
+  foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
+    if ($w.Current.Name -notmatch 'web-app-internals|Web App Internals') { continue }
+    foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.Name -and $e.Current.Name.Length -gt 40) { $txt += $e.Current.Name } }
+  }
+  ($txt -join "`n") | Out-File "$Out\web-app-internals.txt" -Encoding utf8
+  Log "web-app-internals: $($txt.Count) text block(s), widgets mentioned: $((($txt -join ' ') -split 'widget').Count - 1) time(s)"
+} catch { Log "web-app-internals: $_" }
 # the app's own window once, so that its worker is running
 $lnk = Get-ChildItem "$env:USERPROFILE\Desktop\*.lnk" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'Uposatha' } | Select-Object -First 1
 if ($lnk) { Start-Process $lnk.FullName; Start-Sleep 25; Shot 'app-window' } else { Log 'no Uposatha shortcut on the desktop: the PWA was not installed' }
@@ -119,8 +153,11 @@ Dismiss
 Start-Sleep 12
 Shot 'board'; Tree 'board'
 if (Tap 'Widget' '^Add widgets$') { Start-Sleep 8; Shot 'board-add'; Tree 'board-add' }   # run 3: the board opens without a sign-in and has this button
-if (Tap 'Widget' 'Uposatha|Day & night|^Month$') { Start-Sleep 8; Shot 'board-uposatha'; Tree 'board-uposatha' }
-if (Tap 'Widget' '^Pin$|^Pin widget|^Add$|^Pin to') { Start-Sleep 12; Shot 'board-pinned'; Tree 'board-pinned' }
+# the picker lists the apps that have widgets; ours is there only when Windows took the PWA's widgets
+if (Tap 'WidgetPicker' 'Uposatha|Day & night|^Month$') {
+  Start-Sleep 8; Shot 'picker-uposatha'; Tree 'picker-uposatha'
+  if (Tap 'WidgetPicker' '^Pin$') { Start-Sleep 15; Shot 'board-pinned'; Tree 'board-pinned' }
+} else { Log 'the picker does not list Uposatha' }
 Start-Sleep 5
 Shot 'end'
 Get-ChildItem $Out | Select-Object Name, Length

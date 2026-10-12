@@ -94,6 +94,8 @@ def set_text(bundle, path):
     want = json.load(open(path))
     locs = {l["attributes"]["locale"]: l for l in call("GET", f"/v1/appStoreVersions/{v['id']}/appStoreVersionLocalizations")["data"]}
     for locale, fields in want.items():
+        if locale == "play":
+            continue
         fields = {k: v2 for k, v2 in fields.items() if v2 is not None}
         if locale in locs:
             call("PATCH", f"/v1/appStoreVersionLocalizations/{locs[locale]['id']}",

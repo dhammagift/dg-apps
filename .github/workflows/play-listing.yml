@@ -1,0 +1,55 @@
+name: Play listing
+
+# The Google Play store listing (texts) of one app: read it, or set it from a JSON file in this repository
+# (.github/scripts/play_listing.py). Started by hand; the texts are agreed with the owner first.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Which app'
+        type: choice
+        options: [dict, uposatha, dg, noapp]
+        default: dict
+      action:
+        description: 'status (read only) / set'
+        type: choice
+        options: [status, set]
+        default: status
+      file:
+        description: 'set: the JSON file with a "play" block (e.g. dict/store/listing.json)'
+        required: false
+        type: string
+      lang:
+        description: 'set: the listing language'
+        required: false
+        type: string
+        default: en-US
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-listing
+  cancel-in-progress: false
+
+jobs:
+  listing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: ${{ inputs.action }} (${{ inputs.app }})
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          APP: ${{ inputs.app }}
+          ACTION: ${{ inputs.action }}
+          FILE: ${{ inputs.file }}
+          LANG_CODE: ${{ inputs.lang }}
+        run: |
+          pip install --quiet google-api-python-client google-auth
+          case "$APP" in dict) P=gift.dhamma.pali ;; uposatha) P=gift.dhamma.uposatha ;; dg) P=gift.dhamma.twa ;; noapp) P=gift.dhamma.noapp ;; esac
+          if [ "$ACTION" = set ]; then python3 .github/scripts/play_listing.py "$P" set "$FILE" "$LANG_CODE" | tee out.txt
+          else python3 .github/scripts/play_listing.py "$P" status | tee out.txt; fi
+          { echo "### Play listing: $ACTION ($APP)"; echo '```'; cat out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

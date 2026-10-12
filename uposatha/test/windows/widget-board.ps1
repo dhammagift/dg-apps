@@ -127,12 +127,15 @@ if (-not ($rt | Where-Object { $_.Name -match 'WindowsAppRuntime\.1\.2' })) {
 $k = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
 New-Item -Force $k | Out-Null
 Set-ItemProperty $k -Name HideFirstRunExperience -Value 1 -Type DWord
-# Microsoft's own demo PWA with a widget goes in beside ours: the control. Its widget in the picker and ours not = our manifest or
-# worker; neither = this machine (or an app installed by policy) gets no PWA widgets at all.
-Set-ItemProperty $k -Name WebAppInstallForceList -Value ('[{"url":"' + $Url + '","default_launch_container":"window","create_desktop_shortcut":true},{"url":"https://microsoftedge.github.io/Demos/pwamp/","default_launch_container":"window","create_desktop_shortcut":true}]')
+# With a package to install, nothing is installed from the browser: the same web app installed twice (by policy and as a package)
+# is not what a Store user has, and run 13 drew nothing in the pinned widget, not even a card of one static line.
+# Without a package: ours and Microsoft's demo PWA with a widget (the control), both by policy.
+if (-not $Package) {
+  Set-ItemProperty $k -Name WebAppInstallForceList -Value ('[{"url":"' + $Url + '","default_launch_container":"window","create_desktop_shortcut":true},{"url":"https://microsoftedge.github.io/Demos/pwamp/","default_launch_container":"window","create_desktop_shortcut":true}]')
+}
 # PWA widgets are an Edge feature that is off by default: PWABuilder's Store package switches it on with exactly this flag
 # (pwabuilder-microsoft-store, "enable-features" = "msWebAppWidgets"). Runs 4-8 without it: neither Microsoft's demo nor ours in the picker.
-Start-Process $edge -ArgumentList '--no-first-run', '--enable-features=msWebAppWidgets', $Url
+if ($Package) { Start-Process $edge -ArgumentList '--no-first-run', 'about:blank' } else { Start-Process $edge -ArgumentList '--no-first-run', '--enable-features=msWebAppWidgets', $Url }
 Start-Sleep 45
 Shot 'edge'; Tree 'edge'
 Get-ChildItem "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Web Applications" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object FullName | Out-File "$Out\web-applications.txt" -Width 400

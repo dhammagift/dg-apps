@@ -15,10 +15,10 @@ on:
       action:
         description: 'status (read only) / cancel / set-build / set-text / submit'
         type: choice
-        options: [status, cancel, set-build, set-text, submit]
+        options: [status, cancel, set-build, set-text, screenshots, submit]
         default: status
       arg:
-        description: 'set-build: the build number; set-text: the JSON file (e.g. dict/store/listing.json)'
+        description: 'set-build: the build number; set-text: the JSON file (e.g. dict/store/listing.json); screenshots: TYPE=dir (e.g. APP_IPHONE_69=dict/store/iphone69), replaces that set in en-US'
         required: false
         type: string
 
@@ -46,7 +46,12 @@ jobs:
           ACTION: ${{ inputs.action }}
           ARG: ${{ inputs.arg }}
         run: |
-          pip install --quiet 'pyjwt[crypto]'
-          case "$APP" in dict) B=gift.dhamma.pali ;; uposatha) B=gift.dhamma.uposatha ;; dg) B=gift.dhamma.mobile ;; esac
-          python3 .github/scripts/asc_release.py "$B" "$ACTION" ${ARG:+"$ARG"} | tee step.txt
+          pip install --quiet 'pyjwt[crypto]' cryptography
+          case "$APP" in dict) B=gift.dhamma.pali; ID=6816639947 ;; uposatha) B=gift.dhamma.uposatha; ID=6816601259 ;; dg) B=gift.dhamma.mobile; ID= ;; esac
+          if [ "$ACTION" = screenshots ]; then
+            # The committed pictures of one display type (the owner's own, from a phone), replacing that set; never submits.
+            python3 dict/tools/asc-screenshots.py --app-id "$ID" --version 1.0 --locale en-US --set "$ARG" | tee step.txt
+          else
+            python3 .github/scripts/asc_release.py "$B" "$ACTION" ${ARG:+"$ARG"} | tee step.txt
+          fi
           { echo "### App Store: $ACTION ($APP)"; echo '```'; cat step.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

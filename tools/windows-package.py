@@ -9,7 +9,7 @@ Uposatha: Windows shows a widget only when a PACKAGE declares it (AppExtension c
 from the browser has no package, so its widgets never reach the Widgets Board (dg-apps#65). The three widgets of the site's
 manifest are written into the package.
 
-  windows-package.py <app: uposatha | dg> <out.zip> <package id> <publisher CN=...> <publisher display name> [version] [origin]
+  windows-package.py <app: uposatha | dg | dict> <out.zip> <package id> <publisher CN=...> <publisher display name> [version] [origin]
 
 The three identity values are the app's own in Partner Center (Product identity: Package/Identity/Name, Package/Identity/Publisher,
 Package/Properties/PublisherDisplayName). The zip holds *.msixbundle (for the Store) and *.sideload.msix + utils/pwainstaller.exe
@@ -20,19 +20,20 @@ import json, sys, urllib.request
 
 SERVICE = "https://pwabuilder-windows-docker.azurewebsites.net/msix/generatezip"   # PWABuilder's own (its site calls the same)
 
-# name in the Store / the site's manifest / its icon (512 px) / the start address when the manifest names none
+# name in the Store / the site / its manifest / its icon (512 px) / the start address when the manifest names none
 APPS = {
-    "uposatha": ("Uposatha by the Suttas", "/uposatha-calendar.webmanifest", "/assets/img/uposatha-512.png", "/uposatha-calendar"),
-    "dg": ("Dhamma.Gift", "/manifest.json", "/assets/img/pwa-bold-monocolor-512.png", "/"),
+    "uposatha": ("Uposatha by the Suttas", "https://dhamma.gift", "/uposatha-calendar.webmanifest", "/assets/img/uposatha-512.png", "/uposatha-calendar"),
+    "dg": ("Dhamma.Gift", "https://dhamma.gift", "/manifest.json", "/assets/img/pwa-bold-monocolor-512.png", "/"),
+    "dict": ("Dict.Dhamma.Gift", "https://dict.dhamma.gift", "/static/manifest.json", "/static/icon-512.png", "/"),
 }
 
 def main():
     if len(sys.argv) < 6 or sys.argv[1] not in APPS:
         sys.exit(__doc__)
-    name, manifest_path, icon, start = APPS[sys.argv[1]]
+    name, site, manifest_path, icon, start = APPS[sys.argv[1]]
     out, package_id, publisher, display = sys.argv[2:6]
     version = sys.argv[6] if len(sys.argv) > 6 else "1.0.1"
-    origin = (sys.argv[7] if len(sys.argv) > 7 else "https://dhamma.gift").rstrip("/")
+    origin = (sys.argv[7] if len(sys.argv) > 7 else site).rstrip("/")
     manifest_url = origin + manifest_path
     manifest = json.load(urllib.request.urlopen(manifest_url, timeout=30))
     widgets = manifest.get("widgets") or []

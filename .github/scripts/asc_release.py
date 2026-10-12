@@ -8,6 +8,8 @@ ASC key from the GitHub secrets; every step prints what it found and what it did
   asc_release.py <bundle id> set-text <json file>   update the version's texts: {"en-US": {"description": ..,
                                                     "promotionalText": .., "keywords": .., "whatsNew": ..}, "ru": {..}}
   asc_release.py <bundle id> submit                 send the version for review
+  asc_release.py <bundle id> screens [dir]          (read only) the version's screenshots per language and display type,
+                                                    each downloaded into dir (default screens/) to be looked at
   asc_release.py <bundle id> testflight             (read only) the TestFlight groups: public link, its limit, testers,
                                                     which builds each group has and whether Apple let them out to testers
 """
@@ -133,6 +135,25 @@ def submit(bundle):
     print(f"version {v['attributes']['versionString']} submitted for review (submission {sub['id']})")
 
 
+def screens(bundle, out="screens"):
+    v = editable_version(app_id(bundle))
+    os.makedirs(out, exist_ok=True)
+    for loc in call("GET", f"/v1/appStoreVersions/{v['id']}/appStoreVersionLocalizations")["data"]:
+        locale = loc["attributes"]["locale"]
+        for st in call("GET", f"/v1/appStoreVersionLocalizations/{loc['id']}/appScreenshotSets?limit=50")["data"]:
+            kind = st["attributes"]["screenshotDisplayType"]
+            shots = call("GET", f"/v1/appScreenshotSets/{st['id']}/appScreenshots?limit=50")["data"]
+            print(f"{locale} {kind}: {len(shots)}")
+            for i, sh in enumerate(shots, 1):
+                a = sh["attributes"]
+                img = a.get("imageAsset") or {}
+                print(f"  {i}. {a.get('fileName')} {img.get('width')}x{img.get('height')} {(a.get('assetDeliveryState') or {}).get('state')}")
+                if img.get("templateUrl"):
+                    url = img["templateUrl"].replace("{w}", str(img["width"])).replace("{h}", str(img["height"])).replace("{f}", "png")
+                    with urllib.request.urlopen(url, timeout=60) as r, open(f"{out}/{locale}-{kind}-{i}.png", "wb") as f:
+                        f.write(r.read())
+
+
 def testflight(bundle):
     aid = app_id(bundle)
     for g in call("GET", f"/v1/betaGroups?filter[app]={aid}&limit=50")["data"]:
@@ -154,4 +175,5 @@ if __name__ == "__main__":
     bundle, action, *rest = sys.argv[1:]
     {"status": lambda: status(bundle), "cancel": lambda: cancel(bundle), "set-build": lambda: set_build(bundle, rest[0]),
      "set-text": lambda: set_text(bundle, rest[0]), "delete-locale": lambda: delete_locale(bundle, rest[0]),
-     "submit": lambda: submit(bundle), "testflight": lambda: testflight(bundle)}[action]()
+     "submit": lambda: submit(bundle), "testflight": lambda: testflight(bundle),
+     "screens": lambda: screens(bundle, *rest)}[action]()

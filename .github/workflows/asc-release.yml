@@ -13,9 +13,9 @@ on:
         options: [dict, uposatha, dg]
         default: dict
       action:
-        description: 'status (read only) / testflight (read only: groups, public link, builds) / cancel / set-build / set-text / submit'
+        description: 'status (read only) / testflight (read only: groups, public link, builds) / screens (read only: the version screenshots, as an artifact) / cancel / set-build / set-text / submit'
         type: choice
-        options: [status, testflight, cancel, set-build, set-text, screenshots, delete-locale, submit]
+        options: [status, testflight, screens, cancel, set-build, set-text, screenshots, delete-locale, submit]
         default: status
       arg:
         description: 'set-build: the build number; set-text: the JSON file (e.g. dict/store/listing.json); screenshots: TYPE=dir (e.g. APP_IPHONE_69=dict/store/iphone69), replaces that set in en-US'
@@ -55,3 +55,9 @@ jobs:
             python3 .github/scripts/asc_release.py "$B" "$ACTION" ${ARG:+"$ARG"} | tee step.txt
           fi
           { echo "### App Store: $ACTION ($APP)"; echo '```'; cat step.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: The screenshots (screens)
+        if: inputs.action == 'screens'
+        uses: actions/upload-artifact@v4
+        with:
+          name: asc-screens-${{ inputs.app }}
+          path: screens/

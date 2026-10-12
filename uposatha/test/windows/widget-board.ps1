@@ -1,7 +1,7 @@
 # The Uposatha PWA widget on a real Windows 11 Widgets Board (a GitHub runner): installs the PWA into Edge by policy, opens the
 # board (Win+W), tries to add the widget, and leaves a screenshot and the board's element tree after every step.
 # A probe: it fails nothing; what it found is read from the artifact (owner, 2026-10-11: is there a way to test the Windows widget).
-param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '', [int]$Only = -1)
+param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '', [int]$Only = -1, [string]$Size = '')
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
@@ -228,6 +228,31 @@ function BoardTexts([string]$name) {
   $t = @(); try { foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.Name -match '^Widgets$') { foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.Name) { $t += ($e.Current.ControlType.ProgrammaticName -replace 'ControlType\.', '') + ' | ' + $e.Current.Name } } } } } catch { }
   $t | Out-File "$Out\board-texts-$name.txt" -Encoding utf8
   Log ("board texts ($name): " + $t.Count + "; PROBE lines: " + (($t -match 'PROBE-') -join ' / ') + "; main card (day . coming/now): " + [bool]($t -match 'day . (coming|now)|день . (скоро|сейчас)') + "; our titles: " + (($t -match 'Uposatha \+ kala|Day & night|^Text \| Month$').Count))
+}
+# One of our widgets in another size (Small / Medium / Large): its own "More options" is the first such button after its title
+if ($Size) {
+  OpenBoard | Out-Null
+  try {
+    $seen = $false; $done = $false
+    foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
+      if ($w.Current.Name -notmatch '^Widgets$') { continue }
+      foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) {
+        if ($e.Current.Name -match '^(Uposatha \+ kala|Day & night|Month)$') { $seen = $true; continue }
+        if ($seen -and -not $done -and $e.Current.Name -match '^More options$') {
+          $p = $null; if ($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); $done = $true; Log 'opened our widget''s More options' }
+        }
+      }
+    }
+    Start-Sleep 3; Shot 'widget-menu'; Tree 'widget-menu'
+    $hit = $false
+    foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
+      foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) {
+        if (-not $hit -and $e.Current.Name -match ('^' + $Size + '$')) { $p = $null; if ($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); $hit = $true; Log "size $Size chosen" } }
+      }
+    }
+    if (-not $hit) { Log "no menu item $Size" }
+    Start-Sleep 12
+  } catch { Log "size: $_" }
 }
 OpenBoard | Out-Null
 Shot 'board-after-pins'; BoardTexts 'now'

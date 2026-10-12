@@ -1689,6 +1689,13 @@
   // (a page's background often sits on a wrapper, or on <body> alone, where it also fills the canvas).
   function clear(c) { return !c || c === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(c); }
   function topColour() {
+    // The home page and its views paint the strip themselves (home.css, html.dg-app body::before, above every layer): that is
+    // what the bar sits on. elementFromPoint cannot see a pseudo-element and found the settings sheet's dark scrim under it, so
+    // the clock went white on the white strip of the light theme (run 598's simulator video).
+    if (document.documentElement.classList.contains('dg-app')) {
+      var strip = getComputedStyle(document.body, '::before');
+      if (strip.content !== 'none' && !clear(strip.backgroundColor)) return strip.backgroundColor;
+    }
     var el = document.elementFromPoint(Math.round(window.innerWidth / 2), 2);
     for (; el; el = el.parentElement) { var c = getComputedStyle(el).backgroundColor; if (!clear(c)) return c; }
     var b = getComputedStyle(document.body).backgroundColor;

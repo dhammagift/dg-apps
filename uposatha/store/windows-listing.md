@@ -63,7 +63,7 @@ uposatha, buddhist calendar, moon phase, lunar day, sutta, theravada, precepts
 ## Properties
 
 - Category: Lifestyle
-- Privacy policy URL: https://dhamma.gift/docs/policies
+- Privacy policy URL: https://dhamma.gift/docs/policies/
 - Website: https://dhamma.gift/uposatha-calendar
 - Support contact: https://dhamma.gift/docs/
 - Accesses personal information: Yes (the place, kept on the device) with the policy above

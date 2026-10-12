@@ -13,7 +13,7 @@ const say = (s) => { console.log(s); res.push(s); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = false;
 const check = (ok, text) => { say((ok ? 'PASS ' : 'FAIL ') + text); if (!ok) failed = true; };
-const shot = (name) => fs.writeFileSync(`${OUT}/icons-${name}.png`, execSync('adb exec-out screencap -p', { maxBuffer: 64 << 20 }));
+const rawShot = (name) => fs.writeFileSync(`${OUT}/icons-${name}.png`, execSync('adb exec-out screencap -p', { maxBuffer: 64 << 20 }));
 
 async function target() {
   for (let i = 0; i < 20; i++) {
@@ -57,23 +57,27 @@ async function target() {
     list.forEach((i) => check(i.inline && i.same && i.imgHidden && i.size !== '0x0', step + ': ' + i.file + ' is drawn inline from its own file (' + i.size + ')'));
     return list;
   };
+  // The header hides while the page scrolls under the reader: back to the top so the toolbar is in the picture.
+  const shot = async (name) => { await ev(`window.scrollTo(0, 0)`); await sleep(1800); rawShot(name); };
   const click = (sel) => ev(`(function(){ var b = document.querySelector(${JSON.stringify(sel)}); if (!b) return 'no ${sel}'; b.click(); return 'clicked'; })()`);
 
   await ev(`location.assign('/pli-tv-bu-pm')`); await sleep(12000);
-  shot('1-reader'); await verify('reader');
+  await shot('1-reader'); await verify('reader');
   say('voice: ' + await click('.voice-link')); await sleep(5000);
-  shot('2-voice-open'); await verify('voice open');
+  // Paused, the player stays open and the page stops scrolling along (the owner's screenshot had it open).
+  say('pause: ' + await click('.play-main-button')); await sleep(1500);
+  await shot('2-voice-open'); await verify('voice open');
   say('dictionary: ' + await click('#reader-toolbar .toggle-dict-btn')); await sleep(2500);
-  shot('3-dictionary-toggled'); const a = await verify('dictionary toggled');
+  await shot('3-dictionary-toggled'); const a = await verify('dictionary toggled');
   say('dictionary: ' + await click('#reader-toolbar .toggle-dict-btn')); await sleep(2500);
-  shot('4-dictionary-back'); const b = await verify('dictionary back');
+  await shot('4-dictionary-back'); const b = await verify('dictionary back');
   check(a.find((i) => /^comment/.test(i.file)).file !== b.find((i) => /^comment/.test(i.file)).file, 'the dictionary icon itself changes with the toggle');
   say('variants: ' + await click('#toggle-variants')); await sleep(2500);
-  shot('5-variants-toggled'); await verify('variants toggled');
+  await shot('5-variants-toggled'); await verify('variants toggled');
   say('variants: ' + await click('#toggle-variants')); await sleep(2500);
-  shot('6-variants-back'); await verify('variants back');
+  await shot('6-variants-back'); await verify('variants back');
   say('scroll'); await ev(`window.scrollBy(0, 1500)`); await sleep(1500); await ev(`window.scrollBy(0, -1500)`); await sleep(2000);
-  shot('7-after-scroll'); await verify('after a scroll');
+  await shot('7-after-scroll'); await verify('after a scroll');
   await ev(`typeof stopPlayback === 'function' && stopPlayback()`);
   fs.writeFileSync(`${OUT}/icons-result.txt`, res.join('\n') + '\n');
   ws.close();

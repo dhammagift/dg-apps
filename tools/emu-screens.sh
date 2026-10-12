@@ -318,6 +318,7 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
 fi
 if [ "${4:-}" = icons ] && [ "$PKG" = gift.dhamma.mobile ]; then
   # Reader toolbar icons after the dictionary / variants toggles (tools/emu-icons.js, debug APK, DevTools).
+  adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1   # the player asks; the dialog would cover the page
   [ "${VIDEO:-0}" = 1 ] && adb shell screenrecord --bit-rate 6000000 --time-limit 170 /sdcard/icons.mp4 &
   RECPID=$!
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20

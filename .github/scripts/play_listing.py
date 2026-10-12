@@ -26,6 +26,11 @@ try:
     if action == "status":
         for l in api.edits().listings().list(packageName=pkg, editId=edit).execute().get("listings", []):
             print(f"--- {l['language']}\n  title: {l.get('title')!r}\n  short: {l.get('shortDescription')!r}\n  full: {l.get('fullDescription')!r}")
+    elif action == "tracks":
+        for t in api.edits().tracks().list(packageName=pkg, editId=edit).execute().get("tracks", []):
+            for r in t.get("releases", []):
+                print(f"{t['track']}: {r.get('name')!r} codes={r.get('versionCodes')} status={r.get('status')} "
+                      f"fraction={r.get('userFraction')} notes={[n['language'] for n in r.get('releaseNotes', [])]}")
     elif action == "set":
         path, lang = rest
         want = {k: v for k, v in json.load(open(path))["play"].items() if v and k != "releaseNotes"}

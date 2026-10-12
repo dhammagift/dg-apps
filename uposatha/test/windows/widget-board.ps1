@@ -118,9 +118,9 @@ Dismiss
 [Keys]::WinPlus(0x57)   # Win+W
 Start-Sleep 12
 Shot 'board'; Tree 'board'
-if (Tap 'Widget' 'Add widgets|Add a widget|^\+$|Discover|Pin widgets') { Start-Sleep 6; Shot 'board-add'; Tree 'board-add' }
-if (Tap 'Widget' 'Uposatha') { Start-Sleep 6; Shot 'board-uposatha'; Tree 'board-uposatha' }
-if (Tap 'Widget' '^Pin$|Pin widget|^Add$') { Start-Sleep 10; Shot 'board-pinned'; Tree 'board-pinned' }
+if (Tap 'Widget' '^Add widgets$') { Start-Sleep 8; Shot 'board-add'; Tree 'board-add' }   # run 3: the board opens without a sign-in and has this button
+if (Tap 'Widget' 'Uposatha|Day & night|^Month$') { Start-Sleep 8; Shot 'board-uposatha'; Tree 'board-uposatha' }
+if (Tap 'Widget' '^Pin$|^Pin widget|^Add$|^Pin to') { Start-Sleep 12; Shot 'board-pinned'; Tree 'board-pinned' }
 Start-Sleep 5
 Shot 'end'
 Get-ChildItem $Out | Select-Object Name, Length

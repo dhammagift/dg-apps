@@ -106,6 +106,16 @@ def set_text(bundle, path):
             print(f"{locale}: created with {sorted(fields)}")
 
 
+def delete_locale(bundle, locale):
+    v = editable_version(app_id(bundle))
+    for l in call("GET", f"/v1/appStoreVersions/{v['id']}/appStoreVersionLocalizations")["data"]:
+        if l["attributes"]["locale"] == locale:
+            call("DELETE", f"/v1/appStoreVersionLocalizations/{l['id']}")
+            print(f"{locale}: localization removed")
+            return
+    print(f"{locale}: no such localization")
+
+
 def submit(bundle):
     aid = app_id(bundle)
     v = editable_version(aid)
@@ -122,4 +132,5 @@ def submit(bundle):
 if __name__ == "__main__":
     bundle, action, *rest = sys.argv[1:]
     {"status": lambda: status(bundle), "cancel": lambda: cancel(bundle), "set-build": lambda: set_build(bundle, rest[0]),
-     "set-text": lambda: set_text(bundle, rest[0]), "submit": lambda: submit(bundle)}[action]()
+     "set-text": lambda: set_text(bundle, rest[0]), "delete-locale": lambda: delete_locale(bundle, rest[0]),
+     "submit": lambda: submit(bundle)}[action]()

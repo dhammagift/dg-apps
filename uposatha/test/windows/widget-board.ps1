@@ -181,15 +181,37 @@ if ($opened) { Start-Sleep 8; Shot 'board-add'; Tree 'board-add' } else { Shot '
 # the picker lists the apps that have widgets; ours is there only when Windows took the PWA's widgets
 $names = @()
 try { foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.Name -match 'WidgetPicker') { foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.ControlType.ProgrammaticName -match 'ListItem') { $names += $e.Current.Name } } } } } catch { }
-Log ("picker lists: " + ($names -join ' | '))
-Log ("PWAmp (the control) in the picker: " + [bool]($names -match 'PWAmp') + "; Uposatha: " + [bool]($names -match 'Uposatha|Day & night|^Month$'))
-if (Tap 'WidgetPicker' 'Uposatha|Day & night|^Month$') {
-  Start-Sleep 8; Shot 'picker-uposatha'; Tree 'picker-uposatha'
-  if (Tap 'WidgetPicker' '^Pin$') {
-    Start-Sleep 15; Shot 'board-pinned'; Tree 'board-pinned'
-    [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 6; Shot 'board-with-widget'
-  }
-} else { Log 'the picker does not list Uposatha' }
+Log ("picker lists: " + (($names | ForEach-Object { $_.Substring(0, [Math]::Min(40, $_.Length)) }) -join ' | '))
+Log ("PWAmp (the control) in the picker: " + [bool]($names -match 'PWAmp') + "; Uposatha: " + [bool]($names -match 'Uposatha'))
+# The n-th button of that name in the picker (our app has a Pin button per widget)
+function TapNth([string]$window, [string]$pattern, [int]$n) {
+  try {
+    foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
+      if ($w.Current.Name -notmatch $window) { continue }
+      $hits = @(); foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.ControlType.ProgrammaticName -match 'Button' -and $e.Current.Name -match $pattern) { $hits += $e } }
+      if ($hits.Count -gt $n) { $p = $null; if ($hits[$n].TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); Log "tapped button $n of $($hits.Count) [$($hits[$n].Current.Name)]"; return $true } }
+      Log "only $($hits.Count) button(s) /$pattern/ in /$window/"; return $false
+    }
+  } catch { Log "tapNth failed: $_" }
+  return $false
+}
+# every widget of ours is pinned: the picker is opened anew for each (it closes after a pin)
+for ($n = 0; $n -lt 3; $n++) {
+  if ($n -gt 0) { for ($i = 1; $i -le 6; $i++) { if (Tap '^Widgets$' '^Add widgets$') { break } else { Start-Sleep 4 } }; Start-Sleep 6 }
+  if (-not (Tap 'WidgetPicker' '^Uposatha by the Suttas$')) { Log "the picker does not list Uposatha (widget $n)"; break }
+  Start-Sleep 6
+  if ($n -eq 0) { Shot 'picker-uposatha'; Tree 'picker-uposatha' }
+  if (TapNth 'WidgetPicker' '^Pin$' $n) { Start-Sleep 12; Shot "pinned-$n" }
+}
+# what the board says in our widgets, now and a minute later (a drawn card's texts are in the element tree, wherever it is scrolled)
+function BoardTexts([string]$name) {
+  $t = @(); try { foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.Name -match '^Widgets$') { foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.Name) { $t += ($e.Current.ControlType.ProgrammaticName -replace 'ControlType\.', '') + ' | ' + $e.Current.Name } } } } } catch { }
+  $t | Out-File "$Out\board-texts-$name.txt" -Encoding utf8
+  Log ("board texts ($name): " + $t.Count + "; PROBE-MIN: " + [bool]($t -match 'PROBE-MIN') + "; PROBE-NOSIZE: " + [bool]($t -match 'PROBE-NOSIZE') + "; main card (day . coming/now): " + [bool]($t -match 'day . (coming|now)|день . (скоро|сейчас)') + "; our titles: " + (($t -match 'Uposatha \+ kala|Day & night|^Text \| Month$').Count))
+}
+Shot 'board-after-pins'; BoardTexts 'now'
+Start-Sleep 45
+Shot 'board-a-minute-later'; BoardTexts 'later'
 Start-Sleep 5
 Shot 'end'
 Get-ChildItem $Out | Select-Object Name, Length

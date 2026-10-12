@@ -3,7 +3,7 @@
 The package is built by `tools/windows-package.py dg` (PWABuilder) and opens https://dhamma.gift/?source=pwa: the app is the
 site in its own window and changes with the site. Product in Partner Center: 9NK892G5P5GT
 (https://partner.microsoft.com/dashboard/products/9NK892G5P5GT/overview), Store page https://apps.microsoft.com/detail/9NK892G5P5GT.
-Identity: `Dhamma.Gift.Dhamma.Gift`, `CN=228CF411-148B-4864-B241-989A63B8B766`, `Dhamma.Gift`. The text is the App Store one (APP_STORE_LISTING.md) without what only the phone
+Identity: `Dhamma.Gift.Dhamma.Gift`, `CN=228CF411-148B-4864-B241-989A63B8B766`, `Dhamma.Gift`. Sent for certification by the owner on 2026-10-12. The text is the App Store one (APP_STORE_LISTING.md) without what only the phone
 apps have (the Share Extension, the system voice) and without the library's size, which differs in the browser.
 
 ## Description

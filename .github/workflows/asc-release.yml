@@ -1,0 +1,52 @@
+name: App Store release step
+
+# One App Store Connect step for one app's version that is being prepared or reviewed (.github/scripts/asc_release.py):
+# status (read only), cancel review, attach a build, update the texts from a JSON file in this repository, submit for review.
+# Started by hand, one step per run, so each change is seen before the next (owner, 2026-10-12: cancel the Dictionary's
+# review, new screenshots, the new build and texts, then submit again).
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Which app'
+        type: choice
+        options: [dict, uposatha, dg]
+        default: dict
+      action:
+        description: 'status (read only) / cancel / set-build / set-text / submit'
+        type: choice
+        options: [status, cancel, set-build, set-text, submit]
+        default: status
+      arg:
+        description: 'set-build: the build number; set-text: the JSON file (e.g. dict/store/listing.json)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asc-release
+  cancel-in-progress: false
+
+jobs:
+  step:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: ${{ inputs.action }} (${{ inputs.app }})
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APP: ${{ inputs.app }}
+          ACTION: ${{ inputs.action }}
+          ARG: ${{ inputs.arg }}
+        run: |
+          pip install --quiet 'pyjwt[crypto]'
+          case "$APP" in dict) B=gift.dhamma.pali ;; uposatha) B=gift.dhamma.uposatha ;; dg) B=gift.dhamma.mobile ;; esac
+          python3 .github/scripts/asc_release.py "$B" "$ACTION" ${ARG:+"$ARG"} | tee step.txt
+          { echo "### App Store: $ACTION ($APP)"; echo '```'; cat step.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

@@ -122,6 +122,28 @@ def delete_locale(bundle, locale):
     print(f"{locale}: no such localization")
 
 
+def testflight(bundle):
+    """The external TestFlight groups and the builds each one can install (newest first), with each build's beta review state."""
+    aid = app_id(bundle)
+    groups = call("GET", f"/v1/apps/{aid}/betaGroups?limit=50")["data"]
+    for g in groups:
+        ga = g["attributes"]
+        if ga.get("isInternalGroup"):
+            continue
+        print(f"group {ga['name']!r}: public link {'on' if ga.get('publicLinkEnabled') else 'off'} {ga.get('publicLink') or ''}")
+        builds = call("GET", f"/v1/betaGroups/{g['id']}/builds?limit=10&sort=-uploadedDate"
+                             "&include=preReleaseVersion,buildBetaDetail&fields[preReleaseVersions]=version")
+        inc = {(i["type"], i["id"]): i["attributes"] for i in builds.get("included", [])}
+        for b in builds["data"]:
+            ba, rel = b["attributes"], b["relationships"]
+            ver = inc.get(("preReleaseVersions", (rel["preReleaseVersion"]["data"] or {}).get("id")), {}).get("version", "?")
+            det = inc.get(("buildBetaDetails", (rel["buildBetaDetail"]["data"] or {}).get("id")), {})
+            print(f"  {ver} ({ba['version']}) uploaded {ba['uploadedDate'][:10]} expired={ba.get('expired')} "
+                  f"external={det.get('externalBuildState')}")
+    if not any(not g["attributes"].get("isInternalGroup") for g in groups):
+        print("no external groups")
+
+
 def submit(bundle):
     aid = app_id(bundle)
     v = editable_version(aid)
@@ -175,5 +197,6 @@ if __name__ == "__main__":
     bundle, action, *rest = sys.argv[1:]
     {"status": lambda: status(bundle), "cancel": lambda: cancel(bundle), "set-build": lambda: set_build(bundle, rest[0]),
      "set-text": lambda: set_text(bundle, rest[0]), "delete-locale": lambda: delete_locale(bundle, rest[0]),
+     "testflight": lambda: testflight(bundle),
      "submit": lambda: submit(bundle), "testflight": lambda: testflight(bundle),
      "screens": lambda: screens(bundle, *rest)}[action]()

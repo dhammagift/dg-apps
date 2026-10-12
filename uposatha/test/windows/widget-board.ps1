@@ -60,16 +60,32 @@ function Tap([string]$window, [string]$pattern) {
 }
 
 # A fresh runner user has never finished Windows' first-run screens: "Choose privacy settings for your device" covers the whole
-# screen (run 1: every screenshot was that page). Next / Accept until it is gone.
+# screen (run 1: every screenshot was that page). Its window (class Shell_OOBEProxy) gives UI Automation nothing to press (run 2),
+# so: first the processes that host it are stopped; if it is still there, its Next / Accept button is clicked where it stands
+# (the bottom right of the page: 87 % across, 87 % down), a screenshot after every click.
+Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, UIntPtr e);' -Name M -Namespace W -ErrorAction SilentlyContinue
+function ClickAt([double]$rx, [double]$ry) {
+  $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+  [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($b.Left + $b.Width * $rx)), ([int]($b.Top + $b.Height * $ry))
+  Start-Sleep -Milliseconds 300
+  [W.M]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero); [W.M]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+}
+function FirstRunThere {
+  foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.ClassName -match 'OOBE|CloudExperience') { return $true } }
+  return $false
+}
 function Dismiss {
-  for ($i = 0; $i -lt 8; $i++) {
-    $there = $false
-    foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) { if ($w.Current.ClassName -match 'OOBE|CloudExperience') { $there = $true } }
-    if (-not $there) { Log "first-run screens: none left after $i step(s)"; return }
-    if (-not (Tap 'Microsoft account|privacy|Welcome|Windows' '^(Accept|Next|Skip|Skip for now|Not now|No thanks|Continue|Finish|Done)$')) { break }
+  if (-not (FirstRunThere)) { Log 'first-run screens: none'; return }
+  Get-Process | Where-Object { $_.ProcessName -match 'OOBE|CloudExperienceHost|WWAHost' } | ForEach-Object { Log "stopping $($_.ProcessName) ($($_.Id))"; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+  Start-Sleep 4
+  Shot 'first-run-after-stop'
+  for ($i = 1; $i -le 8; $i++) {
+    if (-not (FirstRunThere)) { Log "first-run screens: gone after $($i - 1) click(s)"; return }
+    ClickAt 0.871 0.867
     Start-Sleep 4
+    Shot "first-run-click-$i"
   }
-  Log 'first-run screens: still there'
+  Log ('first-run screens: ' + $(if (FirstRunThere) { 'still there' } else { 'gone' }))
 }
 
 # 1. What this machine is

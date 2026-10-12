@@ -182,6 +182,17 @@ def main():
     play = play_tracks(["gift.dhamma.twa", "gift.dhamma.pali", "gift.dhamma.uposatha", "gift.dhamma.noapp"]) if os.environ.get("PLAY_JSON") else {}
     asc = safe("App Store Connect key", asc_client) if os.environ.get("ASC_KEY_P8") else None
 
+    # The version an app shows in its menu: versionName (build). The build numbers alone (562, 565) read like nothing the owner
+    # sees in the app (2026-10-12), so every number on the page goes with its version.
+    def props(path):
+        try: return dict(l.strip().split("=", 1) for l in open(path) if "=" in l and not l.lstrip().startswith("#"))
+        except OSError: return {}
+    VER = {"dg": props("version.properties"), "dict": props("dict/version.properties"), "upo": props("uposatha/version.properties")}
+    def named(app, code, ios=False):
+        p = VER.get(app, {})
+        v = (p.get("ios") if ios else None) or p.get("version", "")
+        return f"{v} ({code})" if v else str(code)
+
     def play_row(key, product, pkg, aab_prefix, apk_prefix, repo, ours_override=None):
         t = play.get(pkg) or {}
         prod = t.get("production", {})
@@ -193,7 +204,7 @@ def main():
         testing = {"code": test.get("code"), "label": (test_track + " " + fmt(test.get("name"), test.get("code"))).strip()}
         built = safe(f"artifacts {aab_prefix}", lambda: latest_artifact(repo, aab_prefix)) if aab_prefix else None
         apk = safe(f"artifacts {apk_prefix}", lambda: latest_artifact(repo, apk_prefix)) if apk_prefix else None
-        ours = ours_override or ({"code": built[0], "label": str(built[0])} if built else {})
+        ours = ours_override or ({"code": built[0], "label": named(key.split("-")[0], built[0])} if built else {})
         if not t and ours.get("label") and live["label"] and live["label"] != ours["label"]:
             live["code"] = 1  # no track data: a different public version still means ours is newer
         return row(key, product, "Android", "Google Play", live, testing, ours, {
@@ -210,9 +221,10 @@ def main():
         lb = a.get("live_build", "")
         live = {"code": int(lb) if lb.isdigit() else 0, "label": f"{a['live']} ({lb})" if a.get("live") and lb else a.get("live", "")}
         tf = a.get("tf_build", "")
-        testing = {"code": int(tf) if tf.isdigit() else 0, "label": f"TestFlight {tf}" if tf else ""}
+        testing = {"code": int(tf) if tf.isdigit() else 0, "label": f"TestFlight {a.get('tf_version') or ''} ({tf})".replace(" ()", "").replace("TestFlight  (", "TestFlight (") if tf else ""}
         built = safe(f"artifacts {ipa_prefix}", lambda: latest_artifact(REPO, ipa_prefix)) if ipa_prefix else None
-        ours = {"code": built[0], "label": str(built[0])} if built else {"code": testing["code"], "label": tf}
+        ours = ({"code": built[0], "label": named(key.split("-")[0], built[0], ios=True)} if built
+                else {"code": testing["code"], "label": named(key.split("-")[0], tf, ios=True) if tf else ""})
         r = row(key, product, "iOS", "App Store", live, testing, ours, {
             "store_url": store_url, "console_url": f"{ASC_URL}/{a['id']}" if a.get("id") else ASC_URL,
             "repo_url": f"https://github.com/{REPO}", "apk_url": "", "testflight_url": a.get("public_link", "")},

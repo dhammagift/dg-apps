@@ -175,6 +175,29 @@ if ($Package) {
     Log ("package installed: " + $(if ($pkg) { $pkg.PackageFullName } else { 'NO' }))
     $app = Get-StartApps | Where-Object { $_.Name -match '^(Uposatha by the Suttas|Dhamma\.Gift|Dict\.Dhamma\.Gift)$' } | Select-Object -Last 1
     if ($app) { Start-Process ("shell:AppsFolder\" + $app.AppID); Start-Sleep 25; Shot 'packaged-app' } else { Log 'the packaged app is not in the Start menu' }
+    # The jump list of the packaged app (owner, 2026-10-13: the Store apps show no shortcuts of the manifest, the PWA installed
+    # from the browser does): a right click on its taskbar button, a screenshot, and the names in the menu that opened.
+    if ($app) {
+      $btn = $null
+      foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
+        if ($w.Current.ClassName -ne 'Shell_TrayWnd') { continue }
+        foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if (-not $btn -and $e.Current.ControlType.ProgrammaticName -match 'Button' -and $e.Current.Name -match ('^' + [regex]::Escape($app.Name))) { $btn = $e } }
+      }
+      if ($btn) {
+        $r = $btn.Current.BoundingRectangle
+        [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($r.X + $r.Width / 2)), ([int]($r.Y + $r.Height / 2))
+        Start-Sleep -Milliseconds 400
+        [W.M]::mouse_event(8, 0, 0, 0, [UIntPtr]::Zero); [W.M]::mouse_event(16, 0, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep 4; Shot 'jump-list'
+        $items = @()
+        foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
+          if ($w.Current.ClassName -match 'Shell_TrayWnd|Progman|Chrome_WidgetWin|CASCADIA|ConsoleWindowClass') { continue }
+          foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.Name -and $e.Current.ControlType.ProgrammaticName -match 'ListItem|MenuItem|Button') { $items += $e.Current.Name } }
+        }
+        Log ("jump list of [" + $btn.Current.Name + "]: " + (($items | Select-Object -First 30) -join ' | '))
+        [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 1
+      } else { Log "no taskbar button of $($app.Name)" }
+    }
   } catch { Log "package: $_" }
 }
 

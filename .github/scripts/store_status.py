@@ -235,6 +235,31 @@ def main():
     rows.append(ios_row("dict-ios", "Словарь", "gift.dhamma.pali", "", ""))
     rows.append(ios_row("upo-ios", "Uposatha", "gift.dhamma.uposatha", "", ""))
 
+    # Microsoft Store: the PWAs (tools/windows-package.py). They load the site, so there is no build of ours to compare,
+    # only whether the product is out; the public catalogue has no version for them, only the last update.
+    def ms_row(key, product, pid):
+        def product():
+            try:
+                return get(f"https://storeedgefd.dsx.mp.microsoft.com/v9.0/products/{pid}?market=US&locale=en-us"
+                           "&deviceFamily=Windows.Desktop").get("Payload")
+            except urllib.error.HTTPError as e:
+                if e.code == 404:  # not in the Store yet
+                    return {}
+                raise
+        p = safe(f"Microsoft Store {pid}", product, {}) or {}
+        out = bool(p.get("Title"))
+        return {"key": key, "product": product, "platform": "Windows", "store": "Microsoft Store",
+                "live": f"PWA, обновлена {p.get('LastUpdateDateUtc', '')[:10]}" if out else "—", "testing": "—", "ours": "сайт",
+                "status": "свежая" if out else "на проверке",
+                "action": "Всё свежее: приложение открывает сайт." if out else "Ещё нет в магазине: подаём в Microsoft Store.",
+                "store_url": f"https://apps.microsoft.com/detail/{pid}" if out else "",
+                "console_url": f"https://partner.microsoft.com/dashboard/products/{pid}/overview",
+                "repo_url": f"https://github.com/{REPO}", "apk_url": "", "testflight_url": ""}
+
+    rows.append(ms_row("dg-windows", "Dhamma.Gift", "9NK892G5P5GT"))
+    rows.append(ms_row("dict-windows", "Словарь", "9P3B7HLRXXGC"))
+    rows.append(ms_row("upo-windows", "Uposatha", "9NMD1L6H52ZN"))
+
     # Not App: Play (notApp's own Play key may be the only one with access; the public page is the fallback)
     rel = safe("notApp release", lambda: latest_release("dhammagift/notApp"), ("", "", ""))
     # notApp's versionCode is major*10000 + minor*100 + patch (app/build.gradle.kts: 0.6.5 -> 605)

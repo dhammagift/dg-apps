@@ -1,7 +1,7 @@
 # Uposatha by the Suttas: Microsoft Store listing (English, United States)
 
 Product in Partner Center: 9NMD1L6H52ZN (https://partner.microsoft.com/dashboard/products/9NMD1L6H52ZN/overview), Store page
-https://apps.microsoft.com/detail/9NMD1L6H52ZN; sent for certification by the owner on 2026-10-12. Identity: `Dhamma.Gift.UposathabytheSuttas`, `CN=228CF411-148B-4864-B241-989A63B8B766`,
+https://apps.microsoft.com/detail/9NMD1L6H52ZN; sent for certification by the owner on 2026-10-12, in the Store on 2026-10-13. Identity: `Dhamma.Gift.UposathabytheSuttas`, `CN=228CF411-148B-4864-B241-989A63B8B766`,
 `Dhamma.Gift`. The package is built by `tools/windows-package.py uposatha` (PWABuilder) and opens https://dhamma.gift/uposatha-calendar.
 Texts agreed with the owner for the App Store / Play (listing.json), with what is different on Windows: the widgets live on the
 Widgets Board, and nothing is said about reminders that arrive with the app closed or about the app-icon menu (not there on Windows).

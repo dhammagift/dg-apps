@@ -28,10 +28,10 @@ on:
         type: string
         default: 'light'
       package:
-        description: 'A PWABuilder Windows package (zip with *.sideload.msix and utils/pwainstaller.exe) to install as well; empty = none'
+        description: 'A PWABuilder Windows package (zip with *.sideload.msix and utils/pwainstaller.exe) to install instead of the PWA; none = the PWA from the page'
         required: false
         type: string
-        default: ''
+        default: 'none'
       jump:
         description: 'relaunch = the packaged app is closed and opened again and its taskbar menu is pictured a second time; no = once'
         required: false

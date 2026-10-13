@@ -2,6 +2,7 @@
 # board (Win+W), tries to add the widget, and leaves a screenshot and the board's element tree after every step.
 # A probe: it fails nothing; what it found is read from the artifact (owner, 2026-10-11: is there a way to test the Windows widget).
 param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '', [int]$Only = -1, [string]$Size = '', [string]$Theme = '', [string]$Jump = 'no')
+if ($Package -eq 'none') { $Package = '' }   # an empty argument on the command line breaks the call (run 26, and the run without a package on 2026-10-13)
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path

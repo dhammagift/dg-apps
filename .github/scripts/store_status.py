@@ -238,7 +238,7 @@ def main():
     # Microsoft Store: the PWAs (tools/windows-package.py). They load the site, so there is no build of ours to compare,
     # only whether the product is out; the public catalogue has no version for them, only the last update.
     def ms_row(key, product, pid):
-        def product():
+        def fetch():
             try:
                 return get(f"https://storeedgefd.dsx.mp.microsoft.com/v9.0/products/{pid}?market=US&locale=en-us"
                            "&deviceFamily=Windows.Desktop").get("Payload")
@@ -246,7 +246,7 @@ def main():
                 if e.code == 404:  # not in the Store yet
                     return {}
                 raise
-        p = safe(f"Microsoft Store {pid}", product, {}) or {}
+        p = safe(f"Microsoft Store {pid}", fetch, {}) or {}
         out = bool(p.get("Title"))
         return {"key": key, "product": product, "platform": "Windows", "store": "Microsoft Store",
                 "live": f"PWA, обновлена {p.get('LastUpdateDateUtc', '')[:10]}" if out else "—", "testing": "—", "ours": "сайт",

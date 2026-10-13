@@ -199,8 +199,15 @@ def main():
         test = max((t[k] for k in ("beta", "alpha", "internal") if k in t), key=lambda x: x["code"], default={})
         test_track = next((k for k in ("beta", "alpha", "internal") if t.get(k) is test), "")
         live = {"code": prod.get("code"), "label": fmt(prod.get("name"), prod.get("code"))}
+        # What users get is what the public page shows: the API's production release may still be in Google's review
+        # (Not App 0.6.7 in production by the API while the page still gave 0.6.3, 2026-10-13).
+        public = safe(f"Play page {pkg}", lambda: play_public_version(pkg), "")
+        waiting = ""
         if not t:
-            live = {"code": 0, "label": safe(f"Play page {pkg}", lambda: play_public_version(pkg), "")}
+            live = {"code": 0, "label": public}
+        elif public and prod.get("name") and public != prod.get("name"):
+            waiting = f"Версия {live['label']} на проверке Google, у пользователей пока {public}."
+            live = {"code": 0, "label": public}
         testing = {"code": test.get("code"), "label": (test_track + " " + fmt(test.get("name"), test.get("code"))).strip()}
         built = safe(f"artifacts {aab_prefix}", lambda: latest_artifact(repo, aab_prefix)) if aab_prefix else None
         apk = safe(f"artifacts {apk_prefix}", lambda: latest_artifact(repo, apk_prefix)) if apk_prefix else None
@@ -209,7 +216,7 @@ def main():
             live["code"] = 1  # no track data: a different public version still means ours is newer
         return row(key, product, "Android", "Google Play", live, testing, ours, {
             "store_url": f"https://play.google.com/store/apps/details?id={pkg}", "console_url": PC,
-            "repo_url": f"https://github.com/{repo}", "apk_url": apk[1] if apk else "", "testflight_url": ""})
+            "repo_url": f"https://github.com/{repo}", "apk_url": apk[1] if apk else "", "testflight_url": ""}, waiting=waiting)
 
     rows.append(play_row("dg-android", "Dhamma.Gift", "gift.dhamma.twa", "dg-app-full-aab-release", "dg-app-full-apk-release", REPO))
     rows.append(play_row("dict-android", "Словарь", "gift.dhamma.pali", "dg-dict-aab-release", "dg-dict-apk-release", REPO))

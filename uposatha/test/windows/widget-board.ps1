@@ -178,11 +178,23 @@ if ($Package) {
     # The jump list of the packaged app (owner, 2026-10-13: the Store apps show no shortcuts of the manifest, the PWA installed
     # from the browser does): a right click on its taskbar button, a screenshot, and the names in the menu that opened.
     if ($app) {
-      $btn = $null
+      [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 2   # run 43: the Start menu was open over the app
+      $btn = $null; $bar = @()
       foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
         if ($w.Current.ClassName -ne 'Shell_TrayWnd') { continue }
-        foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if (-not $btn -and $e.Current.ControlType.ProgrammaticName -match 'Button' -and $e.Current.Name -match ('^' + [regex]::Escape($app.Name))) { $btn = $e } }
+        foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) {
+          if ($e.Current.Name) { $bar += $e.Current.Name }
+          if (-not $btn -and $e.Current.Name -match [regex]::Escape($app.Name)) { $btn = $e }
+        }
       }
+      Log ("taskbar: " + ($bar -join ' | '))
+      # what Edge wrote as jump lists (one file per app id): the names of the manifest's shortcuts are in it as UTF-16 text
+      try {
+        foreach ($f in Get-ChildItem "$env:APPDATA\Microsoft\Windows\Recent\CustomDestinations" -ErrorAction SilentlyContinue) {
+          $t = [System.Text.Encoding]::Unicode.GetString([System.IO.File]::ReadAllBytes($f.FullName))
+          Log ("jump list file " + $f.Name + " " + $f.Length + " " + $f.LastWriteTime.ToString('HH:mm:ss') + ": " + (([regex]::Matches($t, 'Table of Contents|Favorites|Memo|Dictionary|Patimokkha|dhamma\.gift[^\x00 ]{0,40}') | ForEach-Object { $_.Value } | Select-Object -Unique -First 12) -join ' | '))
+        }
+      } catch { Log "jump list files: $_" }
       if ($btn) {
         $r = $btn.Current.BoundingRectangle
         [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($r.X + $r.Width / 2)), ([int]($r.Y + $r.Height / 2))

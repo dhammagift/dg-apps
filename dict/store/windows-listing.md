@@ -2,7 +2,8 @@
 
 The package is built by `tools/windows-package.py dict` (PWABuilder) and opens https://dict.dhamma.gift/?source=pwa: the app is
 the site in its own window and changes with the site. Product in Partner Center: 9P3B7HLRXXGC
-(https://partner.microsoft.com/dashboard/products/9P3B7HLRXXGC/overview), Store page https://apps.microsoft.com/detail/9P3B7HLRXXGC.
+(https://partner.microsoft.com/dashboard/products/9P3B7HLRXXGC/overview), Store page https://apps.microsoft.com/detail/9P3B7HLRXXGC;
+sent for certification by the owner on 2026-10-13.
 Identity: `Dhamma.Gift.Dict.Dhamma.Gift`, `CN=228CF411-148B-4864-B241-989A63B8B766`, `Dhamma.Gift`; package 1.0.1.0:
 https://test.dhamma.gift/assets/shots/dict-store-windows/Dict.Dhamma.Gift.msixbundle. The text is the App Store / Play one (listing.json) without what only the phone
 apps have: the row of Pāḷi letters over the keyboard, the Share menu, the icon's long-press menu.

@@ -251,7 +251,7 @@ def main():
         return {"key": key, "product": product, "platform": "Windows", "store": "Microsoft Store",
                 "live": f"PWA, обновлена {p.get('LastUpdateDateUtc', '')[:10]}" if out else "—", "testing": "—", "ours": "сайт",
                 "status": "свежая" if out else "на проверке",
-                "action": "Всё свежее: приложение открывает сайт." if out else "Ещё нет в магазине: подаём в Microsoft Store.",
+                "action": "Всё свежее: приложение открывает сайт." if out else "Отправлено в Microsoft Store, ждём проверку.",
                 "store_url": f"https://apps.microsoft.com/detail/{pid}" if out else "",
                 "console_url": f"https://partner.microsoft.com/dashboard/products/{pid}/overview",
                 "repo_url": f"https://github.com/{REPO}", "apk_url": "", "testflight_url": ""}

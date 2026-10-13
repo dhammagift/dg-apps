@@ -81,7 +81,12 @@ def play_tracks(pkgs):
 
 
 def play_public_version(pkg):
-    html = get(f"https://play.google.com/store/apps/details?id={pkg}&hl=en", raw=True)
+    try:
+        html = get(f"https://play.google.com/store/apps/details?id={pkg}&hl=en", raw=True)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:  # not public yet (only in testing)
+            return ""
+        raise
     m = re.search(r'\[\[\["(\d+(?:\.\d+)+)"\]\]', html)
     return m.group(1) if m else ""
 

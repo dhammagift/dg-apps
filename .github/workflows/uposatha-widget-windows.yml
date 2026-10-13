@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: ''
+      jump:
+        description: 'relaunch = the packaged app is closed and opened again and its taskbar menu is pictured a second time; no = once'
+        required: false
+        type: string
+        default: 'no'
 
 concurrency:
   group: uposatha-widget-windows
@@ -52,7 +57,7 @@ jobs:
 
       - name: Install the PWA, open the board, add the widget
         shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./uposatha/test/windows/widget-board.ps1 -Url '${{ inputs.url }}' -Out win-shots -Package '${{ inputs.package }}' -Only ${{ inputs.only }} -Size '${{ inputs.size }}' -Theme '${{ inputs.theme }}'
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./uposatha/test/windows/widget-board.ps1 -Url '${{ inputs.url }}' -Out win-shots -Package '${{ inputs.package }}' -Only ${{ inputs.only }} -Size '${{ inputs.size }}' -Theme '${{ inputs.theme }}' -Jump '${{ inputs.jump }}'
 
       - name: Upload the screenshots and the trees
         if: always()

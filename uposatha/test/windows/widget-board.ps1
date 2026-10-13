@@ -1,7 +1,7 @@
 # The Uposatha PWA widget on a real Windows 11 Widgets Board (a GitHub runner): installs the PWA into Edge by policy, opens the
 # board (Win+W), tries to add the widget, and leaves a screenshot and the board's element tree after every step.
 # A probe: it fails nothing; what it found is read from the artifact (owner, 2026-10-11: is there a way to test the Windows widget).
-param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '', [int]$Only = -1, [string]$Size = '', [string]$Theme = '')
+param([string]$Url = 'https://test.dhamma.gift/uposatha-calendar?app=1&source=pwa', [string]$Out = 'win-shots', [string]$Package = '', [int]$Only = -1, [string]$Size = '', [string]$Theme = '', [string]$Jump = 'no')
 $ErrorActionPreference = 'Continue'
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
@@ -177,7 +177,7 @@ if ($Package) {
     if ($app) { Start-Process ("shell:AppsFolder\" + $app.AppID); Start-Sleep 25; Shot 'packaged-app' } else { Log 'the packaged app is not in the Start menu' }
     # The jump list of the packaged app (owner, 2026-10-13: the Store apps show no shortcuts of the manifest, the PWA installed
     # from the browser does): a right click on its taskbar button, a screenshot, and the names in the menu that opened.
-    if ($app) {
+    function JumpList([string]$pass) {
       [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 2   # run 43: the Start menu was open over the app
       $btn = $null; $bar = @()
       foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
@@ -200,15 +200,20 @@ if ($Package) {
         [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($r.X + $r.Width / 2)), ([int]($r.Y + $r.Height / 2))
         Start-Sleep -Milliseconds 400
         [W.M]::mouse_event(8, 0, 0, 0, [UIntPtr]::Zero); [W.M]::mouse_event(16, 0, 0, 0, [UIntPtr]::Zero)
-        Start-Sleep 4; Shot 'jump-list'
+        Start-Sleep 4; Shot "jump-list-$pass"
         $items = @()
         foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
           if ($w.Current.ClassName -match 'Shell_TrayWnd|Progman|Chrome_WidgetWin|CASCADIA|ConsoleWindowClass') { continue }
           foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.Name -and $e.Current.ControlType.ProgrammaticName -match 'ListItem|MenuItem|Button') { $items += $e.Current.Name } }
         }
-        Log ("jump list of [" + $btn.Current.Name + "]: " + (($items | Select-Object -First 30) -join ' | '))
+        Log ("jump list ($pass) of [" + $btn.Current.Name + "]: " + (($items | Select-Object -First 30) -join ' | '))
         [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 1
       } else { Log "no taskbar button of $($app.Name)" }
+    }
+    if ($app) {
+      JumpList 'first-run'
+      # -Jump relaunch: the same after the app is closed and opened again (does the list come with the second start?)
+      if ($Jump -eq 'relaunch') { Start-Sleep 30; Stop-Process -Name msedge -Force -ErrorAction SilentlyContinue; Start-Sleep 8; Start-Process ("shell:AppsFolder\" + $app.AppID); Start-Sleep 30; JumpList 'second-run' }
     }
   } catch { Log "package: $_" }
 }

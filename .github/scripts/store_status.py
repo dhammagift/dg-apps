@@ -319,6 +319,20 @@ def main():
                      "store_url": surl, "console_url": curl, "repo_url": "https://github.com/dhammagift/dictPlugin",
                      "apk_url": "", "testflight_url": ""})
 
+    # The hub is in two languages: each row's action also in English (same facts, same order).
+    EN = [(r"^Всё свежее: приложение открывает сайт\.$", "Up to date: the app opens the site."), (r"^Всё свежее\.$", "Up to date."),
+          (r"^Отправлено в Microsoft Store, ждём проверку\.$", "Sent to the Microsoft Store, waiting for review."),
+          (r"^Заявка в F-Droid, ждём проверку\.$", "Submitted to F-Droid, waiting for review."),
+          (r"Версия (.+?) на проверке Apple\.", r"Version \1 is in Apple's review."),
+          (r"Версия (.+?) на проверке Google, у пользователей пока (.+?)\.", r"Version \1 is in Google's review; users still get \2."),
+          (r"(.+?) в тесте — можно в прод\. ?", r"\1 is in testing — ready for production. "),
+          (r"Сборка (.+?) ещё никуда не отправлена\.", r"Build \1 has not been sent anywhere yet."),
+          (r"^У нас (.+?), в магазине нет\.$", r"Ours is \1, the store has none."), (r"^У нас (.+?), в магазине (.+?)\.$", r"Ours is \1, the store has \2.")]
+    for r in rows:
+        a = r.get("action", "")
+        for rx, rp in EN:
+            a = re.sub(rx, rp, a)
+        r["action_en"] = a.strip()
     out = {"generated_at": now, "run_url": os.environ.get("RUN_URL", ""), "rows": rows, "errors": errors}
     json.dump(out, open(sys.argv[1] if len(sys.argv) > 1 else "status.json", "w"), ensure_ascii=False, indent=1)
     print(json.dumps({"rows": len(rows), "errors": errors}, ensure_ascii=False, indent=1))

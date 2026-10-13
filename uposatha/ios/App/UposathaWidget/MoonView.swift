@@ -10,11 +10,11 @@ struct MoonShade: Shape {
         let f = WPlan.norm(phase)
         let c = 50.0, r = 48.0, big = 62.0
         let k = cos(2 * Double.pi * f)
-        // drawn, not true: the thin crescents are made thicker so that the day after a new moon (and the 14th day) can be told from the new (full) one; same as WidgetMoon.seen / dg-moon.js
+        // the true crescent, a little thicker in the first 3 % of light so that the day after a new moon (and the 14th day) can be told from the new (full) one; same as WidgetMoon.seen / dg-moon.js
         let u = 1 - min(1, abs(k))
-        let thick: Double = pow(u, 0.6)
-        let bump: Double = 0.07 * exp(-u / 0.06) * (1 - exp(-u / 0.0015))   // the first 5 % a little more visible
-        let rx: Double = (1 - (thick + bump)) * r
+        let thick: Double = u
+        let bump: Double = 0.05 * (1 - exp(-u / 0.01)) * exp(-u / 0.15)   // the first 3 % a little more visible
+        let rx: Double = max(0, 1 - (thick + bump)) * r
         let gibbous = k < 0
         let waxing = f < 0.5
         let terminatorRight = waxing ? !gibbous : gibbous

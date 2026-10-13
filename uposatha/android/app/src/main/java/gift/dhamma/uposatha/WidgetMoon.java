@@ -165,13 +165,14 @@ final class WidgetMoon {
     }
 
     /**
-     * The terminator as it is DRAWN: a loader that is honest and still readable. The true crescent of the day after a new moon is two units
-     * thick and looks like the new moon itself, and the 14th day looks like the full one; the thin part is made thicker (|k|: 0 at half, 1
-     * at new and full; the thickness 1-|k| is raised to 0.6), the middle of the cycle hardly changes. Same function in dg-moon.js and MoonView.swift.
+     * The terminator as it is DRAWN: the true one (|k|: 0 at half, 1 at new and full; the thickness is 1-|k|), but for the first 3 % of
+     * light, where the day after a new moon would look like the new moon itself and the 14th day like the full one: there it gets a little
+     * more (at most 0.04 of the radius). Owner, 2026-10-13: the old curve (the thickness to the power 0.6) drew 6 % of light like 15 %.
+     * Same function in dg-moon.js, uposatha-widget-svg.js and MoonView.swift.
      */
     static double seen(double a) {
         double u = 1 - Math.min(1, Math.max(0, a));
-        return 1 - (Math.pow(u, 0.6) + 0.07 * Math.exp(-u / 0.06) * (1 - Math.exp(-u / 0.0015)));   // + a bump for the first 5 %: not exact on purpose
+        return Math.max(0, 1 - (u + 0.05 * (1 - Math.exp(-u / 0.01)) * Math.exp(-u / 0.15)));
     }
 
     static double illumination(double f) { return (1 - Math.cos(2 * Math.PI * norm(f))) / 2; }

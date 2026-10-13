@@ -150,10 +150,45 @@ Shot 'edge'; Tree 'edge'
 Get-ChildItem "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Web Applications" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object FullName | Out-File "$Out\web-applications.txt" -Width 400
 Get-ChildItem "$env:USERPROFILE\Desktop", "$env:PUBLIC\Desktop" -ErrorAction SilentlyContinue | Select-Object FullName | Out-File -Append "$Out\web-applications.txt" -Width 400
 Get-AppxPackage | Where-Object { $_.Name -match 'edge|uposatha|dhamma|pwa' } | Select-Object Name, Version, PackageFamilyName | Format-Table -AutoSize | Out-File -Append "$Out\web-applications.txt" -Width 400
+# The jump list of an app (owner, 2026-10-13: the Store apps show no shortcuts of the manifest, the PWA installed from the
+# browser does): a right click on its taskbar button, a screenshot, and the names in the menu that opened.
+function JumpList([string]$pass, [string]$name) {
+  [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 2   # run 43: the Start menu was open over the app
+  $btn = $null; $bar = @()
+  foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
+    if ($w.Current.ClassName -ne 'Shell_TrayWnd') { continue }
+    foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) {
+      if ($e.Current.Name) { $bar += $e.Current.Name }
+      if (-not $btn -and $e.Current.Name -match [regex]::Escape($name)) { $btn = $e }
+    }
+  }
+  Log ("taskbar: " + ($bar -join ' | '))
+  # what Edge wrote as jump lists (one file per app id): the names of the manifest's shortcuts are in it as UTF-16 text
+  try {
+    foreach ($f in Get-ChildItem "$env:APPDATA\Microsoft\Windows\Recent\CustomDestinations" -ErrorAction SilentlyContinue) {
+      $t = [System.Text.Encoding]::Unicode.GetString([System.IO.File]::ReadAllBytes($f.FullName))
+      Log ("jump list file " + $f.Name + " " + $f.Length + " " + $f.LastWriteTime.ToString('HH:mm:ss') + ": " + (([regex]::Matches($t, 'Table of Contents|Favorites|Memo|Dictionary|Patimokkha|Calendar|Day \d+[/\d]*|dhamma\.gift[^\x00 ]{0,40}') | ForEach-Object { $_.Value } | Select-Object -Unique -First 12) -join ' | '))
+    }
+  } catch { Log "jump list files: $_" }
+  if ($btn) {
+    $r = $btn.Current.BoundingRectangle
+    [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($r.X + $r.Width / 2)), ([int]($r.Y + $r.Height / 2))
+    Start-Sleep -Milliseconds 400
+    [W.M]::mouse_event(8, 0, 0, 0, [UIntPtr]::Zero); [W.M]::mouse_event(16, 0, 0, 0, [UIntPtr]::Zero)
+    Start-Sleep 4; Shot "jump-list-$pass"
+    $items = @()
+    foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
+      if ($w.Current.ClassName -match 'Shell_TrayWnd|Progman|Chrome_WidgetWin|CASCADIA|ConsoleWindowClass') { continue }
+      foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.Name -and $e.Current.ControlType.ProgrammaticName -match 'ListItem|MenuItem|Button') { $items += $e.Current.Name } }
+    }
+    Log ("jump list ($pass) of [" + $btn.Current.Name + "]: " + (($items | Select-Object -First 30) -join ' | '))
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 1
+  } else { Log "no taskbar button of $name" }
+}
 # the app's own window once, so that its worker is running
 foreach ($app in 'PWAmp', 'Uposatha') {
   $lnk = Get-ChildItem "$env:USERPROFILE\Desktop\*.lnk" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $app } | Select-Object -First 1
-  if ($lnk) { Start-Process $lnk.FullName; Start-Sleep 20; Shot "app-window-$app" } else { Log "no $app shortcut on the desktop: that PWA was not installed" }
+  if ($lnk) { Start-Process $lnk.FullName; Start-Sleep 20; Shot "app-window-$app"; if ($app -eq 'Uposatha') { JumpList 'pwa' 'Uposatha' } } else { Log "no $app shortcut on the desktop: that PWA was not installed" }
 }
 
 # 2b. The same PWA as a Windows package (PWABuilder's test package, what goes to the Microsoft Store in its signed form). Windows
@@ -175,45 +210,10 @@ if ($Package) {
     Log ("package installed: " + $(if ($pkg) { $pkg.PackageFullName } else { 'NO' }))
     $app = Get-StartApps | Where-Object { $_.Name -match '^(Uposatha by the Suttas|Dhamma\.Gift|Dict\.Dhamma\.Gift)$' } | Select-Object -Last 1
     if ($app) { Start-Process ("shell:AppsFolder\" + $app.AppID); Start-Sleep 25; Shot 'packaged-app' } else { Log 'the packaged app is not in the Start menu' }
-    # The jump list of the packaged app (owner, 2026-10-13: the Store apps show no shortcuts of the manifest, the PWA installed
-    # from the browser does): a right click on its taskbar button, a screenshot, and the names in the menu that opened.
-    function JumpList([string]$pass) {
-      [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 2   # run 43: the Start menu was open over the app
-      $btn = $null; $bar = @()
-      foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
-        if ($w.Current.ClassName -ne 'Shell_TrayWnd') { continue }
-        foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) {
-          if ($e.Current.Name) { $bar += $e.Current.Name }
-          if (-not $btn -and $e.Current.Name -match [regex]::Escape($app.Name)) { $btn = $e }
-        }
-      }
-      Log ("taskbar: " + ($bar -join ' | '))
-      # what Edge wrote as jump lists (one file per app id): the names of the manifest's shortcuts are in it as UTF-16 text
-      try {
-        foreach ($f in Get-ChildItem "$env:APPDATA\Microsoft\Windows\Recent\CustomDestinations" -ErrorAction SilentlyContinue) {
-          $t = [System.Text.Encoding]::Unicode.GetString([System.IO.File]::ReadAllBytes($f.FullName))
-          Log ("jump list file " + $f.Name + " " + $f.Length + " " + $f.LastWriteTime.ToString('HH:mm:ss') + ": " + (([regex]::Matches($t, 'Table of Contents|Favorites|Memo|Dictionary|Patimokkha|dhamma\.gift[^\x00 ]{0,40}') | ForEach-Object { $_.Value } | Select-Object -Unique -First 12) -join ' | '))
-        }
-      } catch { Log "jump list files: $_" }
-      if ($btn) {
-        $r = $btn.Current.BoundingRectangle
-        [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point ([int]($r.X + $r.Width / 2)), ([int]($r.Y + $r.Height / 2))
-        Start-Sleep -Milliseconds 400
-        [W.M]::mouse_event(8, 0, 0, 0, [UIntPtr]::Zero); [W.M]::mouse_event(16, 0, 0, 0, [UIntPtr]::Zero)
-        Start-Sleep 4; Shot "jump-list-$pass"
-        $items = @()
-        foreach ($w in $AE::RootElement.FindAll($TS::Children, $Cond::TrueCondition)) {
-          if ($w.Current.ClassName -match 'Shell_TrayWnd|Progman|Chrome_WidgetWin|CASCADIA|ConsoleWindowClass') { continue }
-          foreach ($e in $w.FindAll($TS::Descendants, $Cond::TrueCondition)) { if ($e.Current.Name -and $e.Current.ControlType.ProgrammaticName -match 'ListItem|MenuItem|Button') { $items += $e.Current.Name } }
-        }
-        Log ("jump list ($pass) of [" + $btn.Current.Name + "]: " + (($items | Select-Object -First 30) -join ' | '))
-        [System.Windows.Forms.SendKeys]::SendWait('{ESC}'); Start-Sleep 1
-      } else { Log "no taskbar button of $($app.Name)" }
-    }
     if ($app) {
-      JumpList 'first-run'
+      JumpList 'first-run' $app.Name
       # -Jump relaunch: the same after the app is closed and opened again (does the list come with the second start?)
-      if ($Jump -eq 'relaunch') { Start-Sleep 30; Stop-Process -Name msedge -Force -ErrorAction SilentlyContinue; Start-Sleep 8; Start-Process ("shell:AppsFolder\" + $app.AppID); Start-Sleep 30; JumpList 'second-run' }
+      if ($Jump -eq 'relaunch') { Start-Sleep 30; Stop-Process -Name msedge -Force -ErrorAction SilentlyContinue; Start-Sleep 8; Start-Process ("shell:AppsFolder\" + $app.AppID); Start-Sleep 30; JumpList 'second-run' $app.Name }
     }
   } catch { Log "package: $_" }
 }

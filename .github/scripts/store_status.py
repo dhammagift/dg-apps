@@ -102,20 +102,36 @@ def asc_client():
     return lambda path: get("https://api.appstoreconnect.apple.com" + path, {"Authorization": f"Bearer {token}"})
 
 
+ASC_STATES = {"review": ("WAITING_FOR_REVIEW", "IN_REVIEW", "PROCESSING_FOR_APP_STORE"),
+              "approved": ("PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE"),
+              "rejected": ("REJECTED", "METADATA_REJECTED", "INVALID_BINARY")}
+
+
+SAFARI_BUNDLE = "gift.dhamma.dictlookup"  # DG Lookup for Safari, a macOS app (dictPlugin: safari-macos.yml)
+
+
 def asc_app(asc, bundle):
     apps = asc(f"/v1/apps?filter[bundleId]={bundle}&limit=1")["data"]
     if not apps:
         return None
     app_id = apps[0]["id"]
-    res = {"id": app_id, "live": "", "live_build": "", "review": "", "tf_build": "", "tf_version": "", "public_link": ""}
-    for v in asc(f"/v1/apps/{app_id}/appStoreVersions?limit=10")["data"]:
+    res = {"id": app_id, "name": apps[0]["attributes"].get("name", ""), "live": "", "live_build": "", "review": "", "state": "",
+           "tf_build": "", "tf_version": "", "public_link": ""}
+    versions = sorted(asc(f"/v1/apps/{app_id}/appStoreVersions?limit=10")["data"],
+                      key=lambda v: v["attributes"].get("createdDate") or "", reverse=True)
+    for v in versions:
         st, ver = v["attributes"]["appStoreState"], v["attributes"]["versionString"]
         if st == "READY_FOR_SALE" and not res["live"]:
             res["live"] = ver
             b = asc(f"/v1/appStoreVersions/{v['id']}/build").get("data") or {}
             res["live_build"] = (b.get("attributes") or {}).get("version", "")
-        if st in ("WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE", "PROCESSING_FOR_APP_STORE") and not res["review"]:
-            res["review"] = ver
+    # Only the newest version tells where the app stands now: an older rejection that was answered by a new
+    # submission is history. Rejection reasons are not in the API (Resolution Center), only the state.
+    if versions:
+        st, ver = versions[0]["attributes"]["appStoreState"], versions[0]["attributes"]["versionString"]
+        state = next((k for k, sts in ASC_STATES.items() if st in sts), "")
+        if state:
+            res["review"], res["state"] = ver, state
     b = asc(f"/v1/builds?filter[app]={app_id}&sort=-uploadedDate&limit=1&include=preReleaseVersion")
     if b["data"]:
         res["tf_build"] = b["data"][0]["attributes"]["version"]
@@ -227,9 +243,17 @@ def main():
     rows.append(play_row("dict-android", "Словарь", "gift.dhamma.pali", "dg-dict-aab-release", "dg-dict-apk-release", REPO))
     rows.append(play_row("upo-android", "Uposatha", "gift.dhamma.uposatha", "dg-uposatha-aab-release", "dg-uposatha-apk-release", REPO))
 
-    def ios_row(key, product, bundle, ipa_prefix, store_url):
-        a = safe(f"App Store Connect {bundle}", lambda: asc_app(asc, bundle)) if asc else None
-        a = a or {}
+    def apple_state(r, a):
+        """The newest version's review state over the row's own status: approved and rejected are Apple's word."""
+        ver, st = a.get("review"), a.get("state")
+        if st == "approved":
+            r["status"], r["action"] = "одобрена", f"Версия {ver} одобрена Apple, ждёт выпуска."
+        elif st == "rejected":
+            r["status"], r["action"] = "отказ", f"Версия {ver}: отказ Apple, причина в App Store Connect."
+        return r
+
+    def ios_row(key, product, bundle, ipa_prefix, store_url, a=None):
+        a = a or (safe(f"App Store Connect {bundle}", lambda: asc_app(asc, bundle)) if asc else None) or {}
         lb = a.get("live_build", "")
         live = {"code": int(lb) if lb.isdigit() else 0, "label": f"{a['live']} ({lb})" if a.get("live") and lb else a.get("live", "")}
         tf = a.get("tf_build", "")
@@ -240,12 +264,18 @@ def main():
         r = row(key, product, "iOS", "App Store", live, testing, ours, {
             "store_url": store_url, "console_url": f"{ASC_URL}/{a['id']}" if a.get("id") else ASC_URL,
             "repo_url": f"https://github.com/{REPO}", "apk_url": "", "testflight_url": a.get("public_link", "")},
-            waiting=f"Версия {a['review']} на проверке Apple." if a.get("review") else "")
-        return r
+            waiting=f"Версия {a['review']} на проверке Apple." if a.get("state") == "review" else "")
+        return apple_state(r, a)
 
     rows.append(ios_row("dg-ios", "Dhamma.Gift", "gift.dhamma.mobile", "dg-app-full-ipa", "https://apps.apple.com/app/id6813706217"))
     rows.append(ios_row("dict-ios", "Словарь", "gift.dhamma.pali", "", ""))
     rows.append(ios_row("upo-ios", "Uposatha", "gift.dhamma.uposatha", "", ""))
+    # Any other app in the account gets a row too, so a new one (or its rejection) cannot go unseen.
+    KNOWN = {"gift.dhamma.mobile", "gift.dhamma.pali", "gift.dhamma.uposatha", SAFARI_BUNDLE}
+    for x in (safe("App Store Connect apps", lambda: asc("/v1/apps?limit=50")["data"], []) if asc else []):
+        b = x["attributes"]["bundleId"]
+        if b not in KNOWN:
+            rows.append(ios_row("asc-" + b, x["attributes"]["name"], b, "", ""))
 
     # Microsoft Store: the PWAs (tools/windows-package.py). They load the site, so there is no build of ours to compare,
     # only whether the product is out; the public catalogue has no version for them, only the last update.
@@ -319,11 +349,25 @@ def main():
                      "store_url": surl, "console_url": curl, "repo_url": "https://github.com/dhammagift/dictPlugin",
                      "apk_url": "", "testflight_url": ""})
 
+    # Safari: the same extension as a macOS app in the Mac App Store, so Apple's review states apply.
+    a = (safe(f"App Store Connect {SAFARI_BUNDLE}", lambda: asc_app(asc, SAFARI_BUNDLE)) if asc else None) or {}
+    v, tf = a.get("live", ""), a.get("tf_version", "")
+    fresh = bool(v) and v == ours
+    rows.append(apple_state({"key": "ext-safari", "product": "DG Lookup", "platform": "Safari (macOS)", "store": "Mac App Store",
+                 "live": v or "—", "testing": f"TestFlight {tf} ({a['tf_build']})" if tf else "—", "ours": ours or "—",
+                 "status": "на проверке" if a.get("state") == "review" else "свежая" if fresh else "не отправлена",
+                 "action": f"Версия {a['review']} на проверке Apple." if a.get("state") == "review"
+                           else "Всё свежее." if fresh else f"У нас {ours}, в магазине {v or 'нет'}.",
+                 "store_url": "", "console_url": f"{ASC_URL}/{a['id']}" if a.get("id") else ASC_URL,
+                 "repo_url": "https://github.com/dhammagift/dictPlugin", "apk_url": "", "testflight_url": a.get("public_link", "")}, a))
+
     # The hub is in two languages: each row's action also in English (same facts, same order).
     EN = [(r"^Всё свежее: приложение открывает сайт\.$", "Up to date: the app opens the site."), (r"^Всё свежее\.$", "Up to date."),
           (r"^Отправлено в Microsoft Store, ждём проверку\.$", "Sent to the Microsoft Store, waiting for review."),
           (r"^Заявка в F-Droid, ждём проверку\.$", "Submitted to F-Droid, waiting for review."),
           (r"Версия (.+?) на проверке Apple\.", r"Version \1 is in Apple's review."),
+          (r"Версия (.+?) одобрена Apple, ждёт выпуска\.", r"Version \1 is approved by Apple, waiting to be released."),
+          (r"Версия (.+?): отказ Apple, причина в App Store Connect\.", r"Version \1: rejected by Apple, the reason is in App Store Connect."),
           (r"Версия (.+?) на проверке Google, у пользователей пока (.+?)\.", r"Version \1 is in Google's review; users still get \2."),
           (r"(.+?) в тесте — можно в прод\. ?", r"\1 is in testing — ready for production. "),
           (r"Сборка (.+?) ещё никуда не отправлена\.", r"Build \1 has not been sent anywhere yet."),

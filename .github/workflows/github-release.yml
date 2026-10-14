@@ -1,0 +1,71 @@
+name: GitHub release
+
+# Puts an APK we already built on the repository's Releases page, for people without Google Play. Nothing is
+# rebuilt: the signed release APK artifact of that build number is taken as it is. The tag is <app>-<version>-<build>
+# (dg-1.19-563): on purpose not v* / dg-v* / dict-v* / upo-v*, which release to the stores (build-app.yml); a tag
+# made with GITHUB_TOKEN starts no workflow anyway. Artifacts live 14 days, so an older build cannot be released.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Which app'
+        type: choice
+        options: [dg, dict, upo]
+        default: dg
+      build:
+        description: 'Build number (the code in "1.19 (563)")'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      APP: ${{ inputs.app }}
+      BUILD: ${{ inputs.build }}
+    steps:
+      - name: Get the APK
+        run: |
+          set -euo pipefail
+          case "$APP" in
+            dg)   ART=dg-app-full-apk-release; NAME="Dhamma.Gift"; FILE=dhamma-gift ;;
+            dict) ART=dg-dict-apk-release;     NAME="Dictionary";  FILE=dg-dictionary ;;
+            upo)  ART=dg-uposatha-apk-release; NAME="Uposatha";    FILE=uposatha ;;
+          esac
+          [[ "$BUILD" =~ ^[0-9]+$ ]] || { echo "build must be a number" >&2; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$ART-$BUILD&per_page=5" \
+            --jq '[.artifacts[] | select(.expired | not)][0] // empty | "\(.id) \(.workflow_run.head_sha)"' > art.txt
+          [ -s art.txt ] || { echo "No unexpired artifact $ART-$BUILD (artifacts are kept 14 days)" >&2; exit 1; }
+          read -r ID SHA < art.txt
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ID/zip" > a.zip
+          unzip -q a.zip -d a
+          APK=$(find a -name '*.apk' | head -1)
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          BADGE=$("$BT/aapt2" dump badging "$APK" | head -1)
+          PKG=$(sed -n "s/.* name='\([^']*\)'.*/\1/p" <<<"$BADGE")
+          VER=$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<<"$BADGE")
+          CODE=$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<<"$BADGE")
+          [ "$CODE" = "$BUILD" ] || { echo "APK says versionCode $CODE, asked for $BUILD" >&2; exit 1; }
+          CERT=$("$BT/apksigner" verify --print-certs "$APK" | sed -n 's/.*SHA-256 digest: //p' | head -1)
+          mv "$APK" "$FILE-$VER-$BUILD.apk"
+          { echo "TAG=$APP-$VER-$BUILD"; echo "TITLE=$NAME $VER ($BUILD)"; echo "SHA=$SHA"; echo "OUT=$FILE-$VER-$BUILD.apk"
+            echo "PKG=$PKG"; echo "CERT=$CERT"; } >> "$GITHUB_ENV"
+
+      - name: Create the release
+        run: |
+          set -euo pipefail
+          if [ "$APP" = dg ]; then
+            NOTE="Package \`$PKG\`: its own package, so it installs next to the Google Play version (gift.dhamma.twa) instead of over it."
+          else
+            NOTE="Package \`$PKG\`, the same as on Google Play. If Android refuses to install it over the Play version (a different signature), uninstall that one first."
+          fi
+          printf '%s\n\n%s\n\n%s\n' "$TITLE, the same build as in the stores, for installing without Google Play." "$NOTE" \
+            "Signing certificate SHA-256: \`$CERT\`" > notes.md
+          gh release create "$TAG" "$OUT" --repo "$GITHUB_REPOSITORY" --target "$SHA" --title "$TITLE" --notes-file notes.md \
+            $([ "$APP" = dg ] && echo --latest || echo --latest=false)

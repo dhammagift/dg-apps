@@ -1822,6 +1822,21 @@
     };
     // @site-updater (inlined from src/site-updater.js by build-assets.js)
 
+    // The bridge sets a few menu strings once, under the language active at build time: the version row's "check"
+    // button and the recent-texts-in-shortcuts row. Re-label them when the page language is switched so they do not
+    // keep the launch language (the site's own rows already follow it through i18n).
+    document.addEventListener('dhamma:languagechange', function () {
+        var ru = document.documentElement.lang === 'ru';
+        var btn = document.getElementById('dgAppVersionCheck');
+        if (btn && btn.lastChild && btn.lastChild.nodeType === 3) btn.lastChild.textContent = ru ? 'проверить' : 'check';
+        var st = document.getElementById('dgDynShortcutsTitle');
+        if (st) st.textContent = ru ? 'Недавние тексты в ярлыках' : 'Recent texts in app shortcuts';
+        var sd = document.getElementById('dgDynShortcutsDesc'), n = SHORTCUTS_MAX;
+        if (sd) sd.textContent = ru
+            ? 'До ' + n + (n === 1 ? ' текста' : ' текстов') + ' в меню долгого нажатия на значок приложения.'
+            : 'Up to ' + n + (n === 1 ? ' text' : ' texts') + ' in the long-press menu of the app icon.';
+    });
+
     function afterLoad() { setTimeout(function () { updateSite(); }, 8000); }
     if (document.readyState === 'complete') afterLoad();
     else window.addEventListener('load', afterLoad, { once: true });

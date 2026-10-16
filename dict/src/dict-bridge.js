@@ -353,9 +353,18 @@
     if (!pb || document.getElementById('dg-app-grp')) return false;
     // At the very end of the panel, after the site's own "Data" section — the owner asked for the
     // new rows at the bottom of the menu.
-    buildRows(T[isRu() ? 'ru' : 'en']).forEach(function (el) { pb.appendChild(el); });
+    buildRows(T[isRu() ? 'ru' : 'en']).forEach(function (el) { el.classList.add('dg-app-injected'); pb.appendChild(el); });
     return true;
   }
+
+  // The rows are built once under the launch language; re-render them when the page language is switched so the app
+  // menu (version row, "check", the policy link) follows the language instead of keeping the one from launch.
+  document.addEventListener('dhamma:languagechange', function () {
+    var pb = document.querySelector('#p-menu .pb');
+    if (!pb) return;
+    Array.prototype.forEach.call(pb.querySelectorAll('.dg-app-injected'), function (el) { el.remove(); });
+    inject();
+  });
 
   // The site records every lookup through this one global (extra.js, loaded after this script, so
   // this can only be wired from start()). Wrapping it is how the launcher hears about a new word

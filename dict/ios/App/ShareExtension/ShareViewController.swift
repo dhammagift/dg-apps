@@ -2,7 +2,7 @@ import UIKit
 import WebKit
 
 // The Share Extension: text or a link shared from another app is looked up right here in the sheet —
-// dict.dhamma.gift itself, since this app (unlike the reader) has no offline library or bundled pages
+// dict.dhamma.gift itself, since this app (unlike the Dhamma.Gift app) has no offline library or bundled pages
 // of its own to fall back on; it is a live-site wrapper on every ordinary launch too.
 //
 // It cannot hand the text to the containing app instead and let THAT open dict.dhamma.gift: a share

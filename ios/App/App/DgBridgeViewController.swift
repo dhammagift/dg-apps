@@ -155,6 +155,17 @@ class DgBridgeViewController: CAPBridgeViewController {
         // sutta (a tester's report). Uses the WebView's own history, so it only goes back when there
         // is somewhere to go.
         webView?.allowsBackForwardNavigationGestures = true
+        // The right edge goes Back too, as on Android, where Back works from either edge (owner, 2026-10-16: «не работает свайп
+        // от правого экрана — назад»). WebKit's own right-edge swipe is Forward, which a reader almost never has; it now waits
+        // for this one to fail, so a swipe from the right never jumps forward instead.
+        if let webView = webView {
+            let rightBack = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(rightEdgeBack(_:)))
+            rightBack.edges = .right
+            webView.addGestureRecognizer(rightBack)
+            for gr in webView.gestureRecognizers ?? [] where gr !== rightBack {
+                if let edge = gr as? UIScreenEdgePanGestureRecognizer, edge.edges.contains(.right) { edge.require(toFail: rightBack) }
+            }
+        }
 
         // No scroll indicators: the page is the whole interface, and the indicator is drawn above the
         // launch splash as a strip (seen on Android, dropped here for the same reason).
@@ -193,6 +204,12 @@ class DgBridgeViewController: CAPBridgeViewController {
         // behalf. A release build's `Capacitor.Plugins.DgSelfTest` is therefore undefined.
         bridge?.registerPluginInstance(DgSelfTestPlugin())
         #endif
+    }
+
+    // Back once the finger has travelled a third of the way in from the right edge, only if there is somewhere to go back to.
+    @objc private func rightEdgeBack(_ gr: UIScreenEdgePanGestureRecognizer) {
+        guard gr.state == .ended, let webView = webView, webView.canGoBack else { return }
+        if -gr.translation(in: webView).x > webView.bounds.width / 3 || -gr.velocity(in: webView).x > 600 { webView.goBack() }
     }
 }
 

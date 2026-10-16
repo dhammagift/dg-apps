@@ -3,7 +3,7 @@
 // rather than fixed timings (a screenshot taken at the wrong moment is worse than none: it looks like a bug).
 //
 // The tour does not know about light/dark itself — the driver (drive.sh) flips the simulator's OS appearance
-// between two of these stages, which WebKit's prefers-color-scheme picks up live, no relaunch needed (the reader
+// between two of these stages, which WebKit's prefers-color-scheme picks up live, no relaunch needed (the Dhamma.Gift
 // app's own drive.sh does the same between its light and dark screenshots).
 //
 // Loaded by the built page directly for this one purpose (build-app.yml's uposatha-ios-screenshots job appends

@@ -1052,7 +1052,7 @@ jobs:
           retention-days: 14
 
       # The emulator tests used to install the sideload APK (gift.dhamma.mobile) while Play got this AAB
-      # (gift.dhamma.twa, its own shortcuts.xml): the package that reaches readers was never installed
+      # (gift.dhamma.twa, its own shortcuts.xml): the package that reaches users was never installed
       # anywhere before it did. bundletool makes the universal APK Play itself would serve from this very
       # AAB, signed with the same key, and android-tests runs its launcher-shortcut suite on that.
       - name: The Play bundle as an installable APK (for the emulator tests)
@@ -1173,7 +1173,7 @@ jobs:
   # nothing is shipped to open testing from here, the owner tests with his own closed group. The dictionary and Uposatha moved up from
   # internal on 2026-10-04. Production
   # still costs a deliberate promote in the console, so an automated upload can never be the thing that
-  # ships to readers by accident; that promote stays a human decision.
+  # ships to users by accident; that promote stays a human decision.
   #
   # What this needs once, in the Play Console (docs/ANDROID_RELEASE.md):
   #   Setup -> API access -> link a Google Cloud project -> create a service account -> JSON key;
@@ -1297,9 +1297,9 @@ jobs:
   # the highest code Play has for gift.dhamma.pali and the highest TestFlight build, independent of the
   # other two apps. build.gradle carries 3 (the first code after the TWA's 2) for a local build.
   #
-  # The APKs and the AAB stay workflow artifacts. They are deliberately NOT attached to the reader
+  # The APKs and the AAB stay workflow artifacts. They are deliberately NOT attached to the Dhamma.Gift
   # app's GitHub release: that release already has two Android files that are easy to confuse, and
-  # a third one from a different application is worse. What ships to readers goes through the Play
+  # a third one from a different application is worse. What ships to users goes through the Play
   # job below, which is the only path that needs the artifact anyway.
   dict-build:
     name: Dictionary app (Android)
@@ -1968,7 +1968,7 @@ jobs:
 
   # Uposatha's TestFlight release (release = uposatha-ios, or an upo-v* tag): testflight-release.yml, from the web bundle
   # uposatha-build made, after the bundle's browser checks and the iOS simulator run (uposatha-ios). It needs the app's
-  # record in App Store Connect (bundle id gift.dhamma.uposatha); the signing secrets are the account's, the same as the reader's.
+  # record in App Store Connect (bundle id gift.dhamma.uposatha); the signing secrets are the account's, the same as the Dhamma.Gift app's.
   uposatha-ios-release:
     name: Uposatha app iOS release (TestFlight)
     needs: [plan, unit, uposatha-build, uposatha-ios]
@@ -2067,7 +2067,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build 2>&1 | tee ../../ios-tour-build.log | tail -30
 
-      # Same size as the reader and Uposatha screenshot jobs, and for the same reason: App Store Connect's iPhone
+      # Same size as the Dhamma.Gift and Uposatha screenshot jobs, and for the same reason: App Store Connect's iPhone
       # slot for this app is the 6.5" frame, not 6.7"/6.9".
       - name: Prepare a 6.5" device (the size the store page accepts)
         id: sixfive

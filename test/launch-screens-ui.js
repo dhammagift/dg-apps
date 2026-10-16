@@ -37,7 +37,7 @@ function check(name, actual, expected) {
     const HOLD = () => { const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => st(f, typeof f === 'function' && String(f).includes('leave(el)') ? 60000 : ms, ...a); };
     const present = (page) => page.evaluate(() => !!document.querySelector('.dgls'));
     try {
-        // 1. The reader's home page draws no splash of its own, on any platform (the platform's launch screen is the splash).
+        // 1. The Dhamma.Gift home page draws no splash of its own, on any platform (the platform's launch screen is the splash).
         for (const platform of ['ios', 'android']) {
             const ctx = await ctxOf('light', 'ru');
             await ctx.addInitScript((pl) => { window.Capacitor = { getPlatform: () => pl }; }, platform);
@@ -91,7 +91,7 @@ function check(name, actual, expected) {
             await ctx.close();
         }
 
-        // 4. Android draws its splash natively: the dictionary's bridge draws none (and neither does the reader's home page there).
+        // 4. Android draws its splash natively: the dictionary's bridge draws none (and neither does the Dhamma.Gift home page there).
         {
             const DICT = require(path.join(ROOT, 'dict', 'build.js')).bridgeSource();
             const ctx = await ctxOf('dark', 'ru');

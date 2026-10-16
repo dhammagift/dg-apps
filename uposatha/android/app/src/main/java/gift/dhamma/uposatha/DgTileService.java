@@ -6,7 +6,7 @@ import android.os.Build;
 import android.service.quicksettings.TileService;
 
 /**
- * Uposatha in the Quick Settings shade, as the dictionary and the reader have: one tap from inside
+ * Uposatha in the Quick Settings shade, as the dictionary and the Dhamma.Gift app have: one tap from inside
  * any app. It carries no logic: the tap starts MainActivity with the same "route" extra a launcher
  * shortcut uses, and MainActivity loads it, so the tile, a shortcut and a shared link share one path.
  *

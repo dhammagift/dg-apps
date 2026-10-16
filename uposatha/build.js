@@ -57,7 +57,7 @@ function copyTree(from, to, list) {
 // from DgSiteRouter at serve time (DgApp.swift).
 
 // The snapshot has to BE the calendar page. Run 466 bundled something else — a page titled
-// "Dhamma.gift" that loads the reader's offline scripts and has no .tbar — and the app would have
+// "Dhamma.gift" that loads the Dhamma.Gift app's offline scripts and has no .tbar — and the app would have
 // shipped it: the only guards were "the file exists" and "it is not empty". These markers are the
 // calendar's own (its stylesheet, its top bar, its drawer and the app-only Rate Us row), so a
 // redirect, a 404 page or a different app's shell fails the build here instead of in someone's hand.

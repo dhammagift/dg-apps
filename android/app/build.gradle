@@ -14,7 +14,7 @@ android {
     //
     // Two packages that can be installed at once are two apps in the same launcher, so they cannot both be
     // called "Dhamma.gift" (owner: "у меня две аппки dhamma.gift сейчас"). The Play package keeps the name
-    // readers know; the sideload/test package is DGift. Keyed on the id in one place, so the AAB the store
+    // users know; the sideload/test package is DGift. Keyed on the id in one place, so the AAB the store
     // gets is untouched and there is no second strings.xml to drift.
     def dgApplicationId = (project.findProperty('dgAppId') ?: "gift.dhamma.mobile").toString()
     def dgAppLabel = (dgApplicationId == "gift.dhamma.twa") ? "Dhamma.gift" : "DGift"

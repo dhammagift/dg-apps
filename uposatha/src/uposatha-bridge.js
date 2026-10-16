@@ -909,7 +909,7 @@
     if (!document.body) return;
     var css = document.getElementById('dg-safe-top');
     if (!css) { css = document.createElement('style'); css.id = 'dg-safe-top'; document.head.appendChild(css); }
-    // The top bar, and the burger menu's drawer (the reader pads its own drawer the same way:
+    // The top bar, and the burger menu's drawer (the Dhamma.Gift app pads its own drawer the same way:
     // dg-node home.css, html.dg-app #dg-drawer{padding-top: var(--dg-sat)}). Without it the drawer
     // opens under the clock on Android — the main screen looked right while the menu did not.
     // Every inset is divided by --dg-zoom: the page's font-size setting zooms <html> (home.js,
@@ -920,7 +920,7 @@
     var SAT = 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) / var(--dg-zoom, 1)';
     var SAL = 'var(--safe-area-inset-left, env(safe-area-inset-left, 0px)) / var(--dg-zoom, 1)';
     var SAR = 'var(--safe-area-inset-right, env(safe-area-inset-right, 0px)) / var(--dg-zoom, 1)';
-    // The top bar, and the burger menu's drawer (the reader pads its own drawer the same way:
+    // The top bar, and the burger menu's drawer (the Dhamma.Gift app pads its own drawer the same way:
     // dg-node home.css, html.dg-app #dg-drawer{padding-top: var(--dg-sat)}). Without it the drawer
     // opens under the clock on Android — the main screen looked right while the menu did not.
     css.textContent = 'body.app .tbar{padding-top:calc(' + TOP_PAD + 'px + ' + SAT + ')}'

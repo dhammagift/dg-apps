@@ -62,7 +62,7 @@
   // Set when the reader taps Rate Us. This is NOT what hides the row — the row is permanent (owner:
   // "пункт никуда не нужно скрывать он остаётся на месте"), and tapping a store link is not proof
   // that a review was written. What it is for is the invitation we have not built yet, in this app
-  // or in the reader one ("приглашение поставить нам 5 звёзд"): whoever already tapped it should
+  // or in the Dhamma.Gift one ("приглашение поставить нам 5 звёзд"): whoever already tapped it should
   // never be asked by that prompt. Kept as a flag now so the prompt has an answer ready on the day
   // it exists.
   var RATE_FLAG = 'dgRateUsTapped';

@@ -38,7 +38,7 @@ app does not own:
 - **no history in the launcher shortcuts**: a web manifest's shortcuts are static, and a TWA cannot
   reach `ShortcutManager` at all.
 
-A WebView this app owns has none of those limits, and `DgShortcutsPlugin` can put the reader's own
+A WebView this app owns has none of those limits, and `DgShortcutsPlugin` can put the user's own
 lookup history into the long-press menu.
 
 ## Layout
@@ -74,7 +74,7 @@ site's own classes so they do not look bolted on:
   size, was reported first as too small and then as too large at 22px.
   Tapping it sets `dgRateUsTapped` in localStorage but **does not hide the row** — the row is
   permanent. The flag is for the "please rate us five stars" invitation, which does not exist yet in
-  this app or in the reader one; it is written now so that prompt has an answer ready, and it must
+  this app or in the Dhamma.Gift one; it is written now so that prompt has an answer ready, and it must
   be the thing that decides, not a second flag invented later.
 
 ## Launcher shortcuts

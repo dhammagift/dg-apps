@@ -25,10 +25,10 @@ Read and search the Pāli Canon offline: Suttas and Vinaya with Russian and Engl
 pali,canon,sutta,vinaya,tipitaka,theravada,buddhism,dhamma,reader,dictionary,offline
 ```
 
-## Описание (Description, 1490/4000)
+## Описание (Description, 1502/4000)
 
 ```
-Dhamma.gift is a free reader and search for the Pāli Canon — the Suttas and the Vinaya — in Pāli with Russian and English translations.
+Dhamma.gift is a free app to search, read and listen to the Pāli Canon — the Suttas and the Vinaya — in Pāli with Russian and English translations.
 
 SEARCH
 Full-text search over the whole canon: infix matches (kacchapa finds mahākacchapānaṁ), diacritics optional, word variants, filters by collection and by translator, and a match context that opens straight in the reader.
@@ -89,7 +89,7 @@ Google скрыта (`src/native-bridge.js`, Guideline 4.8 — сторонни�
 **Notes** (поле под Contact Information; вставлять как есть):
 
 ```
-Dhamma.gift is a free, offline-first reader and search engine for the Pali Canon (the Buddhist
+Dhamma.gift is a free, offline-first app to search and read the Pali Canon (the Buddhist
 suttas and Vinaya) with a built-in Pali dictionary and text-to-speech. No account is required.
 
 The app's core is a text library that lives on the device: after a one-time download, search, the

@@ -223,7 +223,7 @@ function initScript({ firstRunDaysAgo, shown, shownDaysAgo, tapped, lang }) {
             const context = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, colorScheme: 'dark' });
             await context.addInitScript(initScript, { firstRunDaysAgo: 61, shown: '0', lang: 'ru' });
             const page = await context.newPage();
-            // The dictionary's language is the PAGE's (its own /ru/ path), not the reader's localStorage key.
+            // The dictionary's language is the PAGE's (its own /ru/ path), not the Dhamma.Gift app's localStorage key.
             await page.goto(process.env.DG_DICT_URL || 'http://test.dhamma.gift/dict/ru/', { waitUntil: 'domcontentloaded' });
             await page.waitForTimeout(900);
             await page.evaluate(DICT);

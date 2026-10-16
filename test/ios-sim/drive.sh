@@ -110,7 +110,7 @@ if [ -n "$TOUR" ]; then
     tour_pass light-en
     xcrun simctl ui "$UDID" appearance dark
     tour_pass dark-en
-    # Russian, dark: the second language the reader is built for, and the one whose layout differs
+    # Russian, dark: the second language the Dhamma.Gift app is built for, and the one whose layout differs
     # most (longer words, its own strings). AppleLanguages is what a real Russian phone reports.
     tour_pass dark-ru "-AppleLanguages (ru) -AppleLocale ru_RU"
     echo "drive: screenshots in $OUT"
@@ -168,7 +168,7 @@ xcrun simctl ui "$UDID" appearance dark
 sleep 3
 xcrun simctl io "$UDID" screenshot "$OUT/ios-dark-en.png" >/dev/null || echo "drive: dark screenshot failed" >&2
 
-# Russian, dark: the second language the reader is built for, and the one whose layout differs most
+# Russian, dark: the second language the Dhamma.Gift app is built for, and the one whose layout differs most
 # (longer words, its own strings). AppleLanguages is what a real Russian phone reports.
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
 xcrun simctl launch "$UDID" "$BUNDLE" -AppleLanguages '(ru)' -AppleLocale ru_RU >/dev/null 2>&1 || true

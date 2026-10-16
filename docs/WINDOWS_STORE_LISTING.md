@@ -8,7 +8,7 @@ apps have (the Share Extension, the system voice) and without the library's size
 
 ## Description
 
-Dhamma.Gift is a free search and reader for the Pāli Canon, the Suttas and the Vinaya, in Pāli with Russian and English translations.
+Dhamma.Gift is a free app to search, read and listen to the Pāli Canon, the Suttas and the Vinaya, in Pāli with Russian and English translations.
 
 SEARCH
 Full-text search over the whole canon: infix matches (kacchapa finds mahākacchapānaṁ), diacritics optional, word variants, filters by collection and by translator, and a match context that opens straight in the reader.

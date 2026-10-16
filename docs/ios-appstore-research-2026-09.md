@@ -1,4 +1,4 @@
-# iOS / App Store / CI research — dhamma.gift offline reader (Capacitor 8)
+# iOS / App Store / CI research — the Dhamma.Gift app, offline (Capacitor 8)
 
 Date of research: 2026-09-17. All facts verified against primary docs fetched that day.
 
@@ -133,7 +133,7 @@ There is **no** `macos-26-arm64` label: arm64 is the plain `macos-26`. Standard 
 **Rules that bite**
 - **4.2.3(ii)**: if the app needs to download additional resources to work on initial launch, you must **disclose the size of the download and prompt the user before doing so**. → a first-run screen stating "≈216 MB" with explicit Continue/Cancel is required, not optional.
 - **2.5.2**: apps must be self-contained in their bundles and may not download/install/execute **code** that adds or changes functionality. Downloading *data* (SQLite/JSON/text) is not prohibited; downloading JS bundles that change app functionality would be.
-- **2.1(a)**: the reviewer will open a virgin build. The app must launch, be navigable, and not crash before/without the dataset: show the reader shell, an offline notice, a resumable download with progress, cancel/retry, and a clear error state. Do not gate the first screen on the network.
+- **2.1(a)**: the reviewer will open a virgin build. The app must launch, be navigable, and not crash before/without the dataset: show the app shell, an offline notice, a resumable download with progress, cancel/retry, and a clear error state. Do not gate the first screen on the network.
 - No guideline requires the content to be Apple-hosted. Developer-CDN downloads of data are fine.
 - App Store cellular prompts (the "over 200 MB, download over cellular?" dialog) apply to App Store *app* downloads, not to in-app downloads; in-app behaviour is yours to design (still: offer Wi-Fi-only default, honour Low Data Mode, allow resume).
 - Apple-hosted alternatives, if ever wanted: **On-Demand Resources** (Apple-hosted; ≤8 GB per asset pack on iOS 18+, 70 GB total — but **deprecated as of iOS 27**, migration to Background Assets recommended) and **Apple-hosted asset packs / Managed Background Assets** (iOS 26+, Apple hosts; limits 200 GB total and 200 packs). Both add platform coupling and tooling (asset-pack manifests, BackgroundAssets framework) for no review benefit here.

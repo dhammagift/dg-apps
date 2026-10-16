@@ -60,9 +60,13 @@
   // the button only reloads the page now). Shown once per update; "x" hides it until the next start.
   function showUpdateBar() {
     if (document.getElementById('dg-upd')) return;
-    var ru = typeof isRu === 'function' ? isRu() : /^ru/i.test(document.documentElement.lang || '');
-    var t = ru ? { head: 'Доступна новая версия', sub: 'Страница обновится за секунду', go: 'Обновить', busy: 'Обновляю…', later: 'Позже' }
-               : { head: 'New version available', sub: 'The page reloads in a second', go: 'Update', busy: 'Updating…', later: 'Later' };
+    function barText() {
+      var ru = typeof isRu === 'function' ? isRu() : /^ru/i.test(document.documentElement.lang || '');
+      return ru ? { head: 'Доступна новая версия', sub: 'Страница обновится за секунду', go: 'Обновить', busy: 'Обновляю…', later: 'Позже' }
+                : { head: 'New version available', sub: 'The page reloads in a second', go: 'Update', busy: 'Updating…', later: 'Later' };
+    }
+    var t = barText();
+    var busy = false;
     var bar = document.createElement('div');
     bar.id = 'dg-upd';
     bar.setAttribute('role', 'status');
@@ -89,6 +93,7 @@
     go.textContent = t.go;
     go.style.cssText = 'font:600 14px system-ui,sans-serif;border:0;border-radius:11px;padding:10px 16px;background:#139b7b;color:#fff';
     go.addEventListener('click', function () {
+      busy = true;
       text.firstChild.textContent = t.busy;
       text.lastChild.textContent = '';
       go.remove(); x.remove();
@@ -107,6 +112,16 @@
     x.addEventListener('click', function () { bar.remove(); });
     bar.appendChild(text); bar.appendChild(go); bar.appendChild(x);
     document.body.appendChild(bar);
+    // The strings are a hand-kept ru/en table (not i18n {{tokens}}), so re-apply them when the page language is switched
+    // while the bar is up — otherwise the bar keeps whatever language was active when it was first shown (mixed UI).
+    function relabel() {
+      if (!document.body.contains(bar)) { document.removeEventListener('dhamma:languagechange', relabel); return; }
+      t = barText();
+      if (busy) { text.firstChild.textContent = t.busy; }
+      else { text.firstChild.textContent = t.head; text.lastChild.textContent = t.sub; go.textContent = t.go; }
+      x.setAttribute('aria-label', t.later);
+    }
+    document.addEventListener('dhamma:languagechange', relabel);
   }
 
   // ---- what the person is told ---------------------------------------------------------------

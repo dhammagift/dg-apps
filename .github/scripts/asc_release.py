@@ -10,6 +10,8 @@ ASC key from the GitHub secrets; every step prints what it found and what it did
   asc_release.py <bundle id> submit                 send the version for review
   asc_release.py <bundle id> screens [dir]          (read only) the version's screenshots per language and display type,
                                                     each downloaded into dir (default screens/) to be looked at
+  asc_release.py <bundle id> beta "<n>|<text>"     TestFlight build n to the external groups and to Apple's beta review, with
+                                                    <text> as its "What to Test" (en-US)
   asc_release.py <bundle id> testflight             (read only) the TestFlight groups: public link, its limit, testers,
                                                     which builds each group has and whether Apple let them out to testers
 """
@@ -157,6 +159,32 @@ def submit(bundle):
     print(f"version {v['attributes']['versionString']} submitted for review (submission {sub['id']})")
 
 
+def beta(bundle, arg):
+    number, _, text = arg.partition("|")
+    aid = app_id(bundle)
+    builds = call("GET", f"/v1/builds?filter[app]={aid}&filter[version]={number}&limit=5")["data"]
+    ok = [b for b in builds if b["attributes"].get("processingState") == "VALID"]
+    if not ok:
+        sys.exit(f"build {number}: not found or not processed yet")
+    bid = ok[0]["id"]
+    if text:
+        loc = [l for l in call("GET", f"/v1/builds/{bid}/betaBuildLocalizations")["data"] if l["attributes"].get("locale") == "en-US"]
+        if loc:
+            call("PATCH", f"/v1/betaBuildLocalizations/{loc[0]['id']}",
+                 {"data": {"type": "betaBuildLocalizations", "id": loc[0]["id"], "attributes": {"whatsNew": text}}})
+        else:
+            call("POST", "/v1/betaBuildLocalizations", {"data": {"type": "betaBuildLocalizations",
+                 "attributes": {"locale": "en-US", "whatsNew": text}, "relationships": {"build": {"data": {"type": "builds", "id": bid}}}}})
+        print(f"build {number}: What to Test set")
+    for g in call("GET", f"/v1/betaGroups?filter[app]={aid}&limit=50")["data"]:
+        if not g["attributes"].get("isInternalGroup"):
+            call("POST", f"/v1/betaGroups/{g['id']}/relationships/builds", {"data": [{"type": "builds", "id": bid}]})
+            print(f"build {number}: added to group {g['attributes'].get('name')!r}")
+    call("POST", "/v1/betaAppReviewSubmissions", {"data": {"type": "betaAppReviewSubmissions",
+         "relationships": {"build": {"data": {"type": "builds", "id": bid}}}}})
+    print(f"build {number}: sent to Apple's beta review")
+
+
 def screens(bundle, out="screens"):
     v = editable_version(app_id(bundle))
     os.makedirs(out, exist_ok=True)
@@ -197,6 +225,6 @@ if __name__ == "__main__":
     bundle, action, *rest = sys.argv[1:]
     {"status": lambda: status(bundle), "cancel": lambda: cancel(bundle), "set-build": lambda: set_build(bundle, rest[0]),
      "set-text": lambda: set_text(bundle, rest[0]), "delete-locale": lambda: delete_locale(bundle, rest[0]),
-     "testflight": lambda: testflight(bundle),
+     "testflight": lambda: testflight(bundle), "beta": lambda: beta(bundle, rest[0]),
      "submit": lambda: submit(bundle), "testflight": lambda: testflight(bundle),
      "screens": lambda: screens(bundle, *rest)}[action]()

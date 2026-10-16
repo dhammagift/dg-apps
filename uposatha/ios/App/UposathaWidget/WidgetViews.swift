@@ -34,17 +34,26 @@ enum WLinks {
 // The card: the app's card tint (not white / black). The designs carry their own paddings, so nothing is added here.
 struct WidgetChrome: ViewModifier {
     let accessory: Bool
+    var sample = false   // the bundled sample (placeholder, gallery): never shown as if it were today's
+    @Environment(\.redactionReasons) private var reasons
 
     func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
-            content.containerBackground(for: .widget) { accessory ? Color.clear : Color.dgSurface }
+            shown(content).containerBackground(for: .widget) { accessory ? Color.clear : Color.dgSurface }
         } else {
             if accessory {
-                content
+                shown(content)
             } else {
-                content.background(Color.dgSurface)
+                shown(content).background(Color.dgSurface)
             }
         }
+    }
+
+    // Nothing here is private (owner, 2026-10-12: the lock screen showed grey bars until Face ID): the system's privacy redaction
+    // of a locked phone is undone. Its placeholder redaction (while loading) is kept.
+    @ViewBuilder
+    private func shown(_ content: Content) -> some View {
+        if reasons.contains(.privacy) && !sample { content.unredacted() } else { content }
     }
 }
 
@@ -1196,7 +1205,7 @@ struct UposathaWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        content.modifier(WidgetChrome(accessory: !WidgetFamilies.isSystem(family)))
+        content.modifier(WidgetChrome(accessory: !WidgetFamilies.isSystem(family), sample: entry.isSample))
     }
 
     @ViewBuilder
@@ -1241,7 +1250,7 @@ struct MoonWidgetView: View {
     var body: some View {
         content
             .widgetURL(WLinks.open("home"))
-            .modifier(WidgetChrome(accessory: !WidgetFamilies.isSystem(family)))
+            .modifier(WidgetChrome(accessory: !WidgetFamilies.isSystem(family), sample: entry.isSample))
     }
 
     @ViewBuilder
@@ -1275,6 +1284,6 @@ struct DayWidgetView: View {
             }
         }
         .widgetURL(WLinks.open("parts"))
-        .modifier(WidgetChrome(accessory: false))
+        .modifier(WidgetChrome(accessory: false, sample: entry.isSample))
     }
 }

@@ -109,8 +109,8 @@ struct UposathaProvider: TimelineProvider {
 
     // Entries for the next four hours: every quarter of an hour, every moment the data names (dawn, noon, sunset, the parts, an
     // Uposatha's start and end) and the hours of the counter; then the system asks again. The widget counts nothing itself.
-    // Right after a tap on the slide switch only the first two entries are made (the answer to the tap must be quick) and the
-    // full timeline is asked for a quarter of an hour later.
+    // Right after a tap on the slide switch only the first entry is made (the answer to the tap must be quick: each entry is drawn
+    // before the widget changes) and the full timeline is asked for at the next moment or a quarter of an hour later.
     static func build(now real: Date, family: WidgetFamily) -> (entries: [UposathaEntry], reload: Date) {
         let key = WidgetFamilies.key(family)
         var loaded = WStore.load()
@@ -136,7 +136,7 @@ struct UposathaProvider: TimelineProvider {
         if WStore.monthOffset(data, at: now) == 0 && WStore.layer("month") != 0 { WStore.setLayer("month", 0) }
         let quick = WStore.switchedJustNow()
         let all = data.timelineDates(from: now)
-        let dates = quick ? Array(all.prefix(2)) : all
+        let dates = quick ? Array(all.prefix(1)) : all
         var list: [UposathaEntry] = []
         for d in dates {
             list.append(UposathaEntry(date: d, data: data, layer: layer, month: WStore.monthOffset(data, at: d), stale: false, isSample: false))
@@ -145,7 +145,8 @@ struct UposathaProvider: TimelineProvider {
         if sampled { return (list, real.addingTimeInterval(quick ? 900 : 3600)) }
         #endif
         let last = dates.last ?? now
-        return (list, quick ? now.addingTimeInterval(900) : max(last, now.addingTimeInterval(900)))
+        let soon = all.count > 1 ? min(all[1], now.addingTimeInterval(900)) : now.addingTimeInterval(900)
+        return (list, quick ? soon : max(last, now.addingTimeInterval(900)))
     }
 }
 

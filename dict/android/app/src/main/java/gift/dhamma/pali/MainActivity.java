@@ -9,7 +9,10 @@ import android.os.SystemClock;
 import android.view.View;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
+import android.view.inputmethod.InputMethodManager;
+import android.content.Context;
 
 import androidx.core.splashscreen.SplashScreen;
 import androidx.core.view.ViewCompat;
@@ -174,6 +177,21 @@ public class MainActivity extends BridgeActivity {
         final String script = "window.__DG_APP_VERSION__=" + JSONObject.quote(versionString()) + ";\n"
                 + readAsset(BRIDGE_ASSET);
         WebView webView = getBridge().getWebView();
+        // JS -> native: show the soft keyboard. Android's WebView does not raise the keyboard when a field is focused
+        // from script (only on a tap), so autofocus on the start screen left no keyboard. The page calls
+        // window.DgKeyboard.show() right after it focuses the search box (ddg-ui home.js), and this brings it up for the
+        // WebView's focused field. iOS raises it natively; this is the Android equivalent.
+        final WebView kbWeb = webView;
+        webView.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void show() {
+                kbWeb.post(() -> {
+                    kbWeb.requestFocus();
+                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) imm.showSoftInput(kbWeb, InputMethodManager.SHOW_IMPLICIT);
+                });
+            }
+        }, "DgKeyboard");
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
                 WebViewCompat.addDocumentStartJavaScript(webView, script, Collections.singleton(SITE_ORIGIN));

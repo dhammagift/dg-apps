@@ -70,20 +70,26 @@ final class ControlGalleryTests: XCTestCase {
         shot("gallery")
         tree("tree-3-gallery")
 
-        // Search the gallery for our control.
+        // Search the gallery for our control (best effort: wait for the keyboard so typing does not race the focus — the
+        // flake was "Neither element nor any descendant has keyboard focus").
         let search = board.searchFields.firstMatch
-        if search.waitForExistence(timeout: 5) {
-            search.tap(); search.typeText(searchText)
-            sleep(3)
-            shot("gallery-search")
-            tree("tree-4-search")
+        if search.waitForExistence(timeout: 5) && search.isHittable {
+            search.tap()
+            if board.keyboards.firstMatch.waitForExistence(timeout: 5) {
+                search.typeText(searchText)
+                sleep(3)
+                shot("gallery-search")
+                tree("tree-4-search")
+            }
         }
 
-        // Find and tap the control's preview button (identifier = the control's kind), which ADDS it to Control Center
-        // and returns there. The group header is a StaticText with the same label — tapping that does nothing, which is
-        // why an earlier run stayed in the gallery; the button carries the bundle id.
+        // Find the control's preview button (identifier = the control's kind). If the search did not bring it into view,
+        // scroll the (long) gallery until it appears. Tapping it ADDS the control to Control Center; the group header is
+        // a StaticText with the same label and tapping that does nothing.
         tree("tree-5-before-pick")
         let preview = board.buttons[ctlId].firstMatch
+        var scrolls = 0
+        while !preview.exists && scrolls < 8 { board.swipeUp(); sleep(1); scrolls += 1 }
         if !preview.waitForExistence(timeout: 6) {
             shot("control-NOT-found")
             XCTFail("the control \(ctlId) was not found in the Add-a-Control gallery")

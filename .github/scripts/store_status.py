@@ -116,7 +116,7 @@ def asc_app(asc, bundle):
         return None
     app_id = apps[0]["id"]
     res = {"id": app_id, "name": apps[0]["attributes"].get("name", ""), "live": "", "live_build": "", "review": "", "state": "",
-           "tf_build": "", "tf_version": "", "public_link": ""}
+           "tf_build": "", "tf_version": "", "tf_state": "", "public_link": ""}
     versions = sorted(asc(f"/v1/apps/{app_id}/appStoreVersions?limit=10")["data"],
                       key=lambda v: v["attributes"].get("createdDate") or "", reverse=True)
     for v in versions:
@@ -135,6 +135,7 @@ def asc_app(asc, bundle):
     b = asc(f"/v1/builds?filter[app]={app_id}&sort=-uploadedDate&limit=1&include=preReleaseVersion")
     if b["data"]:
         res["tf_build"] = b["data"][0]["attributes"]["version"]
+        res["tf_state"] = b["data"][0]["attributes"].get("processingState", "")
         pre = next((i for i in b.get("included", []) if i["type"] == "preReleaseVersions"), None)
         res["tf_version"] = pre["attributes"]["version"] if pre else ""
     for g in asc(f"/v1/betaGroups?filter[app]={app_id}&limit=20")["data"]:
@@ -257,7 +258,7 @@ def main():
         lb = a.get("live_build", "")
         live = {"code": int(lb) if lb.isdigit() else 0, "label": f"{a['live']} ({lb})" if a.get("live") and lb else a.get("live", "")}
         tf = a.get("tf_build", "")
-        testing = {"code": int(tf) if tf.isdigit() else 0, "label": f"TestFlight {a.get('tf_version') or ''} ({tf})".replace(" ()", "").replace("TestFlight  (", "TestFlight (") if tf else ""}
+        testing = {"code": int(tf) if tf.isdigit() else 0, "processing": a.get("tf_state", ""), "label": f"TestFlight {a.get('tf_version') or ''} ({tf})".replace(" ()", "").replace("TestFlight  (", "TestFlight (") if tf else ""}
         built = safe(f"artifacts {ipa_prefix}", lambda: latest_artifact(REPO, ipa_prefix)) if ipa_prefix else None
         ours = ({"code": built[0], "label": named(key.split("-")[0], built[0], ios=True)} if built
                 else {"code": testing["code"], "label": named(key.split("-")[0], tf, ios=True) if tf else ""})

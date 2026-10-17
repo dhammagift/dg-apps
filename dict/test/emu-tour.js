@@ -195,7 +195,10 @@ async function run(name, fn) {
     const ime = adb('shell dumpsys input_method'); fs.writeFileSync(path.join(OUT, 'ime-autofocus.txt'), ime);
     const up = /mInputShown=true/.test(ime);
     log('  search box focused: ' + focused + ' | soft keyboard up without a tap: ' + up);
-    return up;
+    typeAscii('kac'); await sleep(1200);   // type with no tap: the keyboard being up is not enough — the field must be focused
+    const typed = await ev(`document.getElementById('search-box').value`);
+    log('  typed "kac" with no tap, box shows: ' + JSON.stringify(typed));
+    return up && /kac/.test(typed || '');
   });
   await run('search-velthuis', async () => {
     if (!(await tapEl('#search-box'))) return false;

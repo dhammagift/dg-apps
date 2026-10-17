@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Dict.Dhamma.Gift</string>
+	<string>Dict.Dhamma.Gift</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -20,6 +20,17 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>gift.dhamma.pali</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dictdhammagift</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -29,22 +40,38 @@
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-    <false/>
-    <key>UISceneConfigurations</key>
-    <dict>
-      <key>UIWindowSceneSessionRoleApplication</key>
-      <array>
-        <dict>
-            <key>UISceneConfigurationName</key>
-            <string>Default Configuration</string>
-            <key>UISceneDelegateClassName</key>
-            <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-            <key>UISceneStoryboardFile</key>
-            <string>Main</string>
-        </dict>
-      </array>
-    </dict>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconFile</key>
+			<string>DgShortcutDiamond</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Dhamma.Gift</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>route</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>route</key>
+				<string>https://dhamma.gift/</string>
+			</dict>
+		</dict>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -68,32 +95,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<!-- ONE static shortcut, matching android/app/src/main/res/xml/shortcuts.xml exactly: Dhamma.Gift
-	     (the main site; the compass was dropped from the dictionary) is the only entry that belongs to both the "switch off" (programmed) and "switch on"
-	     (recent words) sets DgShortcutsPlugin.set() pushes dynamically, and the only one a reader sees
-	     on a freshly installed app before it has ever run — a dynamic shortcut cannot exist before
-	     then. Without this, a fresh install's long-press menu was empty (dg-apps#39: "нет шорткатов.
-	     хотя есть в даммагифт") until the app had run once AND the dynamic push actually landed.
-	     iOS shows at most four total; DgShortcutsPlugin.set() sends at most 3, leaving room for this one. -->
-	<key>UIApplicationShortcutItems</key>
-	<array>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>route</string>
-			<key>UIApplicationShortcutItemIconFile</key>
-			<string>DgShortcutDiamond</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>Dhamma.Gift</string>
-			<key>UIApplicationShortcutItemUserInfo</key>
-			<dict>
-				<key>route</key>
-				<!-- Absolute, matching android/app/src/main/res/xml/shortcuts.xml exactly: dict.dhamma.gift
-				     is not the main site, which lives on dhamma.gift
-				     (server.allowNavigation already lists dhamma.gift), and wireIosShortcutTaps'
-				     go() already branches on an absolute http(s) route. -->
-				<string>https://dhamma.gift/</string>
-			</dict>
-		</dict>
-	</array>
 </dict>
 </plist>

@@ -14,6 +14,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)/controltest"
 SHOTS=/tmp/dict-control-shots
 
 [ -d "$APP" ] || { echo "control-gallery: no .app at $APP" >&2; exit 1; }
+# A build with CODE_SIGNING_ALLOWED=NO carries only the linker's ad-hoc signature, whose identifier is not the bundle id: the
+# App Intents daemon cannot map the control's intent to the app ("Failed to fetch metadata for ...") and WidgetKit stops
+# generating the control with "Can't create CHSIntentReference" (an empty circle in the gallery, a tap that opens nothing).
+# Ad-hoc signing binds the bundle id: the extensions first, then the app.
+for x in "$APP"/PlugIns/*.appex; do codesign --force --sign - "$x"; done
+codesign --force --sign - "$APP"
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 rm -rf "$SHOTS"; mkdir -p "$SHOTS"
 

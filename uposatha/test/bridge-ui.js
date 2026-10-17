@@ -411,6 +411,9 @@ function capacitorStub() {
             });
             await ctx.addInitScript(BRIDGE);
             const page = await ctx.newPage();
+            // a day with no reminder already past: on the eve of an Uposatha the 24-hour one is late and goes to the
+            // silent "missed" channel (run 617, 2026-10-17: ["uposatha-none-v1", "uposatha-gong-v1"])
+            await page.clock.setFixedTime(new Date('2026-10-12T12:00:00Z'));
             await page.goto(PAGE, { waitUntil: 'load' });
             await page.waitForTimeout(2500);
             check('DND: without access the channels are the plain ones', await page.evaluate(() => [...new Set(window.__calls.scheduled.flat().map((n) => n.channelId))]), ['uposatha-gong-v1']);

@@ -186,9 +186,13 @@ public class MainActivity extends BridgeActivity {
             @JavascriptInterface
             public void show() {
                 kbWeb.post(() -> {
-                    kbWeb.requestFocus();
-                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                    if (imm != null) imm.showSoftInput(kbWeb, InputMethodManager.SHOW_IMPLICIT);
+                    // A plain View.requestFocus() does not gate the IME: the WebView drops a soft-keyboard request for a
+                    // field focused from script (no gesture), so SHOW_IMPLICIT was ignored and mInputShown stayed false
+                    // (emulator API 34). requestFocusFromTouch() makes the WebView treat the focus as touch-driven, which
+                    // satisfies that gate; give it a beat, then show the keyboard for the focused field.
+                    kbWeb.requestFocusFromTouch();
+                    final InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) kbWeb.postDelayed(() -> imm.showSoftInput(kbWeb, InputMethodManager.SHOW_IMPLICIT), 200);
                 });
             }
         }, "DgKeyboard");

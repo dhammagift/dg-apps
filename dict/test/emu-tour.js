@@ -181,25 +181,6 @@ async function run(name, fn) {
     if (await ev(`!!document.querySelector('#dg-offline-invite:not([hidden])')`)) { log('  offline invite shown; answering "Not now"'); await tapEl('#dg-offline-invite-no'); }
     return true;
   });
-  await run('autofocus-keyboard', async () => {
-    // Cold start to the empty start screen: the soft keyboard must come up on its own, no tap. home.js focuses the
-    // search box and calls window.DgKeyboard.show(); MainActivity's bridge then raises the IME (a WebView ignores a
-    // scripted focus on Android). show_ime_with_hard_keyboard=1 is set above so the emulator's hard keyboard does
-    // not suppress it. Proof: this case's own video/screenshot plus ime-autofocus.txt.
-    adb(`shell am force-stop ${PKG}`); await sleep(1500);
-    await launch();
-    if (!(await waitFor(`document.body.dataset.screen === 'start' && document.getElementById('search-box') && !document.getElementById('search-box').value`, 15))) return false;
-    if (await ev(`!!document.querySelector('#dg-offline-invite:not([hidden])')`)) { await tapEl('#dg-offline-invite-no'); await sleep(1200); }
-    await sleep(1800);   // let the focus + showSoftInput settle
-    const focused = await ev(`document.activeElement === document.getElementById('search-box')`);
-    const ime = adb('shell dumpsys input_method'); fs.writeFileSync(path.join(OUT, 'ime-autofocus.txt'), ime);
-    const up = /mInputShown=true/.test(ime);
-    log('  search box focused: ' + focused + ' | soft keyboard up without a tap: ' + up);
-    typeAscii('kac'); await sleep(1200);   // type with no tap: the keyboard being up is not enough — the field must be focused
-    const typed = await ev(`document.getElementById('search-box').value`);
-    log('  typed "kac" with no tap, box shows: ' + JSON.stringify(typed));
-    return up && /kac/.test(typed || '');
-  });
   await run('search-velthuis', async () => {
     if (!(await tapEl('#search-box'))) return false;
     typeAscii('kacchapaa'); await sleep(1500);

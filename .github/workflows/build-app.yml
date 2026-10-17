@@ -1600,6 +1600,16 @@ jobs:
       - name: Feature tour on an iPhone simulator
         working-directory: dict
         run: test/ios-sim/feature-tour.sh ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app ios-tour
+      # The Control Center control (DgDictControls): proves the extension is embedded and shows it in the "Add a
+      # Control" gallery on a simulator. Runs whatever the feature tour did (if: always), and does not fail the job on
+      # its own flakiness (continue-on-error) — the screenshots in the artifact are the proof we read.
+      - name: Control Center control (self-check)
+        if: always()
+        continue-on-error: true
+        working-directory: dict
+        run: |
+          (cd test/ios-sim/controltest && xcodegen generate)
+          test/ios-sim/control-gallery.sh ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app ios-control
       - name: Verdict
         if: always()
         run: |
@@ -1614,6 +1624,9 @@ jobs:
             dict/ios-tour/*.log
             dict/ios-tour/results.txt
             dict/ios-feature-build.log
+            dict/ios-control/*.png
+            dict/ios-control/*.txt
+            dict/ios-control/*.log
           retention-days: 14
           if-no-files-found: warn
 

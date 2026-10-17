@@ -24,7 +24,7 @@ struct DgDictControl: ControlWidget {
             ControlWidgetButton(action: DgDictOpenControlIntent()) {
                 // A control draws only a symbol (SF Symbol or a custom .symbolset): a plain image (the brand mark it had, a loose
                 // imageset outside an asset catalog) came out as "?" in Control Center (owner, 2026-10-17).
-                Label("Dict.Dhamma.Gift", image: "DictMark")
+                Label("Dict.Dhamma.Gift", systemImage: "character.book.closed")
             }
         }
         .displayName("Dict.Dhamma.Gift")

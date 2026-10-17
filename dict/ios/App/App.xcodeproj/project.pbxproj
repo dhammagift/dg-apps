@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		023F44F6C38F46159C7F241A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 39EB34B0DFC048758311B940 /* Assets.xcassets */; };
 		D6D3C0000000000000000002 /* DgDictControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D3C0000000000000000001 /* DgDictControlIntent.swift */; };
 		D6D3C0000000000000000003 /* DgDictControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D3C0000000000000000001 /* DgDictControlIntent.swift */; };
 		10EBD2E1EC0A48488439083A /* DgDictControlWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59E2C663BCA44091A646CE50 /* DgDictControlWidget.swift */; };
@@ -28,7 +27,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		39EB34B0DFC048758311B940 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D6D3C0000000000000000001 /* DgDictControlIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgDictControlIntent.swift; sourceTree = "<group>"; };
 		59E2C663BCA44091A646CE50 /* DgDictControlWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgDictControlWidget.swift; sourceTree = "<group>"; };
 		F3897C9D828B42888791663E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -115,7 +113,6 @@
 				59E2C663BCA44091A646CE50 /* DgDictControlWidget.swift */,
 				D6D3C0000000000000000001 /* DgDictControlIntent.swift */,
 				F3897C9D828B42888791663E /* Info.plist */,
-				39EB34B0DFC048758311B940 /* Assets.xcassets */,
 			);
 			path = DgDictControls;
 			sourceTree = "<group>";
@@ -278,7 +275,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				023F44F6C38F46159C7F241A /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

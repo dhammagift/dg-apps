@@ -1586,25 +1586,6 @@ jobs:
       - name: Sync Capacitor into dict/ios
         working-directory: dict
         run: npx cap sync ios
-      # The Control Center control draws an SF Symbol, not an image, so our brand mark is turned into a custom symbol:
-      # SwiftDraw converts dictmark-src.svg into the SF-symbol template DictMark.svg in the extension's .symbolset (no
-      # SF Symbols.app needed). Done before the build so the asset catalog has the symbol. The result is also uploaded,
-      # to be baked into the repo later and drop this step.
-      - name: Generate the brand symbol (SwiftDraw)
-        working-directory: dict
-        run: |
-          set -e
-          if ! command -v swiftdraw >/dev/null 2>&1; then
-            brew install swiftdraw >/dev/null 2>&1 || {
-              git clone --depth 1 https://github.com/swhitty/SwiftDraw /tmp/swiftdraw
-              (cd /tmp/swiftdraw && swift build -c release)
-              sudo ln -sf /tmp/swiftdraw/.build/release/swiftdraw /usr/local/bin/swiftdraw
-            }
-          fi
-          out=ios/App/DgDictControls/Assets.xcassets/DictMark.symbolset/DictMark.svg
-          swiftdraw ios/App/DgDictControls/dictmark-src.svg --format sfsymbol --output "$out" || \
-            swiftdraw ios/App/DgDictControls/dictmark-src.svg --format sfsymbol > "$out"
-          echo "generated $(wc -c < "$out") bytes"; head -3 "$out"
       - name: Build for the iOS Simulator
         working-directory: dict/ios/App
         run: |
@@ -1646,7 +1627,6 @@ jobs:
             dict/ios-control/*.png
             dict/ios-control/*.txt
             dict/ios-control/*.log
-            dict/ios/App/DgDictControls/Assets.xcassets/DictMark.symbolset/DictMark.svg
           retention-days: 14
           if-no-files-found: warn
 

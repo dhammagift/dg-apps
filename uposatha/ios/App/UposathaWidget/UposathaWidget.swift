@@ -256,6 +256,8 @@ struct UposathaControl: ControlWidget {
             let months = (now.timeIntervalSince1970 - 947_182_440) / 86_400 / 29.530588853
             phase = months - floor(months)
         }
-        return LockInline.symbols[WPlan.phaseIndex(phase)]
+        // .inverse: the filled part is the lit one (in the plain symbols it is the shadow, so a waxing crescent came out as a
+        // white disc with a dark sliver, sim run 39002440495), so the full moon is a full white disc
+        return LockInline.symbols[WPlan.phaseIndex(phase)] + ".inverse"
     }
 }

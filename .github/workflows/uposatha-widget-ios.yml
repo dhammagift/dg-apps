@@ -93,6 +93,19 @@ jobs:
       - name: The widget gallery and the Home Screen
         run: uposatha/test/ios-sim/widget-gallery.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app widget-shots
 
+      # The Control Center control (iOS 18+), by the Dictionary's control test with Uposatha's names: found in the
+      # Add-a-Control gallery, added, tapped ("app foreground after tap: true" = it opened the app)
+      - name: The Control Center control
+        if: always()
+        env:
+          CONTROL_APP_ID: gift.dhamma.uposatha
+          CONTROL_APPEX: UposathaWidget
+          CONTROL_KIND: gift.dhamma.uposatha.UposathaControl
+          CONTROL_SEARCH: Uposatha
+        run: |
+          (cd dict/test/ios-sim/controltest && xcodegen generate)
+          dict/test/ios-sim/control-gallery.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app control-shots
+
       - name: Upload the pictures and the logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -100,6 +113,7 @@ jobs:
           name: uposatha-widget-ios-${{ github.run_number }}
           path: |
             widget-shots
+            control-shots
             uposatha/ios-build.log
           retention-days: 14
           if-no-files-found: ignore

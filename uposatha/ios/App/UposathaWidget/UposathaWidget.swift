@@ -219,5 +219,23 @@ struct UposathaWidgetBundle: WidgetBundle {
         UposathaWidget()
         UposathaMoonWidget()
         UposathaDayWidget()
+        if #available(iOSApplicationExtension 18.0, *) {
+            UposathaControl()
+        }
+    }
+}
+
+// Control Center (iOS 18+): one tap opens Uposatha, as the Quick Settings tile does on Android (DgTileService.java). Added from
+// the + of Control Center. A control draws only a symbol (an SF Symbol or a custom .symbolset), never a plain image.
+@available(iOS 18.0, *)
+struct UposathaControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "gift.dhamma.uposatha.UposathaControl") {
+            ControlWidgetButton(action: UposathaOpenControlIntent()) {
+                Label("Uposatha", systemImage: "moonphase.first.quarter")
+            }
+        }
+        .displayName("Uposatha")
+        .description("Opens the Uposatha calendar.")
     }
 }

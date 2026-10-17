@@ -6,7 +6,10 @@
 set -uo pipefail
 APP="${1:?usage: control-gallery.sh <App.app> <out-dir>}"
 OUT="${2:?usage: control-gallery.sh <App.app> <out-dir>}"
-BUNDLE=gift.dhamma.pali
+# Another app's control (Uposatha's from uposatha-widget-ios.yml): CONTROL_APP_ID, CONTROL_APPEX, CONTROL_KIND, CONTROL_SEARCH
+BUNDLE="${CONTROL_APP_ID:-gift.dhamma.pali}"
+APPEX="${CONTROL_APPEX:-DgDictControls}"
+export TEST_RUNNER_CONTROL_APP_ID="$BUNDLE" TEST_RUNNER_CONTROL_KIND="${CONTROL_KIND:-gift.dhamma.pali.DgDictControl}" TEST_RUNNER_CONTROL_SEARCH="${CONTROL_SEARCH:-Dhamma}"
 HERE="$(cd "$(dirname "$0")" && pwd)/controltest"
 SHOTS=/tmp/dict-control-shots
 
@@ -25,8 +28,8 @@ xcrun simctl install "$UDID" "$APP"
 xcrun simctl ui "$UDID" appearance dark
 ls "$APP/PlugIns" 2>/dev/null | tee "$OUT/plugins.txt"
 # prove the control extension is present in the bundle before driving the UI
-test -d "$APP/PlugIns/DgDictControls.appex" && echo "DgDictControls.appex embedded: yes" | tee -a "$OUT/plugins.txt" \
-  || { echo "control-gallery: DgDictControls.appex is NOT embedded" | tee -a "$OUT/plugins.txt"; }
+test -d "$APP/PlugIns/$APPEX.appex" && echo "$APPEX.appex embedded: yes" | tee -a "$OUT/plugins.txt" \
+  || { echo "control-gallery: $APPEX.appex is NOT embedded" | tee -a "$OUT/plugins.txt"; }
 START=$(date '+%Y-%m-%d %H:%M:%S')
 
 xcodebuild build-for-testing -project "$HERE/ControlTests.xcodeproj" -scheme ControlTests \
@@ -45,7 +48,7 @@ grep -E "error: -\[|failed -|Test Case .* (passed|failed)|app foreground after t
 
 cp "$SHOTS"/* "$OUT"/ 2>/dev/null
 xcrun simctl spawn "$UDID" log show --start "$START" --style compact \
-  --predicate 'process CONTAINS[c] "DgDictControls" OR senderImagePath CONTAINS[c] "DgDictControls" OR eventMessage CONTAINS[c] "dhamma.pali"' \
+  --predicate "process CONTAINS[c] \"$APPEX\" OR senderImagePath CONTAINS[c] \"$APPEX\" OR eventMessage CONTAINS[c] \"$BUNDLE\"" \
   > "$OUT/control-log.txt" 2>&1 || true
 echo "control-gallery: $(ls "$OUT"/*.png 2>/dev/null | wc -l) screenshots"
 ls -la "$OUT" | head -60

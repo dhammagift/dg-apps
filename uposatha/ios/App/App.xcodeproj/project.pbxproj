@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E7B1D0F1000000410072D4E8 /* UposathaControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000400072D4E8 /* UposathaControlIntent.swift */; };
+		E7B1D0F1000000420072D4E8 /* UposathaControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000400072D4E8 /* UposathaControlIntent.swift */; };
 		E7B1D0F1000000090072D4E8 /* UposathaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000010072D4E8 /* UposathaWidget.swift */; };
 		E7B1D0F10000000A0072D4E8 /* WidgetModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000020072D4E8 /* WidgetModel.swift */; };
 		E7B1D0F10000000B0072D4E8 /* WidgetStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B1D0F1000000030072D4E8 /* WidgetStrings.swift */; };
@@ -59,6 +61,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E7B1D0F1000000400072D4E8 /* UposathaControlIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UposathaControlIntent.swift; sourceTree = "<group>"; };
 		E7B1D0F1000000010072D4E8 /* UposathaWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UposathaWidget.swift; sourceTree = "<group>"; };
 		E7B1D0F1000000020072D4E8 /* WidgetModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetModel.swift; sourceTree = "<group>"; };
 		E7B1D0F1000000030072D4E8 /* WidgetStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetStrings.swift; sourceTree = "<group>"; };
@@ -159,6 +162,7 @@
 				E7B1D0F1000000060072D4E8 /* WidgetViews.swift */,
 				E7B1D0F1000000070072D4E8 /* WidgetLockViews.swift */,
 				E7B1D0F1000000080072D4E8 /* SwitchLayerIntent.swift */,
+				E7B1D0F1000000400072D4E8 /* UposathaControlIntent.swift */,
 				E7B1D0F1000000110072D4E8 /* Assets.xcassets */,
 				E7B1D0F1000000130072D4E8 /* widget-sample.json */,
 				E7B1D0F1000000240072D4E8 /* lato_regular.ttf */,
@@ -287,6 +291,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E7B1D0F1000000420072D4E8 /* UposathaControlIntent.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				D6A0C0DE2FEA00020072D4E8 /* DgApp.swift in Sources */,
 				D6A0C0DE2FEA00050072D4E8 /* DgSelfTestPlugin.swift in Sources */,
@@ -298,6 +303,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E7B1D0F1000000410072D4E8 /* UposathaControlIntent.swift in Sources */,
 				E7B1D0F1000000090072D4E8 /* UposathaWidget.swift in Sources */,
 				E7B1D0F10000000A0072D4E8 /* WidgetModel.swift in Sources */,
 				E7B1D0F10000000B0072D4E8 /* WidgetStrings.swift in Sources */,

@@ -6,7 +6,12 @@ import XCTest
 // differ by iOS), so a miss can be read from the artifact. Mirrors uposatha/.../WidgetGalleryTests.swift.
 final class ControlGalleryTests: XCTestCase {
     private let board = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-    private let appId = "gift.dhamma.pali"
+    // Which app's control (control-gallery.sh passes them as TEST_RUNNER_CONTROL_*; the Dictionary's by default, Uposatha's
+    // from uposatha-widget-ios.yml)
+    private static let env = ProcessInfo.processInfo.environment
+    private let appId = env["CONTROL_APP_ID"] ?? "gift.dhamma.pali"
+    private let ctlId = env["CONTROL_KIND"] ?? "gift.dhamma.pali.DgDictControl"
+    private let searchText = env["CONTROL_SEARCH"] ?? "Dhamma"
     private let out = URL(fileURLWithPath: "/tmp/dict-control-shots")
     private var n = 0
 
@@ -68,7 +73,7 @@ final class ControlGalleryTests: XCTestCase {
         // Search the gallery for our control.
         let search = board.searchFields.firstMatch
         if search.waitForExistence(timeout: 5) {
-            search.tap(); search.typeText("Dhamma")
+            search.tap(); search.typeText(searchText)
             sleep(3)
             shot("gallery-search")
             tree("tree-4-search")
@@ -78,11 +83,10 @@ final class ControlGalleryTests: XCTestCase {
         // and returns there. The group header is a StaticText with the same label — tapping that does nothing, which is
         // why an earlier run stayed in the gallery; the button carries the bundle id.
         tree("tree-5-before-pick")
-        let ctlId = "gift.dhamma.pali.DgDictControl"
         let preview = board.buttons[ctlId].firstMatch
         if !preview.waitForExistence(timeout: 6) {
             shot("control-NOT-found")
-            XCTFail("the Dict.Dhamma.Gift control button was not found in the Add-a-Control gallery")
+            XCTFail("the control \(ctlId) was not found in the Add-a-Control gallery")
             return
         }
         shot("control-found")

@@ -98,6 +98,13 @@ final class ControlGalleryTests: XCTestCase {
         // Tap the control in Control Center to open the app.
         let app = XCUIApplication(bundleIdentifier: appId)
         let inCC = board.buttons[ctlId].firstMatch
+        if !inCC.waitForExistence(timeout: 4) {
+            // Control Center is still in edit mode after the add (no button in the tree): a tap where the new control
+            // landed only ends edit mode (Uposatha run 39000381785), so the control itself is looked for again after it
+            board.coordinate(withNormalizedOffset: CGVector(dx: 0.16, dy: 0.18)).tap()
+            sleep(3)
+            shot("edit-mode-ended")
+        }
         if inCC.waitForExistence(timeout: 4) {
             inCC.tap()
             sleep(6)
@@ -111,6 +118,6 @@ final class ControlGalleryTests: XCTestCase {
         let opened = app.state == .runningForeground
         print("app foreground after tap:", opened)
         tree("tree-7-after-tap")
-        XCTAssertTrue(opened, "tapping the control did not bring the dictionary to the foreground")
+        XCTAssertTrue(opened, "tapping the control did not bring \(appId) to the foreground")
     }
 }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D60000652FE0000000010005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D60000642FE0000000010004 /* Assets.xcassets */; };
 		D60000622FE0000000010002 /* DgControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000612FE0000000010001 /* DgControlIntent.swift */; };
 		D60000632FE0000000010003 /* DgControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000612FE0000000010001 /* DgControlIntent.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
@@ -87,6 +88,7 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXFileReference section */
+		D60000642FE0000000010004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D60000612FE0000000010001 /* DgControlIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgControlIntent.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		D60000422FE00000000000E2 /* en */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
@@ -182,6 +184,7 @@
 			children = (
 				D600004A2FE00000000000EA /* DgControlWidget.swift */,
 				D60000612FE0000000010001 /* DgControlIntent.swift */,
+				D60000642FE0000000010004 /* Assets.xcassets */,
 				D60000522FE00000000000F2 /* DgControls.entitlements */,
 				D60000532FE00000000000F3 /* Info.plist */,
 			);
@@ -364,6 +367,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D60000652FE0000000010005 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

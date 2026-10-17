@@ -24,9 +24,10 @@ struct DgLibraryControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "gift.dhamma.mobile.DgLibraryControl") {
             ControlWidgetButton(action: DgOpenLibraryControlIntent()) {
-                // A control draws only a symbol (SF Symbol or a custom .symbolset): a plain image (the brand mark it had, a loose
-                // imageset outside an asset catalog) came out as "?" in Control Center (owner, 2026-10-17).
-                Label("Dhamma.gift", systemImage: "books.vertical")
+                // A control draws only a symbol: the brand mark (the app icon's wheel) as a custom symbol in this target's own
+                // catalog (Assets.xcassets/DgMark.symbolset; the owner wants our marks, 2026-10-17). A plain image (the
+                // loose DgGlyph imageset it had) came out as "?" in Control Center.
+                Label("Dhamma.gift", image: "DgMark")
             }
         }
         .displayName("Dhamma.gift")

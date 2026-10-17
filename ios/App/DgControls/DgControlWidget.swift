@@ -20,29 +20,13 @@ import WidgetKit
 // AppIntent form is used here because it is the one iOS 18.0 also has — the deployment target of
 // this extension is 18.0, and the button must build against both.
 @available(iOS 18.0, *)
-struct DgOpenLibraryControlIntent: AppIntent {
-    static let title: LocalizedStringResource = "Open Dhamma.gift"
-    static let description = IntentDescription("Opens the Dhamma.gift library.")
-    static let openAppWhenRun = true
-
-    @MainActor
-    func perform() async throws -> some IntentResult & OpensIntent {
-        let route = URL(string: "dhammagift://route/")
-            ?? URL(string: "dhammagift://")!
-        return .result(opensIntent: OpenURLIntent(route))
-    }
-}
-
-@available(iOS 18.0, *)
 struct DgLibraryControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "gift.dhamma.mobile.DgLibraryControl") {
             ControlWidgetButton(action: DgOpenLibraryControlIntent()) {
-                // The brand mark, not a system glyph: the control sits in Control Center next to
-                // real app icons, and a generic "book" there could be anyone's reader. The image
-                // set lives in THIS target's own catalog (DgGlyph.imageset) — an app extension
-                // does not see the app's Assets.xcassets.
-                Label("Dhamma.gift", image: "DgGlyph")
+                // A control draws only a symbol (SF Symbol or a custom .symbolset): a plain image (the brand mark it had, a loose
+                // imageset outside an asset catalog) came out as "?" in Control Center (owner, 2026-10-17).
+                Label("Dhamma.gift", systemImage: "books.vertical")
             }
         }
         .displayName("Dhamma.gift")

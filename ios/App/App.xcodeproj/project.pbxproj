@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D60000622FE0000000010002 /* DgControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000612FE0000000010001 /* DgControlIntent.swift */; };
+		D60000632FE0000000010003 /* DgControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000612FE0000000010001 /* DgControlIntent.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -37,7 +39,6 @@
 		D600004D2FE00000000000ED /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D600004C2FE00000000000EC /* WidgetKit.framework */; };
 		D600004F2FE00000000000EF /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D600004E2FE00000000000EE /* SwiftUI.framework */; };
 		D60000502FE00000000000F0 /* DgControls.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = D60000512FE00000000000F1 /* DgControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		D60000602FE0000000010000 /* DgGlyph.imageset in Resources */ = {isa = PBXBuildFile; fileRef = D600005F2FE0000000010000 /* DgGlyph.imageset */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,6 +87,7 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXFileReference section */
+		D60000612FE0000000010001 /* DgControlIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgControlIntent.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		D60000422FE00000000000E2 /* en */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
 		D60000432FE00000000000E3 /* ru */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
@@ -121,7 +123,6 @@
 		D60000512FE00000000000F1 /* DgControls.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DgControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D60000522FE00000000000F2 /* DgControls.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DgControls.entitlements; sourceTree = "<group>"; };
 		D60000532FE00000000000F3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		D600005F2FE0000000010000 /* DgGlyph.imageset */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = DgGlyph.imageset; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -180,7 +181,7 @@
 			isa = PBXGroup;
 			children = (
 				D600004A2FE00000000000EA /* DgControlWidget.swift */,
-				D600005F2FE0000000010000 /* DgGlyph.imageset */,
+				D60000612FE0000000010001 /* DgControlIntent.swift */,
 				D60000522FE00000000000F2 /* DgControls.entitlements */,
 				D60000532FE00000000000F3 /* Info.plist */,
 			);
@@ -363,7 +364,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D60000602FE0000000010000 /* DgGlyph.imageset in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -374,6 +374,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D60000632FE0000000010003 /* DgControlIntent.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				D60000022FE00000000000A2 /* DgBridgeViewController.swift in Sources */,
@@ -402,6 +403,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D60000622FE0000000010002 /* DgControlIntent.swift in Sources */,
 				D600004B2FE00000000000EB /* DgControlWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

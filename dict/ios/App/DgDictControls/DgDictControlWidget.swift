@@ -18,27 +18,13 @@ import WidgetKit
 // The AppIntent form of the button (not the iOS 26 OpenURLIntent initializer) is used because it is
 // the one iOS 18.0 — this extension's deployment target — also has.
 @available(iOS 18.0, *)
-struct DgDictOpenControlIntent: AppIntent {
-    static let title: LocalizedStringResource = "Open Dict.Dhamma.Gift"
-    static let description = IntentDescription("Opens the Dict.Dhamma.Gift dictionary.")
-    static let openAppWhenRun = true
-
-    @MainActor
-    func perform() async throws -> some IntentResult & OpensIntent {
-        let url = URL(string: "dictdhammagift://") ?? URL(string: "dictdhammagift://open")!
-        return .result(opensIntent: OpenURLIntent(url))
-    }
-}
-
-@available(iOS 18.0, *)
 struct DgDictControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "gift.dhamma.pali.DgDictControl") {
             ControlWidgetButton(action: DgDictOpenControlIntent()) {
-                // The dictionary's own brand mark, from THIS target's catalog (DictGlyph.imageset):
-                // an app extension does not see the app's Assets.xcassets, and a generic "book"
-                // glyph in Control Center could be any reader.
-                Label("Dict.Dhamma.Gift", image: "DictGlyph")
+                // A control draws only a symbol (SF Symbol or a custom .symbolset): a plain image (the brand mark it had, a loose
+                // imageset outside an asset catalog) came out as "?" in Control Center (owner, 2026-10-17).
+                Label("Dict.Dhamma.Gift", systemImage: "character.book.closed")
             }
         }
         .displayName("Dict.Dhamma.Gift")

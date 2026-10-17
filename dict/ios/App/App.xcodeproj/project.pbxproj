@@ -7,8 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D6D3C0000000000000000002 /* DgDictControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D3C0000000000000000001 /* DgDictControlIntent.swift */; };
+		D6D3C0000000000000000003 /* DgDictControlIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D3C0000000000000000001 /* DgDictControlIntent.swift */; };
 		10EBD2E1EC0A48488439083A /* DgDictControlWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59E2C663BCA44091A646CE50 /* DgDictControlWidget.swift */; };
-		4A92C39AFF5043DBB17C622A /* DictGlyph.imageset in Resources */ = {isa = PBXBuildFile; fileRef = FE16E3AFAAD34F53AD689A27 /* DictGlyph.imageset */; };
 		532E90B7613E4DC0A9F195F2 /* DgDictControls.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 0F5047B783BC47B18EDE02E8 /* DgDictControls.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D6D1C0DE2FEA00040072D4E8 /* DgSelfTestPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D1C0DE2FEA00030072D4E8 /* DgSelfTestPlugin.swift */; };
 		D6D1C0DE2FEA00020072D4E8 /* DgApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D1C0DE2FEA00010072D4E8 /* DgApp.swift */; };
@@ -26,9 +27,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		D6D3C0000000000000000001 /* DgDictControlIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgDictControlIntent.swift; sourceTree = "<group>"; };
 		59E2C663BCA44091A646CE50 /* DgDictControlWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgDictControlWidget.swift; sourceTree = "<group>"; };
 		F3897C9D828B42888791663E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		FE16E3AFAAD34F53AD689A27 /* DictGlyph.imageset */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = DictGlyph.imageset; sourceTree = "<group>"; };
 		0F5047B783BC47B18EDE02E8 /* DgDictControls.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DgDictControls.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D6D1C0DE2FEA00030072D4E8 /* DgSelfTestPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgSelfTestPlugin.swift; sourceTree = "<group>"; };
 		D6D1C0DE2FEA00010072D4E8 /* DgApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DgApp.swift; sourceTree = "<group>"; };
@@ -110,7 +111,7 @@
 			isa = PBXGroup;
 			children = (
 				59E2C663BCA44091A646CE50 /* DgDictControlWidget.swift */,
-				FE16E3AFAAD34F53AD689A27 /* DictGlyph.imageset */,
+				D6D3C0000000000000000001 /* DgDictControlIntent.swift */,
 				F3897C9D828B42888791663E /* Info.plist */,
 			);
 			path = DgDictControls;
@@ -274,7 +275,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4A92C39AFF5043DBB17C622A /* DictGlyph.imageset in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -305,6 +305,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D6D3C0000000000000000002 /* DgDictControlIntent.swift in Sources */,
 				10EBD2E1EC0A48488439083A /* DgDictControlWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -313,6 +314,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D6D3C0000000000000000003 /* DgDictControlIntent.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				D6D1C0DE2FEA00020072D4E8 /* DgApp.swift in Sources */,
 				D6D1C0DE2FEA00040072D4E8 /* DgSelfTestPlugin.swift in Sources */,

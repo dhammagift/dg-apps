@@ -114,7 +114,7 @@ struct LockInline: View {
     let snap: WSnap
     let u: WUposatha
 
-    private static let symbols: [String] = [
+    static let symbols: [String] = [   // also the Control Center control's symbol (UposathaControl.symbolNow)
         "moonphase.new.moon", "moonphase.waxing.crescent", "moonphase.first.quarter", "moonphase.waxing.gibbous",
         "moonphase.full.moon", "moonphase.waning.gibbous", "moonphase.last.quarter", "moonphase.waning.crescent"
     ]

@@ -742,6 +742,7 @@ public class DgWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         defaults.set(json, forKey: "data")
         WidgetCenter.shared.reloadAllTimelines()
+        if #available(iOS 18.0, *) { ControlCenter.shared.reloadControls(ofKind: "gift.dhamma.uposatha.UposathaControl") }   // the phase symbol of the Control Center control
         call.resolve()
     }
 }

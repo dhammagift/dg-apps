@@ -103,6 +103,7 @@ struct UposathaProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<UposathaEntry>) -> Void) {
+        if #available(iOSApplicationExtension 18.0, *) { ControlCenter.shared.reloadControls(ofKind: UposathaControl.kind) }   // its phase symbol
         let built = Self.build(now: Date(), family: context.family)
         completion(Timeline(entries: built.entries, policy: .after(built.reload)))
     }
@@ -226,16 +227,35 @@ struct UposathaWidgetBundle: WidgetBundle {
 }
 
 // Control Center (iOS 18+): one tap opens Uposatha, as the Quick Settings tile does on Android (DgTileService.java). Added from
-// the + of Control Center. A control draws only a symbol (an SF Symbol or a custom .symbolset), never a plain image.
+// the + of Control Center. A control draws only a symbol (an SF Symbol or a custom .symbolset), never a plain image: the
+// system's symbol of the moon's phase now (owner, 2026-10-17: full at the full moon), the same eight the lock-screen line uses.
+// A control has no timeline: the symbol is made again when the app hands the widgets new data (DgWidget.put) and at every
+// timeline of the widgets (UposathaProvider.getTimeline), both of which reload it.
 @available(iOS 18.0, *)
 struct UposathaControl: ControlWidget {
+    static let kind = "gift.dhamma.uposatha.UposathaControl"
+
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "gift.dhamma.uposatha.UposathaControl") {
+        StaticControlConfiguration(kind: UposathaControl.kind) {
             ControlWidgetButton(action: UposathaOpenControlIntent()) {
-                Label("Uposatha", systemImage: "moonphase.first.quarter")
+                Label("Uposatha", systemImage: UposathaControl.symbolNow())
             }
         }
         .displayName("Uposatha")
         .description("Opens the Uposatha calendar.")
+    }
+
+    // The phase from the app's data when it covers now; without it, from the mean month counted from the new moon of
+    // 2000-01-06 18:14 UTC (off by up to half a day, enough for one of eight symbols).
+    static func symbolNow() -> String {
+        let now = Date()
+        var phase: Double
+        if let d = WStore.load(), d.isUsable(at: now) {
+            phase = WSnap(data: d, t: now).moonNow
+        } else {
+            let months = (now.timeIntervalSince1970 - 947_182_440) / 86_400 / 29.530588853
+            phase = months - floor(months)
+        }
+        return LockInline.symbols[WPlan.phaseIndex(phase)]
     }
 }

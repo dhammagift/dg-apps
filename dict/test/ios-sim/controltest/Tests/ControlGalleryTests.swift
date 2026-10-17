@@ -74,36 +74,39 @@ final class ControlGalleryTests: XCTestCase {
             tree("tree-4-search")
         }
 
-        // Find the control: the group is "Dict.Dhamma.Gift" / the control label "Dict.Dhamma.Gift".
-        let needles = ["Dict.Dhamma.Gift", "Dict.Dhamma", "Dhamma.Gift", "Dhamma"]
-        var hit: XCUIElement? = nil
-        for q in needles {
-            let c = board.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", q)).firstMatch
-            if c.waitForExistence(timeout: 2) { hit = c; break }
-            let s = board.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", q)).firstMatch
-            if s.waitForExistence(timeout: 2) { hit = s; break }
-        }
+        // Find and tap the control's preview button (identifier = the control's kind), which ADDS it to Control Center
+        // and returns there. The group header is a StaticText with the same label — tapping that does nothing, which is
+        // why an earlier run stayed in the gallery; the button carries the bundle id.
         tree("tree-5-before-pick")
-        if let el = hit {
-            shot("control-found")
-            el.tap()
-            sleep(3)
-            shot("control-added")
-            tree("tree-6-after-add")
-        } else {
+        let ctlId = "gift.dhamma.pali.DgDictControl"
+        let preview = board.buttons[ctlId].firstMatch
+        if !preview.waitForExistence(timeout: 6) {
             shot("control-NOT-found")
-            XCTFail("the Dict.Dhamma.Gift control was not found in the Control Center gallery")
+            XCTFail("the Dict.Dhamma.Gift control button was not found in the Add-a-Control gallery")
+            return
         }
+        shot("control-found")
+        preview.tap()
+        sleep(3)
+        shot("control-added")          // now Control Center shows the control with its rendered symbol
+        tree("tree-6-after-add")
 
-        // Leave edit mode and tap the added control, then check the app comes to the front.
-        board.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.03)).tap()
-        sleep(1)
-        shot("cc-with-control")
-        // tap near where a freshly added control lands; best-effort, the screenshot is the real proof
+        // Tap the control in Control Center to open the app.
         let app = XCUIApplication(bundleIdentifier: appId)
-        // try to find and tap the control button in control center
-        let ctl = board.buttons.containing(NSPredicate(format: "label CONTAINS[c] 'Dict' OR label CONTAINS[c] 'Dhamma'")).firstMatch
-        if ctl.waitForExistence(timeout: 2) { ctl.tap(); sleep(5); shot("after-tap") }
-        print("app foreground after tap:", app.state == .runningForeground)
+        let inCC = board.buttons[ctlId].firstMatch
+        if inCC.waitForExistence(timeout: 4) {
+            inCC.tap()
+            sleep(6)
+            shot("after-tap")
+        } else {
+            // fall back to a tap where a freshly added control lands (top-left of the grid)
+            board.coordinate(withNormalizedOffset: CGVector(dx: 0.16, dy: 0.18)).tap()
+            sleep(6)
+            shot("after-tap-fallback")
+        }
+        let opened = app.state == .runningForeground
+        print("app foreground after tap:", opened)
+        tree("tree-7-after-tap")
+        XCTAssertTrue(opened, "tapping the control did not bring the dictionary to the foreground")
     }
 }

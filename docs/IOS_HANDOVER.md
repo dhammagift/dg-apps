@@ -194,7 +194,7 @@ Safari — Books вообще отдаёт данные только своим.
 identities в keychain и настройки, которые Xcode разрешает для Release и Debug:
 
 ```bash
-TOKEN=$(tr -d '\n\r' < /root/.secrets/github-token)
+. /root/.secrets/tools.env; TOKEN=$GITHUB_TOKEN
 curl -sS -L -H "Authorization: Bearer $TOKEN" -H "User-Agent: agent" \
   "https://api.github.com/repos/dhammagift/dg-app-full/actions/jobs/<job_id>/logs" | grep -A 20 "What signing"
 ```
@@ -308,7 +308,7 @@ curl -s https://dhamma.gift/.well-known/apple-app-site-association
 
 ```bash
 cd /var/www/dg-apps
-TOKEN=$(tr -d '\n\r' < /root/.secrets/github-token)     # fine-grained PAT, Issues: RW, только для API
+. /root/.secrets/tools.env; TOKEN=$GITHUB_TOKEN     # fine-grained PAT, Issues: RW, только для API
 
 # запустить полный прогон (в нём будет и ios-release) — только workflow_dispatch, push его не запускает
 curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \

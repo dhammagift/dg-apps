@@ -168,6 +168,12 @@ def submit(bundle):
     # A rejected version stays in its submission (UNRESOLVED_ISSUES): that one is sent again, a new one would be refused.
     old = [s for s in submissions(aid) if s["attributes"].get("state") == "UNRESOLVED_ISSUES"]
     if old:
+        # Its rejected item is marked as dealt with first, or the version reads "not ready to be submitted".
+        for it in call("GET", f"/v1/reviewSubmissions/{old[0]['id']}/items").get("data", []):
+            if it["attributes"].get("state") == "REJECTED":
+                call("PATCH", f"/v1/reviewSubmissionItems/{it['id']}",
+                     {"data": {"type": "reviewSubmissionItems", "id": it["id"], "attributes": {"resolved": True}}})
+                print(f"item {it['id']}: marked resolved")
         call("PATCH", f"/v1/reviewSubmissions/{old[0]['id']}",
              {"data": {"type": "reviewSubmissions", "id": old[0]["id"], "attributes": {"submitted": True}}})
         print(f"version {v['attributes']['versionString']} sent for review again (submission {old[0]['id']})")

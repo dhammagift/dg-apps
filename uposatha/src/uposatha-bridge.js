@@ -337,6 +337,16 @@
       : { title: 'Reminders are running out', body: 'Open the app to extend the reminders.' };
   }
   var pendingAlias = {};   // the page's id -> ours, from the last getPending the page saw
+  var planQueue = Promise.resolve();   // the reminder plans, one after another (see schedule)
+  // Everything of ours that is armed (the page's reminders and the renew notice), with the sound alarms of the same ids.
+  function clearArmed(LN) {
+    return LN.getPending().then(function (p) {
+      var ids = ((p && p.notifications) || []).map(function (n) { return n.id; }).filter(isUnique);
+      if (!ids.length) return null;
+      var alarm = alarmPlugin();
+      return Promise.all([alarm ? Promise.resolve(alarm.cancel({ ids: ids })).catch(function () {}) : null, LN.cancel({ notifications: ids.map(function (id) { return { id: id }; }) })]);
+    });
+  }
   function pageView(p) {
     pendingAlias = {};
     var k = 0;
@@ -493,10 +503,20 @@
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
               return { id: uniqueId(n), at: at, sound: rawSoundOf(n.channelId) };
             }).filter(function (i) { return i.at > 0 && i.sound; }) : [];
-            return Promise.all(ready).then(function () { return items.length ? alarm.schedule({ items: items }) : null; }).then(function () { return target.schedule(Object.assign({}, o, { notifications: list })); }).then(function (res) {
-              if (list.length) setTimeout(function () { refreshDnd().then(maybeAskDnd); }, 2500);   // the page has settled; is the access there?
-              return res;
-            });
+            // A plan (the page's list) replaces what is armed, and plans go one at a time. The page cancels by getPending before it
+            // schedules, but a plan that waits for the notification permission has stored nothing yet: the next plan (the place
+            // arrived meanwhile, so other minutes and other ids) cancelled nothing and both stayed armed, with their sound alarms
+            // past Android's 500 alarms per app - the plugin threw on every opening (owner's phone, 2026-10-25: a crash loop).
+            var plan = list.some(function (n) { return isUnique(n.id) && n.id !== RENEW_ID; });
+            var run = function () {
+              return (plan ? clearArmed(target) : Promise.resolve()).then(function () { return Promise.all(ready); }).then(function () { return items.length ? alarm.schedule({ items: items }) : null; }).then(function () { return target.schedule(Object.assign({}, o, { notifications: list })); }).then(function (res) {
+                if (list.length) setTimeout(function () { refreshDnd().then(maybeAskDnd); }, 2500);   // the page has settled; is the access there?
+                return res;
+              });
+            };
+            var done = planQueue.then(run);
+            planQueue = done.catch(function () {});
+            return done;
           };
         }
         if (key === 'cancel') {

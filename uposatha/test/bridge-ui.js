@@ -46,13 +46,16 @@ function capacitorStub() {
             LocalNotifications: {
                 requestPermissions: () => Promise.resolve({ display: 'granted' }),
                 createChannel: (c) => { window.__calls.channels.push(c); return Promise.resolve(); },
-                getPending: () => Promise.resolve({ notifications: window.__pendingNative || [] }),
-                cancel: (o) => { window.__calls.cancelled = o.notifications.map((n) => n.id); return Promise.resolve(); },
+                // window.__armed (a Map, set by a check): what the system holds, as the plugin keeps it - getPending reads it, cancel takes out.
+                getPending: () => Promise.resolve({ notifications: window.__armed ? [...window.__armed.keys()].map((id) => ({ id })) : (window.__pendingNative || []) }),
+                cancel: (o) => { window.__calls.cancelled = o.notifications.map((n) => n.id); if (window.__armed) o.notifications.forEach((n) => window.__armed.delete(n.id)); return Promise.resolve(); },
                 getDeliveredNotifications: () => Promise.resolve({ notifications: window.__delivered || [] }),
                 removeDeliveredNotifications: (o) => { window.__calls.removed = (window.__calls.removed || []).concat(o.notifications.map((n) => n.id)); return Promise.resolve(); },
                 addListener: () => ({ remove() {} }),
                 // The bridge's own "open the app to extend" notice (7989, U2) is recorded apart, so the checks below see the page's reminders.
-                schedule: (o) => { const r = o.notifications.filter((n) => n.id === 7989); if (r.length) window.__calls.renew = r; window.__calls.scheduled.push(o.notifications.filter((n) => n.id !== 7989)); return Promise.resolve(); },
+                // window.__hold: the plugin waits for the person's answer to the notification permission before it sets anything.
+                schedule: (o) => { const r = o.notifications.filter((n) => n.id === 7989); if (r.length) window.__calls.renew = r; window.__calls.scheduled.push(o.notifications.filter((n) => n.id !== 7989));
+                    return Promise.resolve(window.__hold).then(() => { if (window.__armed) o.notifications.forEach((n) => window.__armed.set(n.id, n)); }); },
             },
         },
     };
@@ -290,6 +293,26 @@ function capacitorStub() {
                     await LN.cancel({ notifications: seen.notifications.filter((n) => n.id >= 7000 && n.id < 7900) });
                     return [seen.notifications.map((n) => n.id), window.__calls.cancelled];
                 }), [[7000, 7001, 7990, 7002], [1000123, 7000, 5000456, 7001, 7989, 7002]]);
+            // A plan that waits for the notification permission, and the next one the page makes meanwhile (the place arrived: other
+            // minutes, other ids). Only the second may stay armed: both armed, with their sound alarms, went past Android's 500 alarms
+            // per app and the plugin threw on every opening (owner's phone, 2026-10-25).
+            check(`stream ${stream}: a plan made while the previous one waits for the permission replaces it`,
+                await page.evaluate(async () => {
+                    const LN = window.Capacitor.Plugins.LocalNotifications;
+                    const day = Math.ceil((Date.now() + 86400000) / 60000) * 60000, plan = (at) => ({ notifications: [
+                        { id: 7000, title: 't', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at: new Date(at) } },
+                        { id: 7001, title: 't2', body: 'b2', channelId: 'uposatha-gong-v1', schedule: { at: new Date(at + 60000) } }] });
+                    let answer; window.__armed = new Map(); window.__hold = new Promise((r) => { answer = r; });
+                    const first = LN.schedule(plan(day));
+                    const seen = await LN.getPending();   // the page's own cancel before its next plan: nothing is armed yet
+                    await LN.cancel({ notifications: seen.notifications.filter((n) => n.id >= 7000 && n.id < 7900) });
+                    const second = LN.schedule(plan(day + 7 * 60000));
+                    answer(); await Promise.all([first, second]);
+                    const ids = [...window.__armed.keys()].filter((id) => id !== 7989).sort();
+                    window.__armed = null; window.__hold = null;
+                    const m = Math.floor((day + 7 * 60000) / 60000) % 1000000;
+                    return JSON.stringify(ids) === JSON.stringify([1000000 + m * 10, 1000000 + (m + 1) * 10 + 1]) || ids;
+                }), true);
             const suffix = stream === 'alarm' ? '-alarm' : '';
             check(`stream ${stream}: channels are made natively on the ${stream} stream, asking to sound through Do Not Disturb`,
                 got.native.some((n) => n[0] === 'uposatha-gong-v1' + (stream === 'alarm' ? '-alarm' : '') && n[1] === stream && n[2] === (stream === 'alarm' ? '' : 'gong.mp3') && n[3] === true) && got.plugin.length === 0, true);

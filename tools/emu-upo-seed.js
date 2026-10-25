@@ -26,10 +26,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const expression = process.argv[2] === 'place' ? `'place: ' + localStorage.getItem('dgUposathaLoc')` : `(function(){ var s = ${JSON.stringify(settings)}; for (var k in s) localStorage.setItem(k, s[k]);
     ['dgUposathaLoc', 'dgUposathaLocAt', 'dgUposathaNotified'].forEach(function (k) { localStorage.removeItem(k); });
     setTimeout(function () { location.reload(); }, 100); return location.href; })()`;
+  // The emulator's WebView gets no position from Android (no fix arrives), so the place is given over DevTools: Moscow, other sunrise
+  // and sunset minutes than the page's 06:00 / 18:00 without a place. It holds while this session is open: kept for KEEP_MS.
+  if (process.argv[2] !== 'place') ws.send(JSON.stringify({ id: 2, method: 'Emulation.setGeolocationOverride', params: { latitude: 55.75, longitude: 37.62, accuracy: 30 } }));
   ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression, returnByValue: true } }));
   const answer = await new Promise((r) => { ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id === 1) r(d); }; });
   const value = answer.result && answer.result.result && answer.result.result.value;
   console.log(process.argv[2] === 'place' ? value : 'seeded ' + Object.keys(settings).join(', ') + ' on ' + JSON.stringify(value));
+  if (process.argv[2] !== 'place') await sleep(+(process.env.KEEP_MS || 90000));
   ws.close();
   process.exit(0);
 })();

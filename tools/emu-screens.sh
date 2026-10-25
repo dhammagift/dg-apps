@@ -52,12 +52,13 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
   pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')
   adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
-  node "$REPO/tools/emu-upo-seed.js" | tee -a "$res"
+  node "$REPO/tools/emu-upo-seed.js" >> "$res" &   # stays connected: the place it gives holds while its session is open
+  SEEDPID=$!; sleep 4
   # The permission dialogs, answered like a person: a few seconds of reading, then "While using the app" / "Allow".
   answer() {
     for i in 1 2 3 4 5 6; do
       sleep 8; adb emu geo fix 37.62 55.75 > /dev/null
-      adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui.xml" > /dev/null 2>&1
+      rm -f "$OUT/ui.xml"; adb shell rm -f /sdcard/ui.xml; adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui.xml" > /dev/null 2>&1
       # The system's own buttons only (the page's own "Allow" for Do Not Disturb opens a settings page, not part of this case)
       b=$(grep -oE 'resource-id="com.android.permissioncontroller:id/permission_allow(_foreground_only)?_button"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$OUT/ui.xml" | head -1 | grep -oE '\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]')
       [ -z "$b" ] && continue
@@ -70,6 +71,7 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   crashes() { adb logcat -b crash -d | grep -c "Process: $PKG"; }
   answer first; sleep 20
   adb exec-out screencap -p > "$OUT/alarms-1-after-permissions.png"
+  wait "$SEEDPID"
   a1=$(count); c1=$(crashes); echo "after the permissions: $a1 alarms of the app, $c1 crash(es)" >> "$res"
   pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}'); adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
   node "$REPO/tools/emu-upo-seed.js" place | tee -a "$res"

@@ -36,3 +36,25 @@ jobs:
               except Exception as e:
                   print(pkg, "ERROR", str(e)[:300])
           PY
+      - name: Recent crash reports (Android vitals)
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          info = json.loads(os.environ["PLAY_JSON"])
+          creds = service_account.Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/playdeveloperreporting"])
+          svc = build("playdeveloperreporting", "v1beta1", credentials=creds, cache_discovery=False)
+          for pkg in ("gift.dhamma.uposatha", "gift.dhamma.pali", "gift.dhamma.twa"):
+              try:
+                  res = svc.vitals().errors().reports().search(parent="apps/" + pkg, pageSize=10).execute()
+                  reports = res.get("errorReports", [])
+                  print(pkg, "error reports:", len(reports))
+                  for r in reports:
+                      print("---", r.get("eventTime"), r.get("type"), r.get("issue"), json.dumps(r.get("deviceModel", {})), r.get("osVersion", {}).get("apiLevel"))
+                      print((r.get("reportText") or "")[:3000])
+              except Exception as e:
+                  print(pkg, "ERROR", str(e)[:500])
+          PY

@@ -86,6 +86,22 @@ public class DgAlarmPlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * The ids of the sound alarms that are set, as this plugin keeps them. The bridge cancels its old ones by this list before a
+     * new plan: the notifications' own list misses those whose notification was never set (the plugin refused it while another
+     * permission dialog was open), and those alarms stayed armed until Android's 500 per app was reached.
+     */
+    @PluginMethod
+    public void pending(PluginCall call) {
+        JSArray ids = new JSArray();
+        for (String key : getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).getAll().keySet()) {
+            try { ids.put(Integer.parseInt(key)); } catch (NumberFormatException e) { /* not an alarm */ }
+        }
+        com.getcapacitor.JSObject out = new com.getcapacitor.JSObject();
+        out.put("ids", ids);
+        call.resolve(out);
+    }
+
     static PendingIntent intentFor(Context context, int id, String sound) {
         Intent intent = new Intent(context, DgAlarmReceiver.class);
         intent.setAction(ACTION_PLAY);

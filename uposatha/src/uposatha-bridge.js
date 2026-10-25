@@ -338,14 +338,19 @@
   }
   var pendingAlias = {};   // the page's id -> ours, from the last getPending the page saw
   var planQueue = Promise.resolve();   // the reminder plans, one after another (see schedule)
-  // Everything of ours that is armed (the page's reminders and the renew notice), with the sound alarms of the same ids.
+  // Everything of ours that is armed: the page's reminders and the renew notice, and the sound alarms - by DgAlarm's own list, as
+  // a sound alarm outlives a notification the plugin refused (asked for the permission while another dialog was open).
   function clearArmed(LN) {
-    return LN.getPending().then(function (p) {
+    var alarm = alarmPlugin();
+    var sounds = alarm && typeof alarm.pending === 'function' ? Promise.resolve(alarm.pending()).then(function (r) {
+      var ids = ((r && r.ids) || []).filter(isUnique);
+      return ids.length ? alarm.cancel({ ids: ids }) : null;
+    }).catch(function () {}) : null;
+    var notes = LN.getPending().then(function (p) {
       var ids = ((p && p.notifications) || []).map(function (n) { return n.id; }).filter(isUnique);
-      if (!ids.length) return null;
-      var alarm = alarmPlugin();
-      return Promise.all([alarm ? Promise.resolve(alarm.cancel({ ids: ids })).catch(function () {}) : null, LN.cancel({ notifications: ids.map(function (id) { return { id: id }; }) })]);
+      return ids.length ? LN.cancel({ notifications: ids.map(function (id) { return { id: id }; }) }) : null;
     });
+    return Promise.all([sounds, notes]);
   }
   function pageView(p) {
     pendingAlias = {};

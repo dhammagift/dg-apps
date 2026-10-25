@@ -34,8 +34,10 @@ function capacitorStub() {
             App: { addListener: (n, cb) => { if (n === 'backButton') window.__back = cb; return { remove() {} }; }, exitApp: () => { window.__calls.exit++; } },
             DgShortcuts: { set: (o) => { window.__calls.shortcuts.push(o.items); window.__calls.lastSet = o; return Promise.resolve({ count: o.items.length }); } },
             DgAlarm: {
-                schedule: (o) => { window.__calls.alarms = (window.__calls.alarms || []).concat(o.items); return Promise.resolve(); },
-                cancel: (o) => { window.__calls.alarmCancels = (window.__calls.alarmCancels || []).concat(o.ids); return Promise.resolve(); },
+                // window.__alarmArmed (a Set, set by a check): the sound alarms the system holds, as DgAlarm keeps them.
+                schedule: (o) => { window.__calls.alarms = (window.__calls.alarms || []).concat(o.items); if (window.__alarmArmed) o.items.forEach((i) => window.__alarmArmed.add(i.id)); return Promise.resolve(); },
+                cancel: (o) => { window.__calls.alarmCancels = (window.__calls.alarmCancels || []).concat(o.ids); if (window.__alarmArmed) o.ids.forEach((id) => window.__alarmArmed.delete(id)); return Promise.resolve(); },
+                pending: () => Promise.resolve({ ids: window.__alarmArmed ? [...window.__alarmArmed] : [] }),
             },
             DgSound: {
                 dndAccess: () => Promise.resolve({ granted: !!window.__dnd }),
@@ -55,7 +57,8 @@ function capacitorStub() {
                 // The bridge's own "open the app to extend" notice (7989, U2) is recorded apart, so the checks below see the page's reminders.
                 // window.__hold: the plugin waits for the person's answer to the notification permission before it sets anything.
                 schedule: (o) => { const r = o.notifications.filter((n) => n.id === 7989); if (r.length) window.__calls.renew = r; window.__calls.scheduled.push(o.notifications.filter((n) => n.id !== 7989));
-                    return Promise.resolve(window.__hold).then(() => { if (window.__armed) o.notifications.forEach((n) => window.__armed.set(n.id, n)); }); },
+                    // window.__refuse: the plugin refuses this one (it asked for the permission while another dialog was open).
+                    return Promise.resolve(window.__hold).then(() => { if (window.__refuse) { window.__refuse = false; throw new Error('permission'); } if (window.__armed) o.notifications.forEach((n) => window.__armed.set(n.id, n)); }); },
             },
         },
     };
@@ -312,6 +315,22 @@ function capacitorStub() {
                     window.__armed = null; window.__hold = null;
                     const m = Math.floor((day + 7 * 60000) / 60000) % 1000000;
                     return JSON.stringify(ids) === JSON.stringify([1000000 + m * 10, 1000000 + (m + 1) * 10 + 1]) || ids;
+                }), true);
+            // The same, but the plugin refuses the first plan (the location dialog was open when it asked): its notifications were never
+            // set, its sound alarms were. The next plan takes them back by DgAlarm's own list (the emulator run of 2026-10-25: 398 of them).
+            if (stream === 'alarm') check('stream alarm: the sound alarms of a refused plan are taken back by the next one',
+                await page.evaluate(async () => {
+                    const LN = window.Capacitor.Plugins.LocalNotifications;
+                    const day = Math.ceil((Date.now() + 86400000) / 60000) * 60000, plan = (at) => ({ notifications: [
+                        { id: 7000, title: 't', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at: new Date(at) } },
+                        { id: 7001, title: 't2', body: 'b2', channelId: 'uposatha-gong-v1', schedule: { at: new Date(at + 60000) } }] });
+                    window.__armed = new Map(); window.__alarmArmed = new Set(); window.__refuse = true;
+                    await LN.schedule(plan(day)).catch(() => {});
+                    await LN.schedule(plan(day + 7 * 60000));
+                    const m = Math.floor((day + 7 * 60000) / 60000) % 1000000, want = [1000000 + m * 10, 1000000 + (m + 1) * 10 + 1];
+                    const got = [[...window.__alarmArmed].sort(), [...window.__armed.keys()].filter((id) => id !== 7989).sort()];
+                    window.__armed = null; window.__alarmArmed = null;
+                    return JSON.stringify(got) === JSON.stringify([want, want]) || got;
                 }), true);
             const suffix = stream === 'alarm' ? '-alarm' : '';
             check(`stream ${stream}: channels are made natively on the ${stream} stream, asking to sound through Do Not Disturb`,

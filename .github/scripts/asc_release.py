@@ -20,6 +20,7 @@ import json, os, sys, time, urllib.error, urllib.request
 import jwt  # PyJWT
 
 API = "https://api.appstoreconnect.apple.com"
+PLATFORM = os.environ.get("ASC_PLATFORM", "IOS")  # MAC_OS for the Safari extension
 TOKEN = jwt.encode({"iss": os.environ["ASC_ISSUER_ID"], "iat": int(time.time()), "exp": int(time.time()) + 1200,
                     "aud": "appstoreconnect-v1"}, os.environ["ASC_KEY_P8"], algorithm="ES256",
                    headers={"kid": os.environ["ASC_KEY_ID"], "typ": "JWT"})
@@ -45,14 +46,14 @@ def app_id(bundle):
 
 def editable_version(aid):
     """The newest iOS version that is not on sale yet (the one being prepared or reviewed)."""
-    for v in call("GET", f"/v1/apps/{aid}/appStoreVersions?filter[platform]=IOS&limit=10")["data"]:
+    for v in call("GET", f"/v1/apps/{aid}/appStoreVersions?filter[platform]={PLATFORM}&limit=10")["data"]:
         if v["attributes"]["appStoreState"] != "READY_FOR_SALE":
             return v
     sys.exit("no iOS version that is not on sale")
 
 
 def submissions(aid):
-    return call("GET", f"/v1/reviewSubmissions?filter[app]={aid}&filter[platform]=IOS&limit=10")["data"]
+    return call("GET", f"/v1/reviewSubmissions?filter[app]={aid}&filter[platform]={PLATFORM}&limit=10")["data"]
 
 
 def status(bundle):
@@ -149,7 +150,7 @@ def testflight(bundle):
 def submit(bundle):
     aid = app_id(bundle)
     v = editable_version(aid)
-    sub = call("POST", "/v1/reviewSubmissions", {"data": {"type": "reviewSubmissions", "attributes": {"platform": "IOS"},
+    sub = call("POST", "/v1/reviewSubmissions", {"data": {"type": "reviewSubmissions", "attributes": {"platform": PLATFORM},
                                                           "relationships": {"app": {"data": {"type": "apps", "id": aid}}}}})["data"]
     call("POST", "/v1/reviewSubmissionItems", {"data": {"type": "reviewSubmissionItems", "relationships": {
         "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": sub["id"]}},

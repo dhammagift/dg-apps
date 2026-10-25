@@ -10,7 +10,7 @@ on:
       app:
         description: 'Which app'
         type: choice
-        options: [dict, uposatha, dg]
+        options: [dict, uposatha, dg, safari]
         default: dict
       action:
         description: 'status (read only) / testflight (read only: groups, public link, builds) / beta (a build to the external TestFlight groups and Apple beta review) / screens (read only: the version screenshots, as an artifact) / cancel / set-build / set-text / submit'
@@ -47,7 +47,7 @@ jobs:
           ARG: ${{ inputs.arg }}
         run: |
           pip install --quiet 'pyjwt[crypto]' cryptography
-          case "$APP" in dict) B=gift.dhamma.pali; ID=6816639947 ;; uposatha) B=gift.dhamma.uposatha; ID=6816601259 ;; dg) B=gift.dhamma.mobile; ID= ;; esac
+          case "$APP" in dict) B=gift.dhamma.pali; ID=6816639947 ;; uposatha) B=gift.dhamma.uposatha; ID=6816601259 ;; dg) B=gift.dhamma.mobile; ID= ;; safari) B=gift.dhamma.dictlookup; ID=; export ASC_PLATFORM=MAC_OS ;; esac
           if [ "$ACTION" = screenshots ]; then
             # The committed pictures of one display type (the owner's own, from a phone), replacing that set; never submits.
             python3 dict/tools/asc-screenshots.py --app-id "$ID" --version 1.0 --locale en-US --set "$ARG" | tee step.txt

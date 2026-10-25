@@ -94,6 +94,11 @@ def set_build(bundle, number):
         sys.exit(f"build {number}: not found or not processed yet ({[b['attributes'].get('processingState') for b in builds]})")
     call("PATCH", f"/v1/appStoreVersions/{v['id']}/relationships/build", {"data": {"type": "builds", "id": ok[0]["id"]}})
     print(f"version {v['attributes']['versionString']}: build {number} attached")
+    # Export compliance: a build without the answer (no ITSAppUsesNonExemptEncryption in its Info.plist, the Safari extension)
+    # keeps the version "not ready to be submitted". Only HTTPS here, the exempt case.
+    if ok[0]["attributes"].get("usesNonExemptEncryption") is None:
+        call("PATCH", f"/v1/builds/{ok[0]['id']}", {"data": {"type": "builds", "id": ok[0]["id"], "attributes": {"usesNonExemptEncryption": False}}})
+        print(f"build {number}: export compliance set (no non-exempt encryption)")
 
 
 def set_text(bundle, path):

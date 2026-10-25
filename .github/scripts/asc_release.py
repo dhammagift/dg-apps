@@ -67,6 +67,8 @@ def status(bundle):
     print("build:", ba.get("version", "none"), "processing=%s encryption=%s" % (ba.get("processingState"), ba.get("usesNonExemptEncryption")))
     for s in submissions(aid):
         print(f"review submission {s['id']}: state={s['attributes'].get('state')} submitted={s['attributes'].get('submittedDate')}")
+        for it in call("GET", f"/v1/reviewSubmissions/{s['id']}/items?include=appStoreVersion").get("data", []):
+            print(f"  item {it['id']}: state={it['attributes'].get('state')} version={(it['relationships'].get('appStoreVersion', {}).get('data') or {}).get('id')}")
     for loc in call("GET", f"/v1/appStoreVersions/{v['id']}/appStoreVersionLocalizations")["data"]:
         la = loc["attributes"]
         print(f"--- {la['locale']} ({loc['id']})")

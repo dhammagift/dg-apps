@@ -2,7 +2,7 @@
 # Screens of the built Dhamma.Gift APK on an Android emulator (workflow android-screens.yml), so a
 # change can be looked at on a real Android WebView before it reaches the owner or a store
 # (owner, 2026-09-29: "сними себе сам ... проверь, пришли скриншоты").
-# Usage: tools/emu-screens.sh <apk> <out-dir> [package] [screens|shortcuts|edgetoedge|tray|widget|icons]
+# Usage: tools/emu-screens.sh <apk> <out-dir> [package] [screens|shortcuts|edgetoedge|tray|widget|icons|alarms]
 set -u
 APK=$1; OUT=$2; PKG=${3:-gift.dhamma.mobile}
 REPO=$(cd "$(dirname "$0")/.." && pwd)
@@ -37,6 +37,51 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = widget ]; then
   cat "$res"
   grep -q "^FAIL" "$res" && exit 1
   exit 0
+fi
+# Reminders after a restore (owner's phone, 2026-10-25: "Uposatha keeps stopping" on every opening after the system asked for the
+# notifications): the settings Android's backup brings back are seeded (tools/emu-upo-seed.js), the page schedules before the
+# permission is given and plans again when the place arrives, the dialogs are answered as a person would, a few seconds each,
+# and the app is opened once more. A crash, or 500 alarms (Android's limit per app), is a FAIL. Needs the DEBUG apk (DevTools).
+if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
+  res="$OUT/alarms-result.txt"; : > "$res"; fail=0
+  ok() { echo "PASS $*" >> "$res"; }; ko() { echo "FAIL $*" >> "$res"; fail=1; }
+  [ "${VIDEO:-0}" = 1 ] && { adb shell screenrecord --bit-rate 4000000 --time-limit 170 /sdcard/alarms.mp4 & RECPID=$!; }
+  adb emu geo fix 37.62 55.75 > /dev/null   # Moscow: other sunrise and sunset minutes than the page's 06:00 / 18:00 without a place
+  adb logcat -b crash -c
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
+  pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')
+  adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
+  node "$REPO/tools/emu-upo-seed.js" | tee -a "$res"
+  # The permission dialogs, answered like a person: a few seconds of reading, then "While using the app" / "Allow".
+  answer() {
+    for i in 1 2 3 4 5 6; do
+      sleep 5; adb emu geo fix 37.62 55.75 > /dev/null
+      adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui.xml" > /dev/null 2>&1
+      b=$(grep -oE '(text="(While using the app|Allow)"|resource-id="com.android.permissioncontroller:id/permission_allow[a-z_]*button")[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$OUT/ui.xml" | head -1 | grep -oE '\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]')
+      [ -z "$b" ] && continue
+      adb exec-out screencap -p > "$OUT/alarms-$1-dialog-$i.png"
+      xy=$(echo "$b" | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\1 \2 \3 \4/' | awk '{print int(($1+$3)/2), int(($2+$4)/2)}')
+      echo "$1: answered a dialog at $xy" >> "$res"; adb shell input tap $xy
+    done
+  }
+  count() { adb shell dumpsys alarm | grep -cE "Alarm\{[^}]* $PKG\}"; }
+  crashes() { adb logcat -b crash -d | grep -c "Process: $PKG"; }
+  answer first; sleep 20
+  adb exec-out screencap -p > "$OUT/alarms-1-after-permissions.png"
+  a1=$(count); c1=$(crashes); echo "after the permissions: $a1 alarms of the app, $c1 crash(es)" >> "$res"
+  # Opened again (the owner's crash came at every later opening). Not force-stop: that would take the alarms away.
+  adb shell input keyevent KEYCODE_HOME; sleep 2; adb shell am kill "$PKG"; sleep 2
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 25
+  answer second; sleep 10
+  adb exec-out screencap -p > "$OUT/alarms-2-opened-again.png"
+  a2=$(count); c2=$(crashes); echo "opened again: $a2 alarms of the app, $c2 crash(es)" >> "$res"
+  adb logcat -b crash -d > "$OUT/crash-buffer.txt"
+  adb shell dumpsys alarm > "$OUT/dumpsys-alarm.txt"
+  [ "$a1" -ge 150 ] && ok "the reminders were set ($a1 alarms): the scenario ran" || ko "only $a1 alarms: the reminders were not set, the scenario did not run"
+  [ "$c2" = 0 ] && ok "no crash" || ko "$c2 crash(es) of the app (crash-buffer.txt)"
+  [ "$a2" -lt 500 ] && ok "under Android's 500 alarms per app ($a2)" || ko "$a2 alarms: Android's limit of 500 is reached"
+  if [ "${VIDEO:-0}" = 1 ]; then adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null; adb pull /sdcard/alarms.mp4 "$OUT/alarms.mp4" > /dev/null; fi
+  cat "$res"; exit $fail
 fi
 # Edge to edge (dg-apps#41): the Uposatha app must run UNDER the transparent system bars instead of
 # showing the painted strips the DgBars plugin used to draw. Only a real device answers whether it

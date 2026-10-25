@@ -50,7 +50,7 @@ on:
         type: string
         default: 'audio'
       mode:
-        description: 'screens, shortcuts (Dhamma.Gift launcher shortcuts test), edgetoedge (Uposatha edge-to-edge check: PASS/FAIL, red run on a failure), widget (Uposatha: the widget renderer drawn by the debug build WidgetPreviewActivity, light and dark; needs the DEBUG apk), or tray (the notification player: Pause / Play on the shade, DEBUG apk, red run on a failure), or icons (Dhamma.Gift reader toolbar icons after the dictionary / variants toggles, DEBUG apk, red run on a failure)'
+        description: 'screens, shortcuts (Dhamma.Gift launcher shortcuts test), edgetoedge (Uposatha edge-to-edge check: PASS/FAIL, red run on a failure), widget (Uposatha: the widget renderer drawn by the debug build WidgetPreviewActivity, light and dark; needs the DEBUG apk), or tray (the notification player: Pause / Play on the shade, DEBUG apk, red run on a failure), or icons (Dhamma.Gift reader toolbar icons after the dictionary / variants toggles, DEBUG apk, red run on a failure), or alarms (Uposatha: the reminders after settings restored by a backup, the permission dialogs answered late, opened again - no crash and under 500 alarms, DEBUG apk, red run on a failure)'
         required: false
         type: string
         default: 'screens'
@@ -91,7 +91,7 @@ jobs:
 
       # tools/emu-tray.js talks to the app's WebView over DevTools with the WebSocket that comes with Node 22+.
       - name: Node for the notification player test
-        if: inputs.mode == 'tray' || inputs.mode == 'icons'
+        if: inputs.mode == 'tray' || inputs.mode == 'icons' || inputs.mode == 'alarms'
         uses: actions/setup-node@v4
         with:
           node-version: '24.20.0'

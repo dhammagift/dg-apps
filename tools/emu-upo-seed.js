@@ -3,7 +3,7 @@
 // source, the place is found by the phone and not known yet: at the reload the page schedules before the notification
 // permission is given and plans again when the place arrives (the crash loop of "500 alarms"). Debug APK only.
 //
-//   node tools/emu-upo-seed.js      (adb already forwards tcp:9222 to the app's webview_devtools_remote socket)
+//   node tools/emu-upo-seed.js [place]      (adb already forwards tcp:9222 to the app's webview_devtools_remote socket)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
@@ -22,12 +22,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     dgUposathaSoundStream: 'alarm',
     dgUposathaLocAuto: '1',
   };
-  const expression = `(function(){ var s = ${JSON.stringify(settings)}; for (var k in s) localStorage.setItem(k, s[k]);
+  // "place": only report the place the page found (the second plan of the case comes from it)
+  const expression = process.argv[2] === 'place' ? `'place: ' + localStorage.getItem('dgUposathaLoc')` : `(function(){ var s = ${JSON.stringify(settings)}; for (var k in s) localStorage.setItem(k, s[k]);
     ['dgUposathaLoc', 'dgUposathaLocAt', 'dgUposathaNotified'].forEach(function (k) { localStorage.removeItem(k); });
     setTimeout(function () { location.reload(); }, 100); return location.href; })()`;
   ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression, returnByValue: true } }));
   const answer = await new Promise((r) => { ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id === 1) r(d); }; });
-  console.log('seeded ' + Object.keys(settings).join(', ') + ' on ' + JSON.stringify(answer.result && answer.result.result && answer.result.result.value));
+  const value = answer.result && answer.result.result && answer.result.result.value;
+  console.log(process.argv[2] === 'place' ? value : 'seeded ' + Object.keys(settings).join(', ') + ' on ' + JSON.stringify(value));
   ws.close();
   process.exit(0);
 })();

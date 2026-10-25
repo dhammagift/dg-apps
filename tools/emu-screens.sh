@@ -46,6 +46,7 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   res="$OUT/alarms-result.txt"; : > "$res"; fail=0
   ok() { echo "PASS $*" >> "$res"; }; ko() { echo "FAIL $*" >> "$res"; fail=1; }
   [ "${VIDEO:-0}" = 1 ] && { adb shell screenrecord --bit-rate 4000000 --time-limit 170 /sdcard/alarms.mp4 & RECPID=$!; }
+  adb shell cmd location set-location-enabled true
   adb emu geo fix 37.62 55.75 > /dev/null   # Moscow: other sunrise and sunset minutes than the page's 06:00 / 18:00 without a place
   adb logcat -b crash -c
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
@@ -55,9 +56,10 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   # The permission dialogs, answered like a person: a few seconds of reading, then "While using the app" / "Allow".
   answer() {
     for i in 1 2 3 4 5 6; do
-      sleep 5; adb emu geo fix 37.62 55.75 > /dev/null
+      sleep 8; adb emu geo fix 37.62 55.75 > /dev/null
       adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui.xml" > /dev/null 2>&1
-      b=$(grep -oE '(text="(While using the app|Allow)"|resource-id="com.android.permissioncontroller:id/permission_allow[a-z_]*button")[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$OUT/ui.xml" | head -1 | grep -oE '\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]')
+      # The system's own buttons only (the page's own "Allow" for Do Not Disturb opens a settings page, not part of this case)
+      b=$(grep -oE 'resource-id="com.android.permissioncontroller:id/permission_allow(_foreground_only)?_button"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$OUT/ui.xml" | head -1 | grep -oE '\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]')
       [ -z "$b" ] && continue
       adb exec-out screencap -p > "$OUT/alarms-$1-dialog-$i.png"
       xy=$(echo "$b" | sed -E 's/\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]/\1 \2 \3 \4/' | awk '{print int(($1+$3)/2), int(($2+$4)/2)}')
@@ -69,6 +71,8 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   answer first; sleep 20
   adb exec-out screencap -p > "$OUT/alarms-1-after-permissions.png"
   a1=$(count); c1=$(crashes); echo "after the permissions: $a1 alarms of the app, $c1 crash(es)" >> "$res"
+  pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}'); adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
+  node "$REPO/tools/emu-upo-seed.js" place | tee -a "$res"
   # Opened again (the owner's crash came at every later opening). Not force-stop: that would take the alarms away.
   adb shell input keyevent KEYCODE_HOME; sleep 2; adb shell am kill "$PKG"; sleep 2
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 25
@@ -77,6 +81,7 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   a2=$(count); c2=$(crashes); echo "opened again: $a2 alarms of the app, $c2 crash(es)" >> "$res"
   adb logcat -b crash -d > "$OUT/crash-buffer.txt"
   adb shell dumpsys alarm > "$OUT/dumpsys-alarm.txt"
+  grep -q '^place: {' "$res" && ok "the place arrived: the page planned again with it" || ko "the place never arrived: the second plan of the case did not happen"
   [ "$a1" -ge 150 ] && ok "the reminders were set ($a1 alarms): the scenario ran" || ko "only $a1 alarms: the reminders were not set, the scenario did not run"
   [ "$c2" = 0 ] && ok "no crash" || ko "$c2 crash(es) of the app (crash-buffer.txt)"
   [ "$a2" -lt 500 ] && ok "under Android's 500 alarms per app ($a2)" || ko "$a2 alarms: Android's limit of 500 is reached"

@@ -1,0 +1,51 @@
+name: Play promote
+
+# One build from the closed testing track (alpha) to production, as the console's "Promote release" does: the same release
+# name and notes, the whole audience. Started by hand on the owner's word only (owner, 2026-10-25: Uposatha 567 to production).
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'The Play package'
+        type: choice
+        options: [gift.dhamma.uposatha, gift.dhamma.pali, gift.dhamma.twa]
+      version_code:
+        description: 'The versionCode on alpha to promote'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: alpha -> production
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          PKG: ${{ inputs.package }}
+          CODE: ${{ inputs.version_code }}
+        run: |
+          pip install --quiet google-api-python-client google-auth
+          python3 - <<'PY'
+          import json, os, sys
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          pkg, code = os.environ["PKG"], os.environ["CODE"]
+          creds = service_account.Credentials.from_service_account_info(json.loads(os.environ["PLAY_JSON"]), scopes=["https://www.googleapis.com/auth/androidpublisher"])
+          edits = build("androidpublisher", "v3", credentials=creds, cache_discovery=False).edits()
+          eid = edits.insert(packageName=pkg, body={}).execute()["id"]
+          alpha = edits.tracks().get(packageName=pkg, editId=eid, track="alpha").execute().get("releases", [])
+          rel = next((r for r in alpha if code in r.get("versionCodes", [])), None)
+          if not rel:
+              edits.delete(packageName=pkg, editId=eid).execute()
+              sys.exit("versionCode %s is not on alpha of %s" % (code, pkg))
+          body = {"versionCodes": [code], "status": "completed", "name": rel.get("name")}
+          if rel.get("releaseNotes"):
+              body["releaseNotes"] = rel["releaseNotes"]
+          edits.tracks().update(packageName=pkg, editId=eid, track="production", body={"track": "production", "releases": [body]}).execute()
+          edits.commit(packageName=pkg, editId=eid).execute()
+          print("promoted", pkg, code, rel.get("name"), "to production")
+          PY

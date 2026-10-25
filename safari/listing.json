@@ -1,0 +1,5 @@
+{
+  "en-US": {
+    "description": "Look up Pali words on any web page right in Safari, and search the Pali Canon on Dhamma.Gift.\n\nSelect a Pali (or English) word, open the context menu and choose Dhamma.gift: the entry from Dict.Dhamma.Gift opens in a popup or a new window. Dict.Dhamma.Gift shows data from open Pali dictionaries (Digital Pali Dictionary and others, with attribution; not affiliated with their authors).\n\nFeatures:\n- Look up a selected word from the context menu or by double-click\n- Display modes: popup, compact or new window\n- Dictionary language: English or Russian\n- Search the Pali Canon on Dhamma.Gift for the selected text\n- \"Explain grammar (DharmaMitra)\" opens the third-party site dharmamitra.org with the selected text\n- Optional hand-off to GoldenDict-NG, DictTango or MDict\n\nPrivacy: no account, no data collection, no ads, no tracking.\n\nFor students of Pali and anyone reading the suttas online."
+  }
+}

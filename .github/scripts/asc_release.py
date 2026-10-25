@@ -7,7 +7,8 @@ ASC key from the GitHub secrets; every step prints what it found and what it did
   asc_release.py <bundle id> set-build <number>     attach that processed build to the version
   asc_release.py <bundle id> set-text <json file>   update the version's texts: {"en-US": {"description": ..,
                                                     "promotionalText": .., "keywords": .., "whatsNew": ..}, "ru": {..}}
-  asc_release.py <bundle id> submit                 send the version for review
+  asc_release.py <bundle id> set-version <x.y.z>    rename the version (a rejected 0.6.1 goes back as 0.6.2)
+  asc_release.py <bundle id> submit                 send the version for review (again, after a rejection)
   asc_release.py <bundle id> screens [dir]          (read only) the version's screenshots per language and display type,
                                                     each downloaded into dir (default screens/) to be looked at
   asc_release.py <bundle id> beta "<n>|<text>"     TestFlight build n to the external groups and to Apple's beta review, with
@@ -147,9 +148,22 @@ def testflight(bundle):
         print("no external groups")
 
 
+def set_version(bundle, name):
+    v = editable_version(app_id(bundle))
+    call("PATCH", f"/v1/appStoreVersions/{v['id']}", {"data": {"type": "appStoreVersions", "id": v["id"], "attributes": {"versionString": name}}})
+    print(f"version {v['attributes']['versionString']} renamed to {name}")
+
+
 def submit(bundle):
     aid = app_id(bundle)
     v = editable_version(aid)
+    # A rejected version stays in its submission (UNRESOLVED_ISSUES): that one is sent again, a new one would be refused.
+    old = [s for s in submissions(aid) if s["attributes"].get("state") == "UNRESOLVED_ISSUES"]
+    if old:
+        call("PATCH", f"/v1/reviewSubmissions/{old[0]['id']}",
+             {"data": {"type": "reviewSubmissions", "id": old[0]["id"], "attributes": {"submitted": True}}})
+        print(f"version {v['attributes']['versionString']} sent for review again (submission {old[0]['id']})")
+        return
     sub = call("POST", "/v1/reviewSubmissions", {"data": {"type": "reviewSubmissions", "attributes": {"platform": PLATFORM},
                                                           "relationships": {"app": {"data": {"type": "apps", "id": aid}}}}})["data"]
     call("POST", "/v1/reviewSubmissionItems", {"data": {"type": "reviewSubmissionItems", "relationships": {
@@ -225,6 +239,7 @@ def testflight(bundle):
 if __name__ == "__main__":
     bundle, action, *rest = sys.argv[1:]
     {"status": lambda: status(bundle), "cancel": lambda: cancel(bundle), "set-build": lambda: set_build(bundle, rest[0]),
+     "set-version": lambda: set_version(bundle, rest[0]),
      "set-text": lambda: set_text(bundle, rest[0]), "delete-locale": lambda: delete_locale(bundle, rest[0]),
      "testflight": lambda: testflight(bundle), "beta": lambda: beta(bundle, rest[0]),
      "submit": lambda: submit(bundle), "testflight": lambda: testflight(bundle),

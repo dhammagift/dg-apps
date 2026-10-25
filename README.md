@@ -1,4 +1,4 @@
-# dg-app-full — Dhamma.gift offline app (Android, iOS planned)
+# dg-app-full — Dhamma.gift offline app (Android, iOS, Windows)
 
 Offline Pāli-canon search and reader: the **real dhamma.gift frontend** running in a Capacitor
 WebView, with local SQLite standing in for the server's search API.
@@ -6,6 +6,14 @@ WebView, with local SQLite standing in for the server's search API.
 > **The UI is not maintained in this repository.** It is generated at build time from a checkout
 > of [dg-node](https://github.com/dhammagift/dg-node) — the website. This repo holds only what is
 > genuinely app-specific.
+
+## In the stores
+
+| App | iPhone / iPad | Android | Windows |
+|---|---|---|---|
+| Dhamma.Gift | [App Store](https://apps.apple.com/app/dhamma-gift/id6813706217) | [Google Play](https://play.google.com/store/apps/details?id=gift.dhamma.twa) | [Microsoft Store](https://apps.microsoft.com/detail/9NK892G5P5GT) |
+| Uposatha by the Suttas (`uposatha/`) | [App Store](https://apps.apple.com/app/uposatha-by-the-suttas/id6816601259) | [Google Play](https://play.google.com/store/apps/details?id=gift.dhamma.uposatha) | [Microsoft Store](https://apps.microsoft.com/detail/9NMD1L6H52ZN) |
+| Dict.Dhamma.Gift (`dict/`) | [App Store](https://apps.apple.com/app/dict-dhamma-gift/id6816639947) | [Google Play](https://play.google.com/store/apps/details?id=gift.dhamma.pali) | [Microsoft Store](https://apps.microsoft.com/detail/9P3B7HLRXXGC) |
 
 ## Why it is built this way
 

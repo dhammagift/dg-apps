@@ -1,6 +1,6 @@
 # Dict.Dhamma.Gift — Capacitor app
 
-The dictionary (`gift.dhamma.pali`) as a Capacitor Android app. It replaces the Bubblewrap Trusted
+The dictionary (`gift.dhamma.pali`) as a Capacitor app for Android and iOS ([App Store](https://apps.apple.com/app/dict-dhamma-gift/id6816639947) · [Google Play](https://play.google.com/store/apps/details?id=gift.dhamma.pali) · [Microsoft Store](https://apps.microsoft.com/detail/9P3B7HLRXXGC)). It replaces the Bubblewrap Trusted
 Web Activity that used to live in `dg-twa/dict-app`; that module still exists there but is
 superseded by this one.
 

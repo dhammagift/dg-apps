@@ -152,6 +152,11 @@ const CASES = [
         if (!isSubset) return { expected, sliced: false };
         const copy = JSON.parse(JSON.stringify(expected));
         copy.body.availableLangs = actualLangs;
+        // The same for the translators; and the mp3 line, which the app adds after the text from the server (dg-node
+        // public/offline/app.js dgTextOnline): its own answer carries the Principles line in that place.
+        const tr = actual.body.availableTranslators, etr = expected.body.availableTranslators;
+        if (Array.isArray(tr) && Array.isArray(etr) && tr.every(t => etr.includes(t))) copy.body.availableTranslators = tr;
+        if (typeof expected.body.audioHtml === 'string' && /class="dg-principles"/.test(actual.body.audioHtml || '')) copy.body.audioHtml = actual.body.audioHtml;
         return { expected: copy, sliced: true };
     }
 

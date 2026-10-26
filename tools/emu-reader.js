@@ -23,6 +23,8 @@ const CASES = [
   ['/pli-tv-bu-vb-sk63?lang=ru', 'pli-2nd', 'en', true],
   ['/pli-tv-bu-vb-sk63?lang=ru', '2nd', 'en', true],
   ['/pli-tv-kd1?lang=en', '2nd', 'en', false],
+  // Thai is not in the app's ru+en library: the text comes from the site, its popover lists th (dg-node: ?lang= went to the slice)
+  ['/sn56.11?lang=th', 'pli-2nd', 'th', true],
 ];
 
 const CHECK = `(function (toggle, lang, audio) {
@@ -45,6 +47,7 @@ const CHECK = `(function (toggle, lang, audio) {
   }
   if (document.documentElement.scrollWidth > innerWidth + 1) errs.push('horizontal scroll');
   if (!sutta.querySelector('.dg-principles a')) errs.push('no Principles line');
+  if (lang && !((window.READER_MODE || {}).availableLangs || []).includes(lang)) errs.push('the popover has no ' + lang + ' (availableLangs ' + (window.READER_MODE || {}).availableLangs + ')');
   if (audio !== !!sutta.querySelector('.dg-audio-mp3 a[href$=".mp3"]')) errs.push(audio ? 'no mp3 line' : 'an mp3 line');
   return JSON.stringify({ errs: errs, pli: pli.length, trn: trn.length, langs: Array.from(new Set(trn.map(function (e) { return (e.className.match(/(\\w+)-lang/) || [])[1]; }))) });
 })`;
@@ -92,6 +95,12 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     shot(`${n + 1}-${path.replace(/\W+/g, '-').replace(/^-|-$/g, '')}-${toggle}-end`);
     check(!r.errs.length, `${name}: Pali lines ${r.pli}, translation lines ${r.trn} (${r.langs.join(',') || 'none'})${r.errs.length ? ' - ' + r.errs.join('; ') : ''}`);
   }
+
+  // Settings: no Thai interface in the apps (owner 2026-10-26), Thai texts stay.
+  await ev(`location.assign('/settings/index.html')`); await sleep(4000);
+  const th = await ev(`document.querySelector('#uiLang') ? Array.from(document.querySelectorAll('#uiLang option')).map(function (o) { return o.value; }).join(',') : null`);
+  shot('settings-ui-lang');
+  check(th === 'en,ru', `settings: the interface languages are ${th}, want en,ru`);
 
   // Voice: the title's Pali speaker plays Pali but is not saved as the mode; Voice and Alt+R then start in the translation.
   if (await open('/sn56.11?lang=ru', 'pli-2nd') && await waitFor(`!!document.querySelector('.pli-lang .title-play-btn')`, 15000)) {

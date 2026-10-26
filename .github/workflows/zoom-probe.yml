@@ -1,0 +1,41 @@
+name: Text size probe
+
+# Settings -> Text size in Safari, Chrome, Firefox and Playwright's WebKit on macOS (tools/zoom-probe.js): the owner saw it
+# change nothing in Dhamma.Gift for iPad on a Mac (2026-10-26), whose web view is macOS's WebKit, the engine of Safari here.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Text to open
+        default: https://test.dhamma.gift/sn56.11?lang=ru
+      browsers:
+        description: Comma-separated, of chrome, firefox, webkit, safari
+        default: chrome,firefox,webkit,safari
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Browsers
+        run: |
+          npm i playwright@1.48.2 >/dev/null
+          npx playwright install firefox webkit
+          sudo safaridriver --enable
+          safaridriver -p 4444 &
+          sleep 2
+      - name: Probe
+        env:
+          PROBE_URL: ${{ inputs.url }}
+        run: node tools/zoom-probe.js out "${{ inputs.browsers }}" | tee out-log.txt; mv out-log.txt out/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zoom-probe-${{ github.run_number }}
+          path: out

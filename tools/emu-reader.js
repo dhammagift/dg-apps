@@ -12,19 +12,20 @@ let failed = false;
 const check = (ok, text) => { console.log((ok ? 'PASS ' : 'FAIL ') + text); if (!ok) failed = true; };
 const shot = (name) => fs.writeFileSync(`${OUT}/reader-${name}.png`, execSync('adb exec-out screencap -p', { maxBuffer: 64 << 20 }));
 
-// [path, stored Pali toggle ('pli-2nd' both, '2nd' translation only), translation lang expected] - as in reader-smoke.js
+// [path, stored Pali toggle ('pli-2nd' both, '2nd' translation only), translation lang expected, has mp3s on test] - as in
+// reader-smoke.js. Under every text the Principles line; the mp3 line comes from the site's /api/text-audio (dg-node 36bcd2b).
 const CASES = [
-  ['/sn56.11?lang=ru', 'pli-2nd', 'ru'],
-  ['/sn56.11?lang=ru', '2nd', 'ru'],
-  ['/mn10?lang=en', '2nd', 'en'],
-  ['/an1.1-10?lang=ru', 'pli-2nd', 'ru'],
-  ['/pli-tv-bu-vb-pj1?lang=ru', 'pli-2nd', null],
-  ['/pli-tv-bu-vb-sk63?lang=ru', 'pli-2nd', 'en'],
-  ['/pli-tv-bu-vb-sk63?lang=ru', '2nd', 'en'],
-  ['/pli-tv-kd1?lang=en', '2nd', 'en'],
+  ['/sn56.11?lang=ru', 'pli-2nd', 'ru', true],
+  ['/sn56.11?lang=ru', '2nd', 'ru', true],
+  ['/mn10?lang=en', '2nd', 'en', true],
+  ['/an1.1-10?lang=ru', 'pli-2nd', 'ru', true],
+  ['/pli-tv-bu-vb-pj1?lang=ru', 'pli-2nd', null, true],
+  ['/pli-tv-bu-vb-sk63?lang=ru', 'pli-2nd', 'en', true],
+  ['/pli-tv-bu-vb-sk63?lang=ru', '2nd', 'en', true],
+  ['/pli-tv-kd1?lang=en', '2nd', 'en', false],
 ];
 
-const CHECK = `(function (toggle, lang) {
+const CHECK = `(function (toggle, lang, audio) {
   var errs = [];
   var states = Array.from(document.body.classList).filter(function (c) { return /^dg-state-/.test(c); });
   if (states.join() !== 'dg-state-reader') errs.push('body states: ' + states.join(' '));
@@ -43,6 +44,8 @@ const CHECK = `(function (toggle, lang) {
     if (first.getBoundingClientRect().left - art > 10) errs.push('text ' + Math.round(first.getBoundingClientRect().left - art) + 'px right of the article');
   }
   if (document.documentElement.scrollWidth > innerWidth + 1) errs.push('horizontal scroll');
+  if (!sutta.querySelector('.dg-principles a')) errs.push('no Principles line');
+  if (audio !== !!sutta.querySelector('.dg-audio-mp3 a[href$=".mp3"]')) errs.push(audio ? 'no mp3 line' : 'an mp3 line');
   return JSON.stringify({ errs: errs, pli: pli.length, trn: trn.length, langs: Array.from(new Set(trn.map(function (e) { return (e.className.match(/(\\w+)-lang/) || [])[1]; }))) });
 })`;
 
@@ -68,12 +71,15 @@ const CHECK = `(function (toggle, lang) {
     return waitFor(`!!document.querySelector('#sutta article .quote')`, 25000);
   };
 
-  for (const [n, [path, toggle, lang]] of CASES.entries()) {
+  for (const [n, [path, toggle, lang, audio]] of CASES.entries()) {
     const name = `${path} pali=${toggle}`;
     if (!(await open(path, toggle))) { shot(`${n + 1}-noload`); check(false, `${name}: the text did not load`); continue; }
     await sleep(1500);
-    const r = JSON.parse(await ev(`${CHECK}(${JSON.stringify(toggle)}, ${JSON.stringify(lang)})`));
+    const r = JSON.parse(await ev(`${CHECK}(${JSON.stringify(toggle)}, ${JSON.stringify(lang)}, ${audio})`));
     shot(`${n + 1}-${path.replace(/\W+/g, '-').replace(/^-|-$/g, '')}-${toggle}`);
+    // the lines under the text, a second screenshot
+    await ev(`(document.querySelector('#sutta .dg-principles') || {scrollIntoView: function () {}}).scrollIntoView({block: 'end'})`); await sleep(700);
+    shot(`${n + 1}-${path.replace(/\W+/g, '-').replace(/^-|-$/g, '')}-${toggle}-end`);
     check(!r.errs.length, `${name}: Pali lines ${r.pli}, translation lines ${r.trn} (${r.langs.join(',') || 'none'})${r.errs.length ? ' - ' + r.errs.join('; ') : ''}`);
   }
 

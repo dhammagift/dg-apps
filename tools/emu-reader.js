@@ -49,6 +49,9 @@ const CHECK = `(function (toggle, lang, audio) {
   return JSON.stringify({ errs: errs, pli: pli.length, trn: trn.length, langs: Array.from(new Set(trn.map(function (e) { return (e.className.match(/(\\w+)-lang/) || [])[1]; }))) });
 })`;
 
+let finished = false;
+process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the script stopped before its end'); process.exitCode = 1; } });
+
 (async () => {
   let t;
   for (let i = 0; i < 20 && !t; i++) {
@@ -61,7 +64,11 @@ const CHECK = `(function (toggle, lang, audio) {
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
   let id = 0; const waiting = {};
   ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && waiting[d.id]) { waiting[d.id](d); delete waiting[d.id]; } };
-  const send = (method, params) => new Promise((r) => { const i = ++id; waiting[i] = r; ws.send(JSON.stringify({ id: i, method, params })); });
+  // A call the WebView never answers (Input.dispatchKeyEvent did, run 90) is a FAIL, not a silent exit 0 of an empty event loop.
+  const send = (method, params) => new Promise((r) => {
+    const i = ++id; waiting[i] = r; ws.send(JSON.stringify({ id: i, method, params }));
+    setTimeout(() => { if (waiting[i]) { console.log(`FAIL DevTools ${method} got no answer in 30 s`); process.exit(1); } }, 30000);
+  });
   const ev = (expression) => send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
     .then((d) => (d.result && d.result.result ? d.result.result.value : null));
   const waitFor = async (expr, ms) => { for (let i = 0; i < ms / 500; i++) { if (await ev(expr)) return true; await sleep(500); } return false; };
@@ -78,7 +85,10 @@ const CHECK = `(function (toggle, lang, audio) {
     const r = JSON.parse(await ev(`${CHECK}(${JSON.stringify(toggle)}, ${JSON.stringify(lang)}, ${audio})`));
     shot(`${n + 1}-${path.replace(/\W+/g, '-').replace(/^-|-$/g, '')}-${toggle}`);
     // the lines under the text, a second screenshot
-    await ev(`(document.querySelector('#sutta .dg-principles') || {scrollIntoView: function () {}}).scrollIntoView({block: 'end'})`); await sleep(700);
+    // (again until it stays in view: the page still grows under a long text, run 90 shot blank screens)
+    await ev(`(async function () { var e = document.querySelector('#sutta .dg-principles'); if (!e) return;
+      for (var i = 0; i < 20; i++) { e.scrollIntoView({ block: 'center' }); await new Promise(function (r) { setTimeout(r, 400); });
+        var b = e.getBoundingClientRect(); if (b.top >= 0 && b.bottom <= innerHeight + 2) return; } })()`); await sleep(1000);
     shot(`${n + 1}-${path.replace(/\W+/g, '-').replace(/^-|-$/g, '')}-${toggle}-end`);
     check(!r.errs.length, `${name}: Pali lines ${r.pli}, translation lines ${r.trn} (${r.langs.join(',') || 'none'})${r.errs.length ? ' - ' + r.errs.join('; ') : ''}`);
   }
@@ -97,7 +107,8 @@ const CHECK = `(function (toggle, lang, audio) {
     const v = await mode(); shot('10-voice-link');
     check(v === 'trn', `voice: Voice after the speaker plays ${v}, want trn`);
     await stop(); await sleep(1500);
-    for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, modifiers: 1, key: 'r', code: 'KeyR', windowsVirtualKeyCode: 82 });
+    // The page's own key event: the WebView leaves CDP's Input.dispatchKeyEvent unanswered (run 90). settings.js reads altKey and code only.
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', code: 'KeyR', altKey: true, bubbles: true }))`);
     await sleep(2500);
     const a = await mode(); shot('11-voice-alt-r');
     check(a === 'trn', `voice: Alt+R after the speaker plays ${a}, want trn`);
@@ -105,6 +116,7 @@ const CHECK = `(function (toggle, lang, audio) {
   } else check(false, 'voice: sn56.11 or its title speaker did not load');
 
   ws.close();
+  finished = true;
   console.log(failed ? 'RESULT FAIL' : 'RESULT PASS');
   process.exit(failed ? 1 : 0);
 })();

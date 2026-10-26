@@ -13,7 +13,7 @@ const check = (ok, text) => { console.log((ok ? 'PASS ' : 'FAIL ') + text); if (
 const shot = (name) => fs.writeFileSync(`${OUT}/reader-${name}.png`, execSync('adb exec-out screencap -p', { maxBuffer: 64 << 20 }));
 
 // [path, stored Pali toggle ('pli-2nd' both, '2nd' translation only), translation lang expected, has mp3s on test] - as in
-// reader-smoke.js. Under every text the Principles line; the mp3 line comes from the site's /api/text-audio (dg-node 36bcd2b).
+// reader-smoke.js. Under every text the Principles line; the mp3 line comes after the text from the site's /api/text-online (dg-node dgTextOnline).
 const CASES = [
   ['/sn56.11?lang=ru', 'pli-2nd', 'ru', true],
   ['/sn56.11?lang=ru', '2nd', 'ru', true],

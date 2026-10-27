@@ -35,7 +35,7 @@ public class MainActivity extends BridgeActivity {
     // one of them is opened in a Custom Tab right here. Handing it to the page instead (?_nativeRoute=) loaded the home page, and on
     // a cold start its Browser.open came before the bridge was ready and was lost: the screen blinked, Back had one step too many,
     // and only the second tap opened the docs (owner, dhamma.gift/docs/uposatha).
-    private static final Pattern SITE_ONLY = Pattern.compile("^/(ru/)?(dict|memorize|docs|uposatha-calendar)(/|$)");
+    private static final Pattern SITE_ONLY = Pattern.compile("^/(ru/)?(dict|memorize|docs|uposatha-calendar|apps)(/|$)");
 
     // The launch splash (res/drawable/dg_splash_icon.xml, 890 ms: 250 ms still, the gem opens, a glint) stays until the page has drawn its first
     // frame, so it hands over to the page and not to an empty WebView: this page is far heavier than the

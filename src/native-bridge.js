@@ -378,7 +378,7 @@
         // neither — a dhamma.gift/uposatha-calendar link (the bot's calendar button) opened search.
         // The literal origin, not ONLINE_ORIGIN: that var is declared further down and would still
         // be undefined here, since this runs at parse time.
-        var EXTERNAL_ROUTES = /^\/(ru\/)?(dict|memorize|docs|uposatha-calendar)(\/|\?|$)/; // login is bundled now (below)
+        var EXTERNAL_ROUTES = /^\/(ru\/)?(dict|memorize|docs|uposatha-calendar|apps)(\/|\?|$)/; // login is bundled now (below)
         if (EXTERNAL_ROUTES.test(route)) {
             openExternal((window.DG_ONLINE_ORIGIN || 'https://dhamma.gift') + route);
             return;
@@ -867,7 +867,8 @@
     // documents (PDFs), legacy.suttacentral.net, th, assets/br and the timers are site-only too.
     // theravada.ru / tipitaka.theravada.su: the site's local mirrors behind the results' "Ru" links (openRu.js).
     // uposatha-calendar: a page of the site (and of its own app), never bundled here.
-    var NOT_BUNDLED_RE = /^\/(ru\/)?(dict|memorize|docs|uposatha-calendar|read|d|rev|frev|ml|documents|legacy\.suttacentral\.net|th|theravada\.ru|theravada\.rf|tipitaka\.theravada\.su)(\/|$)|^\/(ru\/)?(r|history)\.php$|^\/(ru\/)?assets\/(br|repeat-timer|pomodoro-timer)(\/|$)/;
+    // apps: the site's store links page (all three apps), where its Google Play links point.
+    var NOT_BUNDLED_RE = /^\/(ru\/)?(dict|memorize|docs|uposatha-calendar|apps|read|d|rev|frev|ml|documents|legacy\.suttacentral\.net|th|theravada\.ru|theravada\.rf|tipitaka\.theravada\.su)(\/|$)|^\/(ru\/)?(r|history)\.php$|^\/(ru\/)?assets\/(br|repeat-timer|pomodoro-timer)(\/|$)/;
 
     // Where a link has to go outside this WebView, or null when it opens here. /4nt (the edition
     // comparison) is never bundled; its online copy is s.dhamma.gift without the /4nt prefix, the

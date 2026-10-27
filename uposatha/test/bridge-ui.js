@@ -415,6 +415,24 @@ function capacitorStub() {
             await ctx.close();
         }
 
+        // 4a-1. Reminders off: with the bridge the page schedules an empty plan (it clears what is armed); without it (the DG app's
+        // plain plugin) it schedules nothing, as an empty schedule there asks for the notification permission.
+        for (const withBridge of [true, false]) {
+            const ctx = await ctxOf('light', 'en');
+            await ctx.addInitScript(capacitorStub);
+            await ctx.addInitScript(() => {
+                localStorage.setItem('dgUposathaRemind', JSON.stringify({ on: false, lead: 24, d8: true, d14: true, d15: true, sound: 'gong', ownChannel: '', ownName: '' }));
+                window.__alarmArmed = new Set([1000120]);   // a sound alarm left by a refused plan, no notification of it pending
+            });
+            if (withBridge) await ctx.addInitScript(BRIDGE);
+            const page = await ctx.newPage();
+            await page.goto(PAGE, { waitUntil: 'load' });
+            await page.waitForTimeout(2500);
+            check(`reminders off, ${withBridge ? 'with the bridge: the empty plan takes back the sound alarm left armed' : 'no bridge: no schedule call'}`,
+                await page.evaluate(() => [window.__calls.scheduled.length, [...window.__alarmArmed]]), withBridge ? [0, []] : [0, [1000120]]);
+            await ctx.close();
+        }
+
         // 4a0. iOS: the same page, the reminders go to DgNotify (with the sound of the channel) and quick actions to DgShortcuts.
         {
             const ctx = await ctxOf('light', 'en');

@@ -469,6 +469,8 @@
     plugins.LocalNotifications = new Proxy(LN, {
       get: function (target, key) {
         if (key === '__dgWrapped') return true;
+        // The page may then schedule an empty plan (its reminders turned off); a plugin without this bridge would ask for the permission.
+        if (key === 'dgPlans') return true;
         if (key === 'createChannel') {
           return function (ch) {
             lastChannels[ch.id] = ch;

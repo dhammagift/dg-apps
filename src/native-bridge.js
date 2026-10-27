@@ -514,7 +514,7 @@
     // "recently read" texts fit — with four statics only two did, which is the report this answers
     // ("должны быть 3 пункта под историю... почему-то всё ещё два"). iOS the same since 2026-10-12: it
     // shows four quick actions in total, and Info.plist now declares the one static entry too.
-    var SHORTCUTS_MAX = 3;
+    var SHORTCUTS_MAX = window.DG_SHORTCUTS_MAX = 3;
     // Settings switch "Recent texts in app shortcuts" (dg-app-full#4). 'off' disables them; any
     // other value (including none) keeps the default, on. Static shortcuts are unaffected.
     var SHORTCUTS_FLAG = 'dgDynamicShortcuts';
@@ -1831,7 +1831,7 @@
         if (btn && btn.lastChild && btn.lastChild.nodeType === 3) btn.lastChild.textContent = ru ? 'проверить' : 'check';
         var st = document.getElementById('dgDynShortcutsTitle');
         if (st) st.textContent = ru ? 'Недавние тексты в ярлыках' : 'Recent texts in app shortcuts';
-        var sd = document.getElementById('dgDynShortcutsDesc'), n = SHORTCUTS_MAX;
+        var sd = document.getElementById('dgDynShortcutsDesc'), n = window.DG_SHORTCUTS_MAX;   // the first part's SHORTCUTS_MAX (another function scope)
         if (sd) sd.textContent = ru
             ? 'До ' + n + (n === 1 ? ' текста' : ' текстов') + ' в меню долгого нажатия на значок приложения.'
             : 'Up to ' + n + (n === 1 ? ' text' : ' texts') + ' in the long-press menu of the app icon.';

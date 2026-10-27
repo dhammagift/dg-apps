@@ -130,6 +130,8 @@ const ASSETS = [
     // like on a device. verifyPageAssets() now fails the build for the next one.
     { url: '/assets/js/dg-page-find.js', sources: [f('public/overrides/js/dg-page-find.js')] },
     { url: '/assets/js/dg-page-find-ui.js', sources: [f('public/overrides/js/dg-page-find-ui.js')] },
+    // The two-finger Text size demo: index.html loads it only after ?pinch=1 (sessionStorage dgPinchDemo), but names it.
+    { url: '/assets/js/pinch-size-demo.js', sources: [f('public/overrides/js/pinch-size-demo.js')] },
     { url: '/assets/img/buttons/chrome-cta.png', sources: [l('img/buttons/chrome-cta.png')] },
     { url: '/assets/img/buttons/firefox-cta.png', sources: [l('img/buttons/firefox-cta.png')] },
     { url: '/assets/img/buttons/edge-cta.png', sources: [l('img/buttons/edge-cta.png')] },

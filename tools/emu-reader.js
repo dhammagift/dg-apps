@@ -81,6 +81,41 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     return waitFor(`!!document.querySelector('#sutta article .quote')`, 25000);
   };
 
+  // Home -> Materials -> Principles / Rationale, three real taps each from the first one after the start: the site's page in a
+  // Custom Tab (another app on top), never the search in the app (owner 2026-10-27: once the search, once the page). Back returns.
+  const top = () => (execSync('adb shell dumpsys activity activities').toString()
+    .match(/(?:topResumedActivity=|mResumedActivity: )ActivityRecord\{\S+ \S+ ([^\/\s]+)\//) || [])[1];
+  for (const doc of ['principles', 'rationale']) for (let i = 1; i <= 3; i++) {
+    const name = `materials -> ${doc}, tap ${i}`;
+    if (top() !== 'gift.dhamma.mobile') { execSync('adb shell input keyevent 4'); await sleep(2500); }
+    if (!(await waitFor(`!!document.querySelector('.dg-tile[data-tile="materials"]')`, 15000))) { await ev(`location.assign('/')`); await sleep(4000); }
+    await ev(`document.querySelector('.dg-tile[data-tile="materials"]').click()`); await sleep(1500);
+    // Edge to edge (API 35+): the WebView starts at the screen's top left, so CSS px * devicePixelRatio is the tap point.
+    const at = await ev(`(async function () { var a = document.querySelector('a.dg-sheet-row[href="/docs/${doc}"]'); if (!a) return null;
+      a.scrollIntoView({ block: 'center' }); await new Promise(function (r) { setTimeout(r, 600); });
+      var b = a.getBoundingClientRect(); return Math.round((b.left + b.width / 2) * devicePixelRatio) + ' ' + Math.round((b.top + b.height / 2) * devicePixelRatio); })()`);
+    if (!at) { shot(`docs-${doc}-${i}-norow`); check(false, `${name}: no /docs/${doc} row in the sheet`); continue; }
+    execSync(`adb shell input tap ${at}`); await sleep(3500);
+    const app = top(), page = app === 'gift.dhamma.mobile' ? await ev(`location.pathname + location.search`) : '';
+    shot(`docs-${doc}-${i}`);
+    check(app && app !== 'gift.dhamma.mobile', `${name}: on top ${app}${page ? ', the app shows ' + page : ''}`);
+    execSync('adb shell input keyevent 4'); await sleep(2500);
+    check(top() === 'gift.dhamma.mobile', `${name}: Back returns to the app (${top()})`);
+  }
+
+  // A language switch on the home page (dhamma-i18n dispatches dhamma:languagechange, also at every start): the bridge's listener
+  // read SHORTCUTS_MAX from another function scope and threw a ReferenceError each time (99af3d2).
+  await ev(`location.assign('/')`); await sleep(4000);
+  for (const lang of ['ru', 'en']) {
+    const errs = JSON.parse(await ev(`(async function () { var errs = [], on = function (e) { errs.push(e.message); };
+      window.addEventListener('error', on);
+      try { await window.setSiteLanguage(${JSON.stringify(lang)}); } catch (e) { errs.push(String(e)); }
+      await new Promise(function (r) { setTimeout(r, 500); }); window.removeEventListener('error', on);
+      return JSON.stringify(errs.concat(document.documentElement.lang === ${JSON.stringify(lang)} ? [] : ['html lang ' + document.documentElement.lang])); })()`));
+    shot(`home-lang-${lang}`);
+    check(!errs.length, `home: switched to ${lang}${errs.length ? ' - errors: ' + errs.join('; ') : ', no error'}`);
+  }
+
   for (const [n, [path, toggle, lang, audio]] of CASES.entries()) {
     const name = `${path} pali=${toggle}`;
     if (!(await open(path, toggle))) { shot(`${n + 1}-noload`); check(false, `${name}: the text did not load`); continue; }

@@ -87,7 +87,26 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   [ "$a1" -ge 150 ] && ok "the reminders were set ($a1 alarms): the scenario ran" || ko "only $a1 alarms: the reminders were not set, the scenario did not run"
   [ "$c2" = 0 ] && ok "no crash" || ko "$c2 crash(es) of the app (crash-buffer.txt)"
   [ "$a2" -lt 500 ] && ok "under Android's 500 alarms per app ($a2)" || ko "$a2 alarms: Android's limit of 500 is reached"
-  if [ "${VIDEO:-0}" = 1 ]; then adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null; adb pull /sdcard/alarms.mp4 "$OUT/alarms.mp4" > /dev/null; fi
+  # A test reminder, then the sound source changed (840f3e2: the test became the plan replayed, the real reminders were dropped).
+  if [ "${VIDEO:-0}" = 1 ]; then adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null; adb pull /sdcard/alarms.mp4 "$OUT/alarms.mp4" > /dev/null
+    adb shell screenrecord --bit-rate 4000000 --time-limit 170 /sdcard/alarms2.mp4 & RECPID=$!; fi
+  pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}'); adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
+  src() { node "$REPO/tools/emu-eval.js" "(async function () { var s = document.getElementById('dg-stream'); if (!s) return 'no sound source row';
+    s.value = '$1'; s.dispatchEvent(new Event('change', { bubbles: true })); await new Promise(function (r) { setTimeout(r, 8000); }); return 'source ' + s.value; })()" | tee -a "$res"; }
+  node "$REPO/tools/emu-eval.js" "(async function () { var k = document.getElementById('tst-kind'), b = document.getElementById('tst-go'); if (!k || !b) return 'no test reminder button';
+    k.value = 'upo'; b.click(); await new Promise(function (r) { setTimeout(r, 5000); }); return 'test reminder: ' + document.getElementById('tst-msg').textContent; })()" | tee -a "$res"
+  src notification; a3=$(count)
+  adb exec-out screencap -p > "$OUT/alarms-3-test-then-source.png"
+  [ "$a3" -ge 150 ] && ok "a test reminder, then the source changed: the reminders are still set ($a3 alarms)" || ko "a test reminder, then the source changed: only $a3 alarms, the reminders were dropped"
+  # Back on the alarm source, then every reminder turned off (840f3e2 / 7ffa8a9: the sound alarms stayed armed and rang).
+  src alarm; a4=$(count)
+  node "$REPO/tools/emu-eval.js" "(function () { ['dgUposathaRemind', 'dgUposathaMeal', 'dgUposathaParts'].forEach(function (k) { var v = JSON.parse(localStorage.getItem(k) || '{}');
+    if ('on' in v) v.on = false; if ('rem' in v) v.rem = false; localStorage.setItem(k, JSON.stringify(v)); }); setTimeout(function () { location.reload(); }, 100); return 'reminders off, reloading'; })()" | tee -a "$res"
+  sleep 20; a5=$(count)
+  adb exec-out screencap -p > "$OUT/alarms-4-turned-off.png"
+  adb shell dumpsys alarm > "$OUT/dumpsys-alarm-off.txt"
+  [ "$a4" -ge 150 ] && [ "$a5" -lt 10 ] && ok "turned off: $a4 alarms before, $a5 after" || ko "turned off: $a4 alarms before, $a5 after (want 150+ before and under 10 after)"
+  if [ "${VIDEO:-0}" = 1 ]; then adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null; adb pull /sdcard/alarms2.mp4 "$OUT/alarms-2.mp4" > /dev/null; fi
   cat "$res"; exit $fail
 fi
 # Edge to edge (dg-apps#41): the Uposatha app must run UNDER the transparent system bars instead of

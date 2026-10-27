@@ -148,15 +148,18 @@ const CASES = [
         const actualLangs = actual && actual.body && actual.body.availableLangs;
         if (!Array.isArray(expectedLangs) || !Array.isArray(actualLangs)) return { expected, sliced: false };
         const narrowed = expectedLangs.filter(l => actualLangs.includes(l));
-        const isSubset = narrowed.length === actualLangs.length && actualLangs.every(l => expectedLangs.includes(l));
+        const isSubset = actualLangs.length > 0 && narrowed.length === actualLangs.length && actualLangs.every(l => expectedLangs.includes(l));
         if (!isSubset) return { expected, sliced: false };
         const copy = JSON.parse(JSON.stringify(expected));
         copy.body.availableLangs = actualLangs;
         // The same for the translators; and the mp3 line, which the app adds after the text from the server (dg-node
         // public/offline/app.js dgTextOnline): its own answer carries the Principles line in that place.
         const tr = actual.body.availableTranslators, etr = expected.body.availableTranslators;
-        if (Array.isArray(tr) && Array.isArray(etr) && tr.every(t => etr.includes(t))) copy.body.availableTranslators = tr;
-        if (typeof expected.body.audioHtml === 'string' && /class="dg-principles"/.test(actual.body.audioHtml || '')) copy.body.audioHtml = actual.body.audioHtml;
+        if (Array.isArray(tr) && Array.isArray(etr) && tr.length && tr.every(t => etr.includes(t))) copy.body.availableTranslators = tr;
+        // The Principles line's links must be the server's (its margin differs: no mp3 line above it).
+        const principles = (h) => (/<p class="dg-principles"[^>]*>([\s\S]*?)<\/p>/.exec(h || '') || [])[1];
+        const line = principles(actual.body.audioHtml);
+        if (line != null && line === principles(expected.body.audioHtml)) copy.body.audioHtml = actual.body.audioHtml;
         return { expected: copy, sliced: true };
     }
 

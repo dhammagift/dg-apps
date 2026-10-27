@@ -1,4 +1,4 @@
-// "Text size" (settings, 70-150 %, localStorage uiScale applied as CSS zoom) in each browser on macOS: the owner saw it
+// "Text size" (settings, 70-250 %, localStorage uiScale applied as CSS zoom) in each browser on macOS: the owner saw it
 // change nothing in Dhamma.Gift for iPad on a Mac, whose WKWebView is macOS's WebKit - real Safari here is that engine.
 // Steps as a reader does them: open a text, open the settings sheet, press + five times, close the sheet, then reload.
 // Each step: the root zoom, the first translation line's box, a screenshot. Numbers to read, not a pass/fail.

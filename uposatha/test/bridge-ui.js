@@ -332,6 +332,41 @@ function capacitorStub() {
                     window.__armed = null; window.__alarmArmed = null;
                     return JSON.stringify(got) === JSON.stringify([want, want]) || got;
                 }), true);
+            // A refused plan, then the reminders turned off: nothing of it is pending, so the page cancels nothing and schedules an
+            // empty plan, which takes the sound alarms back (else the gong rang for months with no notification).
+            if (stream === 'alarm') check('stream alarm: turned off after a refused plan, its sound alarms are taken back',
+                await page.evaluate(async () => {
+                    const LN = window.Capacitor.Plugins.LocalNotifications;
+                    const day = Math.ceil((Date.now() + 86400000) / 60000) * 60000;
+                    window.__armed = new Map(); window.__alarmArmed = new Set(); window.__refuse = true;
+                    await LN.schedule({ notifications: [
+                        { id: 7000, title: 't', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at: new Date(day) } },
+                        { id: 7001, title: 't2', body: 'b2', channelId: 'uposatha-gong-v1', schedule: { at: new Date(day + 60000) } }] }).catch(() => {});
+                    const before = window.__alarmArmed.size;
+                    const ours = (await LN.getPending()).notifications.filter((n) => n.id >= 7000 && n.id < 7900);
+                    if (ours.length) await LN.cancel({ notifications: ours });
+                    await LN.schedule({ notifications: [] });
+                    const got = [before, window.__alarmArmed.size, window.__armed.size];
+                    window.__armed = null; window.__alarmArmed = null;
+                    return JSON.stringify(got) === '[2,0,0]' || got;
+                }), true);
+            // A test reminder (7990+) is not a plan: a change of the source then sets the real reminders again, not the test.
+            if (stream === 'alarm') check('stream alarm: after a test reminder, a change of the source sets the real reminders again',
+                await page.evaluate(async () => {
+                    const LN = window.Capacitor.Plugins.LocalNotifications;
+                    const day = Math.ceil((Date.now() + 86400000) / 60000) * 60000;
+                    window.__armed = new Map();
+                    await LN.schedule({ notifications: [
+                        { id: 7000, title: 't', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at: new Date(day) } },
+                        { id: 7001, title: 't2', body: 'b2', channelId: 'uposatha-gong-v1', schedule: { at: new Date(day + 60000) } }] });
+                    await LN.schedule({ notifications: [{ id: 7990, title: 'test', body: 'b', channelId: 'uposatha-gong-v1', schedule: { at: new Date(Date.now() + 60000) } }] });
+                    const n = window.__calls.scheduled.length, sel = document.getElementById('dg-stream');
+                    sel.value = 'alarm'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    await new Promise((r) => setTimeout(r, 1500));
+                    const again = window.__calls.scheduled.slice(n).flat().map((x) => x.title).sort();
+                    window.__armed = null;
+                    return JSON.stringify(again) === '["t","t2"]' || again;
+                }), true);
             const suffix = stream === 'alarm' ? '-alarm' : '';
             check(`stream ${stream}: channels are made natively on the ${stream} stream, asking to sound through Do Not Disturb`,
                 got.native.some((n) => n[0] === 'uposatha-gong-v1' + (stream === 'alarm' ? '-alarm' : '') && n[1] === stream && n[2] === (stream === 'alarm' ? '' : 'gong.mp3') && n[3] === true) && got.plugin.length === 0, true);

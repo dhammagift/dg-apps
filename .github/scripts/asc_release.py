@@ -46,11 +46,11 @@ def app_id(bundle):
 
 
 def editable_version(aid):
-    """The newest iOS version that is not on sale yet (the one being prepared or reviewed)."""
+    """The newest version (iOS, or macOS for Safari) that is not on sale yet (the one being prepared or reviewed)."""
     for v in call("GET", f"/v1/apps/{aid}/appStoreVersions?filter[platform]={PLATFORM}&limit=10")["data"]:
         if v["attributes"]["appStoreState"] != "READY_FOR_SALE":
             return v
-    sys.exit("no iOS version that is not on sale")
+    sys.exit(f"no {PLATFORM} version that is not on sale")
 
 
 def submissions(aid):

@@ -45,6 +45,7 @@ jobs:
           APP: ${{ inputs.app }}
           ACTION: ${{ inputs.action }}
           ARG: ${{ inputs.arg }}
+        shell: bash   # pipefail: a failed script under `| tee` is a failed step
         run: |
           pip install --quiet 'pyjwt[crypto]' cryptography
           case "$APP" in dict) B=gift.dhamma.pali; ID=6816639947 ;; uposatha) B=gift.dhamma.uposatha; ID=6816601259 ;; dg) B=gift.dhamma.mobile; ID= ;; safari) B=gift.dhamma.dictlookup; ID=; export ASC_PLATFORM=MAC_OS ;; esac

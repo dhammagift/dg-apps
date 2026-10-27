@@ -480,7 +480,11 @@
         }
         if (key === 'schedule') {
           return function (o) {
-            lastSchedule = o;
+            // A plan is the page's list: its range, or none at all (the reminders turned off; the page then still schedules,
+            // an empty plan, so that what is armed is cleared in turn). The test reminders (7990+) are not one.
+            var notes = (o && o.notifications) || [];
+            var plan = !notes.length || notes.some(function (n) { return isPageId(n.id); });
+            if (plan) lastSchedule = o;
             // The picture of the reminders (docs/launch-screens/uposatha-notification.png: the mirror, the bowl, the brush),
             // shown at the right of the notification; the sound channel is the reader's.
             var list = ((o && o.notifications) || []).map(function (n) {
@@ -512,9 +516,8 @@
             // schedules, but a plan that waits for the notification permission has stored nothing yet: the next plan (the place
             // arrived meanwhile, so other minutes and other ids) cancelled nothing and both stayed armed, with their sound alarms
             // past Android's 500 alarms per app - the plugin threw on every opening (owner's phone, 2026-10-25: a crash loop).
-            var plan = list.some(function (n) { return isUnique(n.id) && n.id !== RENEW_ID; });
             var run = function () {
-              return (plan ? clearArmed(target) : Promise.resolve()).then(function () { return Promise.all(ready); }).then(function () { return items.length ? alarm.schedule({ items: items }) : null; }).then(function () { return target.schedule(Object.assign({}, o, { notifications: list })); }).then(function (res) {
+              return (plan ? clearArmed(target) : Promise.resolve()).then(function () { return Promise.all(ready); }).then(function () { return items.length ? alarm.schedule({ items: items }) : null; }).then(function () { return list.length ? target.schedule(Object.assign({}, o, { notifications: list })) : { notifications: [] }; }).then(function (res) {
                 if (list.length) setTimeout(function () { refreshDnd().then(maybeAskDnd); }, 2500);   // the page has settled; is the access there?
                 return res;
               });
@@ -557,7 +560,8 @@
         if (key === 'createChannel') return function (ch) { lastChannels[ch.id] = ch; return Promise.resolve(); };
         if (key === 'schedule') {
           return function (o) {
-            lastSchedule = o;
+            var notes = (o && o.notifications) || [];
+            if (!notes.length || notes.some(function (n) { return isPageId(n.id); })) lastSchedule = o;   // a plan, not a test (as on Android)
             var items = ((o && o.notifications) || []).map(function (n) {
               var at = n.schedule && n.schedule.at ? new Date(n.schedule.at).getTime() : 0;
               // first: an Uposatha reminder (the page marks it), set ahead of the meal and parts ones within the ~60

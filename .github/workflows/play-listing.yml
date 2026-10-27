@@ -47,6 +47,7 @@ jobs:
           ACTION: ${{ inputs.action }}
           FILE: ${{ inputs.file }}
           LANG_CODE: ${{ inputs.lang }}
+        shell: bash   # pipefail: a failed script under `| tee` is a failed step
         run: |
           pip install --quiet google-api-python-client google-auth
           case "$APP" in dict) P=gift.dhamma.pali ;; uposatha) P=gift.dhamma.uposatha ;; dg) P=gift.dhamma.twa ;; noapp) P=gift.dhamma.noapp ;; esac

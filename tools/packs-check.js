@@ -8,10 +8,16 @@ const PACKS = process.argv[3] || (BASE + '/mobile-data');
   const b = await chromium.launch(); const c = await b.newContext(); const p = await c.newPage();
   p.on('console', m => { if (/dg-offline|error/i.test(m.text())) console.log('  [page]', m.text().slice(0, 200)); });
   await p.goto(BASE + '/robots.txt');
+  // window.restart(): a fresh worker, as a reload or a killed app would give
   await p.evaluate(() => {
-    const w = new Worker('/offline/db-worker.js', { type: 'module' }); let n = 0; window.__progress = [];
-    w.addEventListener('message', e => { if (!e.data.id) window.__progress.push(e.data); });
+    let w = null, n = 0; window.__progress = [];
+    window.restart = async () => {
+      if (w) { w.terminate(); await new Promise(r => setTimeout(r, 1500)); }
+      w = new Worker('/offline/db-worker.js', { type: 'module' });
+      w.addEventListener('message', e => { if (!e.data.id) window.__progress.push(e.data); });
+    };
     window.call = (op, args) => new Promise((res, rej) => { const id = ++n; const h = e => { if (e.data.id === id) { w.removeEventListener('message', h); e.data.ok ? res(e.data.result) : rej(new Error(e.data.error)); } }; w.addEventListener('message', h); w.postMessage({ id, op, args }); });
+    return window.restart();
   });
   const call = (op, args) => p.evaluate(([op, args]) => window.call(op, args), [op, args]);
   let bad = 0;
@@ -40,6 +46,39 @@ const PACKS = process.argv[3] || (BASE + '/mobile-data');
   const dn = await call('text', { suttaId: 'dn22', langs: 'ru,sr' });
   console.log('dn22 languages after removing tr-small:', JSON.stringify(dn.availableLangs), dn.availableLangs.includes('sr') ? 'BAD: sr still there' : 'ok');
   if (dn.availableLangs.includes('sr')) bad++;
+  const expect = (ok, what) => { if (!ok) bad++; console.log(`${ok ? 'ok  ' : 'BAD '} ${what}`); };
+  // Default packs, no selection saved (Cakkhu's review 1): check and update must stay on packs, never the whole dg.db.gz.
+  await call('update', { distBase: '/mobile-data', packs: [], packsBase: PACKS });
+  const chk = await call('check', { distBase: '/mobile-data', packsBase: PACKS });
+  expect(chk.current === true, `check with no selection: ${JSON.stringify(chk)}`);
+  const upd0 = await call('update', { distBase: '/mobile-data', packsBase: PACKS });
+  expect(JSON.stringify(upd0.packs) === '["root-ms"]' && !upd0.downloaded, `update with no selection stays on packs: ${JSON.stringify(upd0)}`);
+  // Killed while unpacking (review 2): the archive is still beside the pack file. The next start must not adopt the
+  // file; the next download unpacks the archive again.
+  const man = await p.evaluate(async (u) => (await fetch(u + '/packs-manifest.json', { cache: 'no-store' })).json(), PACKS);
+  const rm = man.packs.find(x => x.main);
+  await p.evaluate(async ([u, name]) => {
+    const buf = await (await fetch(u)).arrayBuffer();
+    const fh = await (await navigator.storage.getDirectory()).getFileHandle(name, { create: true });
+    const wr = await fh.createWritable(); await wr.write(buf); await wr.close();
+  }, [new URL(rm.url, PACKS + '/').href, `dg-mobile.pack.${rm.id}.${rm.build_id}.gz.partial`]);
+  await p.evaluate(() => window.restart());
+  const reopened = await call('open', { distBase: '/mobile-data', download: false, packsBase: PACKS, packsOn: true });
+  expect(reopened.present === false, `interrupted unpack is not adopted: ${JSON.stringify(reopened)}`);
+  const t2 = Date.now();
+  const again = await call('open', { distBase: '/mobile-data', download: true, packs: [], packsBase: PACKS, packsOn: true });
+  const kac = await call('search', { q: 'kacchapa', langs: 'ru' });
+  expect(again.present && kac.metadata.totalFiles > 0, `unpacked again in ${((Date.now() - t2) / 1000).toFixed(1)}s, search kacchapa ${kac.metadata.totalFiles} texts`);
+  // Delete while a pack downloads (review 4): the download stops, nothing is left, the old set is not reopened.
+  const pend = p.evaluate((P) => window.call('update', { distBase: '/mobile-data', packs: ['tr-en'], packsBase: P }).then(r => 'resolved ' + JSON.stringify(r), e => 'rejected ' + e.message), PACKS);
+  await p.waitForTimeout(1500);
+  console.log('delete during download:', JSON.stringify(await call('delete', { distBase: '/mobile-data' })));
+  const upr = await pend;
+  const st = await call('status', { distBase: '/mobile-data', wantManifest: false });
+  expect(/rejected/.test(upr) && !st.present, `update ${upr.slice(0, 60)}; status ${JSON.stringify(st)}`);
+  await p.evaluate(() => window.restart());
+  const after = await call('open', { distBase: '/mobile-data', download: false, packsBase: PACKS, packsOn: true });
+  expect(after.present === false, `after a restart nothing opens: ${JSON.stringify(after)}`);
   console.log('delete:', JSON.stringify(await call('delete', { distBase: '/mobile-data' })));
   console.log('status after delete:', JSON.stringify(await call('status', { distBase: '/mobile-data', wantManifest: false })));
   await b.close();

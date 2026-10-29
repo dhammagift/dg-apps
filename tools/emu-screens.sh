@@ -50,6 +50,14 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   adb emu geo fix 37.62 55.75 > /dev/null   # Moscow: other sunrise and sunset minutes than the page's 06:00 / 18:00 without a place
   adb logcat -b crash -c
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
+  # A fresh install, the reminders off (the page's defaults): no notification permission is asked at the start (7ffa8a9:
+  # the empty plan goes only to a bridge that takes it, a plain plugin would ask). Android's own dialog is looked for on screen.
+  adb shell uiautomator dump /sdcard/ui0.xml > /dev/null 2>&1; adb pull /sdcard/ui0.xml "$OUT/ui-start.xml" > /dev/null 2>&1
+  adb exec-out screencap -p > "$OUT/alarms-0-start-reminders-off.png"
+  if grep -q 'com.android.permissioncontroller' "$OUT/ui-start.xml" 2>/dev/null; then
+    ko "reminders off: a permission dialog at the start ($(grep -oE 'permission_message"[^>]*text="[^"]*' "$OUT/ui-start.xml" | sed 's/.*text="//' | head -1))"
+  elif [ -s "$OUT/ui-start.xml" ]; then ok "reminders off: no permission dialog at the start"
+  else ko "reminders off: the screen could not be read (uiautomator)"; fi
   pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')
   adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
   node "$REPO/tools/emu-upo-seed.js" >> "$res" &   # stays connected: the place it gives holds while its session is open

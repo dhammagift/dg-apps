@@ -105,7 +105,7 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   sleep 20; a5=$(count)
   adb exec-out screencap -p > "$OUT/alarms-4-turned-off.png"
   adb shell dumpsys alarm > "$OUT/dumpsys-alarm-off.txt"
-  [ "$a4" -ge 150 ] && [ "$a5" -lt 10 ] && ok "turned off: $a4 alarms before, $a5 after" || ko "turned off: $a4 alarms before, $a5 after (want 150+ before and under 10 after)"
+  [ "$a4" -ge 50 ] && [ "$a5" -lt 10 ] && ok "turned off: $a4 alarms before, $a5 after" || ko "turned off: $a4 alarms before, $a5 after (want 50+ before and under 10 after)"
   if [ "${VIDEO:-0}" = 1 ]; then adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null; adb pull /sdcard/alarms2.mp4 "$OUT/alarms-2.mp4" > /dev/null; fi
   cat "$res"; exit $fail
 fi

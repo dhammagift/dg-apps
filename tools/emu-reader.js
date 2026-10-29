@@ -94,11 +94,15 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     if (top() !== 'gift.dhamma.mobile') { execSync('adb shell input keyevent 4'); await sleep(2500); }
     if (top() !== 'gift.dhamma.mobile') { execSync('adb shell monkey -p gift.dhamma.mobile -c android.intent.category.LAUNCHER 1 > /dev/null'); await sleep(4000); }
     if (!(await waitFor(`!!document.querySelector('.dg-tile[data-tile="materials"]')`, 15000))) { await ev(`location.assign('/')`); await sleep(4000); }
-    await ev(`document.querySelector('.dg-tile[data-tile="materials"]').click()`); await sleep(1500);
-    // The tap point: the WebView's place plus CSS px * devicePixelRatio.
-    const at = await ev(`(async function () { var a = document.querySelector('a.dg-sheet-row[href="/docs/${doc}"]'); if (!a) return null;
+    // The tap point (the WebView's place plus CSS px * devicePixelRatio), or null while the row is not what is on screen there.
+    // Back from the Custom Tab finds the sheet still open: the tile is tapped only when it is not (a tap would close it, run 94).
+    const rowAt = `(async function () { var a = document.querySelector('a.dg-sheet-row[href="/docs/${doc}"]'); if (!a) return null;
       a.scrollIntoView({ block: 'center' }); await new Promise(function (r) { setTimeout(r, 600); });
-      var b = a.getBoundingClientRect(); return Math.round(${wv[0]} + (b.left + b.width / 2) * devicePixelRatio) + ' ' + Math.round(${wv[1]} + (b.top + b.height / 2) * devicePixelRatio); })()`);
+      var b = a.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2, hit = document.elementFromPoint(x, y);
+      if (!hit || !a.contains(hit)) return null;
+      return Math.round(${wv[0]} + x * devicePixelRatio) + ' ' + Math.round(${wv[1]} + y * devicePixelRatio); })()`;
+    let at = await ev(rowAt);
+    if (!at) { await ev(`document.querySelector('.dg-tile[data-tile="materials"]').click()`); await sleep(1500); at = await ev(rowAt); }
     if (!at) { shot(`docs-${doc}-${i}-norow`); check(false, `${name}: no /docs/${doc} row in the sheet`); continue; }
     execSync(`adb shell input tap ${at}`); await sleep(3500);
     const app = top(), page = app === 'gift.dhamma.mobile' ? await ev(`location.pathname + location.search`) : '';
@@ -107,6 +111,16 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     execSync('adb shell input keyevent 4'); await sleep(2500);
     check(top() === 'gift.dhamma.mobile', `${name}: Back returns to the app (${top()})`);
   }
+
+  // Memo -> download the audio (dg-apps#58): an Android WebView ignores <a download> of a blob, so the bridge writes the mp3 to the
+  // cache and opens the share sheet (shareMemoMp3). The sheet on top within a minute is a PASS; Back closes it.
+  await ev(`location.assign('/memo/index.html?text=' + encodeURIComponent('atthi imasmiṁ kāye kesā lomā'))`); await sleep(5000);
+  await ev(`document.getElementById('btn_download_audio').click()`);
+  let sheet = null;
+  for (let i = 0; i < 30 && !sheet; i++) { await sleep(2000); const t = top(); if (t && t !== 'gift.dhamma.mobile') sheet = t; }
+  shot('memo-download');
+  check(!!sheet, `memo: download the audio opens the share sheet (${sheet || 'nothing on top of the app in 60 s'})`);
+  if (sheet) { execSync('adb shell input keyevent 4'); await sleep(2500); }
 
   // A language switch on the home page (dhamma-i18n dispatches dhamma:languagechange, also at every start): the bridge's listener
   // read SHORTCUTS_MAX from another function scope and threw a ReferenceError each time (99af3d2).

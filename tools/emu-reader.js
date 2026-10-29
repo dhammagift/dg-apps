@@ -89,6 +89,23 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
   execSync('adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1 || true');
   const wv = (execSync('adb shell cat /sdcard/ui.xml').toString().match(/class="android\.webkit\.WebView"[^>]*bounds="\[(\d+),(\d+)\]/) || [0, 0, 0]).slice(1).map(Number);
   console.log(`the WebView starts at ${wv.join(',')}`);
+  // Chrome without its first-run screens (a debug app's command line), so the Custom Tab shows the page itself, and the page read
+  // over Chrome's own DevTools socket: its address and title, so a 404 or a wrong page is a FAIL, not "Chrome is on top" (owner).
+  execSync('adb shell am set-debug-app --persistent com.android.chrome');
+  execSync(`adb shell "echo '_ --disable-fre --no-default-browser-check --no-first-run' > /data/local/tmp/chrome-command-line"`);
+  execSync('adb shell am force-stop com.android.chrome');
+  const TITLE = { principles: 'Principles of Translation', rationale: 'Rationale for Consistent Translation' };
+  const chromePage = async (doc) => {
+    for (let k = 0; k < 15; k++) {
+      try {
+        execSync('adb forward tcp:9223 localabstract:chrome_devtools_remote');
+        const p = (await (await fetch('http://127.0.0.1:9223/json')).json()).find((x) => x.type === 'page' && x.url.includes('/docs/' + doc));
+        if (p && p.title && p.title !== p.url) return p;
+      } catch (e) { /* Chrome not up yet */ }
+      await sleep(1000);
+    }
+    return null;
+  };
   for (const doc of ['principles', 'rationale']) for (let i = 1; i <= 3; i++) {
     const name = `materials -> ${doc}, tap ${i}`;
     if (top() !== 'gift.dhamma.mobile') { execSync('adb shell input keyevent 4'); await sleep(2500); }
@@ -106,8 +123,9 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     if (!at) { shot(`docs-${doc}-${i}-norow`); check(false, `${name}: no /docs/${doc} row in the sheet`); continue; }
     execSync(`adb shell input tap ${at}`); await sleep(3500);
     const app = top(), page = app === 'gift.dhamma.mobile' ? await ev(`location.pathname + location.search`) : '';
+    const tab = app === 'com.android.chrome' ? await chromePage(doc) : null;
     shot(`docs-${doc}-${i}`);
-    check(app && app !== 'gift.dhamma.mobile', `${name}: on top ${app}${page ? ', the app shows ' + page : ''}`);
+    check(tab && tab.title.startsWith(TITLE[doc]), `${name}: on top ${app}${page ? ', the app shows ' + page : ''}${tab ? `, the tab: ${tab.url} "${tab.title}"` : ', no /docs/' + doc + ' page in Chrome'}`);
     execSync('adb shell input keyevent 4'); await sleep(2500);
     check(top() === 'gift.dhamma.mobile', `${name}: Back returns to the app (${top()})`);
   }

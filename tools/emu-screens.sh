@@ -103,11 +103,14 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
     s.value = '$1'; s.dispatchEvent(new Event('change', { bubbles: true })); await new Promise(function (r) { setTimeout(r, 8000); }); return 'source ' + s.value; })()" | tee -a "$res"; }
   node "$REPO/tools/emu-eval.js" "(async function () { var k = document.getElementById('tst-kind'), b = document.getElementById('tst-go'); if (!k || !b) return 'no test reminder button';
     k.value = 'upo'; b.click(); await new Promise(function (r) { setTimeout(r, 5000); }); return 'test reminder: ' + document.getElementById('tst-msg').textContent; })()" | tee -a "$res"
-  src notification; a3=$(count)
+  # The change takes back every alarm and sets them again, one by one: counted once the number has settled (run of 1.0.1: 13
+  # at 8 s, 177 later), up to a minute. The old fault left none for good.
+  settle() { local n=-1 m; for i in $(seq 12); do m=$(count); [ "$m" = "$n" ] && [ "$m" -gt 0 ] && break; n=$m; sleep 5; done; echo "$m"; }
+  src notification; a3=$(settle)
   adb exec-out screencap -p > "$OUT/alarms-3-test-then-source.png"
   [ "$a3" -ge 150 ] && ok "a test reminder, then the source changed: the reminders are still set ($a3 alarms)" || ko "a test reminder, then the source changed: only $a3 alarms, the reminders were dropped"
   # Back on the alarm source, then every reminder turned off (each switch the page reads as on: on/day, rem/beg; run 93 left day and beg) (840f3e2 / 7ffa8a9: the sound alarms stayed armed and rang).
-  src alarm; a4=$(count)
+  src alarm; a4=$(settle)
   node "$REPO/tools/emu-eval.js" "(function () { ['dgUposathaRemind', 'dgUposathaMeal', 'dgUposathaParts'].forEach(function (k) { var v = JSON.parse(localStorage.getItem(k) || '{}');
     ['on', 'day', 'rem', 'beg'].forEach(function (f) { if (f in v) v[f] = false; }); localStorage.setItem(k, JSON.stringify(v)); }); setTimeout(function () { location.reload(); }, 100); return 'reminders off, reloading'; })()" | tee -a "$res"
   sleep 20; a5=$(count)

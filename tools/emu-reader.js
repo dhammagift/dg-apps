@@ -96,7 +96,7 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
   execSync('adb shell am force-stop com.android.chrome');
   const TITLE = { principles: 'Principles of Translation', rationale: 'Rationale for Consistent Translation' };
   const chromePage = async (doc) => {
-    for (let k = 0; k < 15; k++) {
+    for (let k = 0; k < 40; k++) {   // Chrome's first start opens its DevTools socket late (the first tap had the page on screen, not yet the socket)
       try {
         execSync('adb forward tcp:9223 localabstract:chrome_devtools_remote');
         const p = (await (await fetch('http://127.0.0.1:9223/json')).json()).find((x) => x.type === 'page' && x.url.includes('/docs/' + doc));
@@ -126,7 +126,8 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     const tab = app === 'com.android.chrome' ? await chromePage(doc) : null;
     shot(`docs-${doc}-${i}`);
     check(tab && tab.title.startsWith(TITLE[doc]), `${name}: on top ${app}${page ? ', the app shows ' + page : ''}${tab ? `, the tab: ${tab.url} "${tab.title}"` : ', no /docs/' + doc + ' page in Chrome'}`);
-    execSync('adb shell input keyevent 4'); await sleep(2500);
+    // Back, again while Chrome is still on top: its first Custom Tab shows a "Minimize tab" tip, and the first Back only closes it.
+    for (let k = 0; k < 3 && top() !== 'gift.dhamma.mobile'; k++) { execSync('adb shell input keyevent 4'); await sleep(2500); }
     check(top() === 'gift.dhamma.mobile', `${name}: Back returns to the app (${top()})`);
   }
 

@@ -49,7 +49,7 @@ LANGUAGES
 Pāli, Russian and English.
 
 WHERE THE TEXTS COME FROM
-The Pali text, its translations and the Dhamma.gift project's own translations are used under their open licences. Dhamma.gift is a non-commercial project: no advertising, no tracking, and no account required — signing in is optional and only syncs favourites and notes between your devices.
+The Pāli Canon in the Mahāsaṅgīti edition, with translations, including the Dhamma.gift project's own, all used under their open licences. Dhamma.gift is a non-commercial project: no advertising, no tracking, and no account required — signing in is optional and only syncs favourites and notes between your devices.
 
 May all beings be happy.
 ```

@@ -48,6 +48,8 @@ const PACKS = process.argv[3] || (BASE + '/mobile-data');
   if (dn.availableLangs.includes('sr')) bad++;
   const expect = (ok, what) => { if (!ok) bad++; console.log(`${ok ? 'ok  ' : 'BAD '} ${what}`); };
   // Default packs, no selection saved (Cakkhu's review 1): check and update must stay on packs, never the whole dg.db.gz.
+  const keepSel = await call('update', { distBase: '/mobile-data', packsBase: PACKS });
+  expect(JSON.stringify(keepSel.packs) === '["root-ms","tr-ru"]', `update with no selection keeps the packs on disk: ${JSON.stringify(keepSel.packs)}`);
   await call('update', { distBase: '/mobile-data', packs: [], packsBase: PACKS });
   const chk = await call('check', { distBase: '/mobile-data', packsBase: PACKS });
   expect(chk.current === true, `check with no selection: ${JSON.stringify(chk)}`);

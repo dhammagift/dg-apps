@@ -665,9 +665,21 @@ const SITE_ONLY_PATHS = (() => {
     // Kept on the site, not in the app (owner): the old multi-tool and a page only Memo links to.
     '/assets/common/multiTool.html', '/assets/common/multiToolRu.html', '/assets/texts/dn2.9.html',
 ]);
+// Top-level names the site serves itself (its siteroot/ mounts and its own routes) that are not the app's: a dhamma.gift link
+// to one opens on the site (native-bridge.js, MainActivity.sitePage via site-prefixes.json). Read from dg-node, so a page added
+// there cannot fall into the app's search (owner, 2026-10-29: dhamma.gift/api-docs/ opened the search). The app's own pages
+// and the routes its page renders are left out.
+const APP_ROUTES = ['assets', 'config', 'login', 'manifest.json', 'memo', 'nodejs', 'offline', 'read', 'reader', 'ru', 'search', 'settings', 'spa', 'toc'];
+const SITE_PREFIXES = (() => {
+    const src = fs.readFileSync(f('dg-fastify.js'), 'utf8');
+    const routes = [...src.matchAll(/(?:app\.(?:get|all|route)\(\s*|prefix:\s*)'\/([\w.-]+)/g)].map(m => m[1]);
+    const mounts = fs.existsSync(f('siteroot')) ? fs.readdirSync(f('siteroot')) : [];
+    return [...new Set(routes.concat(mounts))].filter(n => !n.startsWith('.') && !APP_ROUTES.includes(n)).sort();
+})();
 function copyNative(name, to) {
     const head = (ONLINE_ORIGIN ? `window.DG_ONLINE_ORIGIN = ${JSON.stringify(ONLINE_ORIGIN)};\n` : '') +
-        `window.DG_SITE_ONLY_PATHS = ${JSON.stringify(SITE_ONLY_PATHS)};\n`;
+        `window.DG_SITE_ONLY_PATHS = ${JSON.stringify(SITE_ONLY_PATHS)};\n` +
+        `window.DG_SITE_PREFIXES = ${JSON.stringify(SITE_PREFIXES)};\n`;
     const body = fs.readFileSync(path.join(SRC, name), 'utf8')
         .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(SRC, 'site-updater.js'), 'utf8'));
     fs.writeFileSync(to, head + `window.__DG_APP_VERSION__ = ${JSON.stringify(appStamp())};\n` + body);
@@ -693,6 +705,7 @@ function appVersionName() {
 // reader, the search UI) is copied from dg-node — see copyOfflineLayer above and ASSETS.
 function copyNativeFiles() {
     copyNative('native-bridge.js', path.join(WWW, 'native-bridge.js'));
+    fs.writeFileSync(path.join(WWW, 'site-prefixes.json'), JSON.stringify(SITE_PREFIXES) + '\n');
     fs.copyFileSync(path.join(SRC, 'tts.js'), path.join(WWW, 'tts.js'));
     // A plain copy, not copyNative(): the dhammagift:// mapping needs no baked origin and no
     // site-only path list, and it is the file with a node test (test/deep-link.test.js), so it

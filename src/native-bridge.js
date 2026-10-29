@@ -379,7 +379,8 @@
         // The literal origin, not ONLINE_ORIGIN: that var is declared further down and would still
         // be undefined here, since this runs at parse time.
         var EXTERNAL_ROUTES = /^\/(ru\/)?(dict|memorize|docs|uposatha-calendar|apps)(\/|\?|$)/; // login is bundled now (below)
-        if (EXTERNAL_ROUTES.test(route)) {
+        var first = /^\/(?:ru\/)?([^\/?#]+)/.exec(route);   // or any page the site serves itself (DG_SITE_PREFIXES, build-assets.js)
+        if (EXTERNAL_ROUTES.test(route) || (first && (window.DG_SITE_PREFIXES || []).indexOf(first[1]) !== -1)) {
             openExternal((window.DG_ONLINE_ORIGIN || 'https://dhamma.gift') + route);
             return;
         }
@@ -880,6 +881,10 @@
             if (u.origin !== location.origin) return /^javascript:/i.test(u.href) ? null : u.href;
             if (/^\/4nt(\/|$)/.test(u.pathname)) return 'https://s.dhamma.gift' + u.pathname.replace(/^\/4nt/, '') + u.search + u.hash;
             if (NOT_BUNDLED_RE.test(u.pathname)) return ONLINE_ORIGIN + u.pathname + u.search + u.hash;
+            // Any other page the site serves itself, read from dg-node at build time (/api-docs, /research, /help ...): the
+            // search would take its name for a query (owner, 2026-10-29: dhamma.gift/api-docs/ opened the search).
+            var first = /^\/(?:ru\/)?([^\/]+)/.exec(u.pathname);
+            if (first && (window.DG_SITE_PREFIXES || []).indexOf(first[1]) !== -1) return ONLINE_ORIGIN + u.pathname + u.search + u.hash;
             // Old help pages the site redirects to the docs (list baked in by build-assets.js).
             if ((window.DG_SITE_ONLY_PATHS || []).indexOf(u.pathname) !== -1) return ONLINE_ORIGIN + u.pathname + u.search + u.hash;
         } catch (e) { /* not a URL */ }

@@ -20,6 +20,13 @@ import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.WebViewListener;
 
+import org.json.JSONArray;
+
+import java.io.InputStream;
+import java.util.HashSet;
+import java.util.Scanner;
+import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MainActivity extends BridgeActivity {
@@ -36,6 +43,26 @@ public class MainActivity extends BridgeActivity {
     // a cold start its Browser.open came before the bridge was ready and was lost: the screen blinked, Back had one step too many,
     // and only the second tap opened the docs (owner, dhamma.gift/docs/uposatha).
     private static final Pattern SITE_ONLY = Pattern.compile("^/(ru/)?(dict|memorize|docs|uposatha-calendar|apps)(/|$)");
+    private static final Pattern FIRST_SEGMENT = Pattern.compile("^/(?:ru/)?([^/]+)");
+
+    // The fixed list above, and every top-level name the site serves itself (its siteroot/ mounts and routes), which
+    // build-assets.js reads from dg-node into site-prefixes.json (owner, 2026-10-29: dhamma.gift/api-docs/ opened the search).
+    private Set<String> sitePrefixes;
+
+    private boolean sitePage(String path) {
+        if (SITE_ONLY.matcher(path).find()) return true;
+        if (sitePrefixes == null) {
+            sitePrefixes = new HashSet<>();
+            try (InputStream in = getAssets().open("public/site-prefixes.json"); Scanner sc = new Scanner(in, "UTF-8")) {
+                JSONArray names = new JSONArray(sc.useDelimiter("\\A").next());
+                for (int i = 0; i < names.length(); i++) sitePrefixes.add(names.getString(i));
+            } catch (Exception e) {
+                // A bundle without the file: the fixed list only.
+            }
+        }
+        Matcher m = FIRST_SEGMENT.matcher(path);
+        return m.find() && sitePrefixes.contains(m.group(1));
+    }
 
     // The launch splash (res/drawable/dg_splash_icon.xml, 890 ms: 250 ms still, the gem opens, a glint) stays until the page has drawn its first
     // frame, so it hands over to the page and not to an empty WebView: this page is far heavier than the
@@ -262,7 +289,7 @@ public class MainActivity extends BridgeActivity {
             // loop's first step, whatever the browser does.
             Uri referrer = getReferrer();
             boolean fromSelf = referrer != null && getPackageName().equals(referrer.getHost());
-            String browser = !fromSelf && path != null && SITE_ONLY.matcher(path).find()
+            String browser = !fromSelf && path != null && sitePage(path)
                 ? CustomTabsClient.getPackageName(this, null) : null;
             if (browser != null) {
                 try {

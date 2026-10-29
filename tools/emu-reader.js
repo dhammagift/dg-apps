@@ -131,6 +131,24 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     check(top() === 'gift.dhamma.mobile', `${name}: Back returns to the app (${top()})`);
   }
 
+  // A dhamma.gift link from outside (an App Link) to a page the site serves itself opens in Chrome, not as a search in the app
+  // (owner, 2026-10-29: dhamma.gift/api-docs/ did). The list is read from dg-node at build time (build-assets.js SITE_PREFIXES).
+  {
+    execSync('adb shell am start -W -a android.intent.action.VIEW -d https://dhamma.gift/api-docs/ gift.dhamma.mobile > /dev/null');
+    let tab = null;
+    for (let k = 0; k < 30 && !tab; k++) {
+      try {
+        execSync('adb forward tcp:9223 localabstract:chrome_devtools_remote');
+        tab = (await (await fetch('http://127.0.0.1:9223/json')).json()).find((x) => x.type === 'page' && x.url.includes('/api-docs') && x.title && x.title !== x.url) || null;
+      } catch (e) { /* Chrome not up yet */ }
+      if (!tab) await sleep(1000);
+    }
+    shot('applink-api-docs');
+    check(tab && /API/.test(tab.title), `App Link dhamma.gift/api-docs/: on top ${top()}${tab ? `, the tab: ${tab.url} "${tab.title}"` : ', no /api-docs page in Chrome'}`);
+    for (let k = 0; k < 3 && top() !== 'gift.dhamma.mobile'; k++) { execSync('adb shell input keyevent 4'); await sleep(2500); }
+    if (top() !== 'gift.dhamma.mobile') { execSync('adb shell monkey -p gift.dhamma.mobile -c android.intent.category.LAUNCHER 1 > /dev/null'); await sleep(4000); }
+  }
+
   // Memo -> download the audio (dg-apps#58): an Android WebView ignores <a download> of a blob, so the bridge writes the mp3 to the
   // cache and opens the share sheet (shareMemoMp3). The sheet on top within a minute is a PASS; Back closes it.
   await ev(`location.assign('/memo/index.html?text=' + encodeURIComponent('atthi imasmiṁ kāye kesā lomā'))`); await sleep(5000);

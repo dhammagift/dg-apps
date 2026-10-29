@@ -1,9 +1,9 @@
 // Selectable offline packs, end to end in Chromium: dg-node's db-worker.js (no app.js on the page) downloads the packs,
 // opens them as main + ATTACH, and its offline search must equal the site's; then a pack is dropped and all deleted.
-// node tools/packs-check.js [site] [packs base]   (defaults: test.dhamma.gift, F1's packs-test)
+// node tools/packs-check.js [site] [packs base]   (defaults: test.dhamma.gift and its own mobile-data)
 const { chromium } = require('/usr/lib/node_modules/@playwright/cli/node_modules/playwright');
 const BASE = process.argv[2] || 'https://test.dhamma.gift';
-const PACKS = process.argv[3] || 'https://f1.dhamma.gift/mobile-data/packs-test';
+const PACKS = process.argv[3] || (BASE + '/mobile-data');
 (async () => {
   const b = await chromium.launch(); const c = await b.newContext(); const p = await c.newPage();
   p.on('console', m => { if (/dg-offline|error/i.test(m.text())) console.log('  [page]', m.text().slice(0, 200)); });

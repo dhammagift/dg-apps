@@ -85,15 +85,20 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
   // Custom Tab (another app on top), never the search in the app (owner 2026-10-27: once the search, once the page). Back returns.
   const top = () => (execSync('adb shell dumpsys activity activities').toString()
     .match(/(?:topResumedActivity=|mResumedActivity: )ActivityRecord\{\S+ \S+ ([^\/\s]+)\//) || [])[1];
+  // The WebView's own place on the screen (below the status bar here: run 92 tapped one bar's height too high).
+  execSync('adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1 || true');
+  const wv = (execSync('adb shell cat /sdcard/ui.xml').toString().match(/class="android\.webkit\.WebView"[^>]*bounds="\[(\d+),(\d+)\]/) || [0, 0, 0]).slice(1).map(Number);
+  console.log(`the WebView starts at ${wv.join(',')}`);
   for (const doc of ['principles', 'rationale']) for (let i = 1; i <= 3; i++) {
     const name = `materials -> ${doc}, tap ${i}`;
     if (top() !== 'gift.dhamma.mobile') { execSync('adb shell input keyevent 4'); await sleep(2500); }
+    if (top() !== 'gift.dhamma.mobile') { execSync('adb shell monkey -p gift.dhamma.mobile -c android.intent.category.LAUNCHER 1 > /dev/null'); await sleep(4000); }
     if (!(await waitFor(`!!document.querySelector('.dg-tile[data-tile="materials"]')`, 15000))) { await ev(`location.assign('/')`); await sleep(4000); }
     await ev(`document.querySelector('.dg-tile[data-tile="materials"]').click()`); await sleep(1500);
-    // Edge to edge (API 35+): the WebView starts at the screen's top left, so CSS px * devicePixelRatio is the tap point.
+    // The tap point: the WebView's place plus CSS px * devicePixelRatio.
     const at = await ev(`(async function () { var a = document.querySelector('a.dg-sheet-row[href="/docs/${doc}"]'); if (!a) return null;
       a.scrollIntoView({ block: 'center' }); await new Promise(function (r) { setTimeout(r, 600); });
-      var b = a.getBoundingClientRect(); return Math.round((b.left + b.width / 2) * devicePixelRatio) + ' ' + Math.round((b.top + b.height / 2) * devicePixelRatio); })()`);
+      var b = a.getBoundingClientRect(); return Math.round(${wv[0]} + (b.left + b.width / 2) * devicePixelRatio) + ' ' + Math.round(${wv[1]} + (b.top + b.height / 2) * devicePixelRatio); })()`);
     if (!at) { shot(`docs-${doc}-${i}-norow`); check(false, `${name}: no /docs/${doc} row in the sheet`); continue; }
     execSync(`adb shell input tap ${at}`); await sleep(3500);
     const app = top(), page = app === 'gift.dhamma.mobile' ? await ev(`location.pathname + location.search`) : '';

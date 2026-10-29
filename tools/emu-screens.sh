@@ -98,10 +98,10 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
   src notification; a3=$(count)
   adb exec-out screencap -p > "$OUT/alarms-3-test-then-source.png"
   [ "$a3" -ge 150 ] && ok "a test reminder, then the source changed: the reminders are still set ($a3 alarms)" || ko "a test reminder, then the source changed: only $a3 alarms, the reminders were dropped"
-  # Back on the alarm source, then every reminder turned off (840f3e2 / 7ffa8a9: the sound alarms stayed armed and rang).
+  # Back on the alarm source, then every reminder turned off (each switch the page reads as on: on/day, rem/beg; run 93 left day and beg) (840f3e2 / 7ffa8a9: the sound alarms stayed armed and rang).
   src alarm; a4=$(count)
   node "$REPO/tools/emu-eval.js" "(function () { ['dgUposathaRemind', 'dgUposathaMeal', 'dgUposathaParts'].forEach(function (k) { var v = JSON.parse(localStorage.getItem(k) || '{}');
-    if ('on' in v) v.on = false; if ('rem' in v) v.rem = false; localStorage.setItem(k, JSON.stringify(v)); }); setTimeout(function () { location.reload(); }, 100); return 'reminders off, reloading'; })()" | tee -a "$res"
+    ['on', 'day', 'rem', 'beg'].forEach(function (f) { if (f in v) v[f] = false; }); localStorage.setItem(k, JSON.stringify(v)); }); setTimeout(function () { location.reload(); }, 100); return 'reminders off, reloading'; })()" | tee -a "$res"
   sleep 20; a5=$(count)
   adb exec-out screencap -p > "$OUT/alarms-4-turned-off.png"
   adb shell dumpsys alarm > "$OUT/dumpsys-alarm-off.txt"

@@ -13,7 +13,7 @@ on:
       action:
         description: "status (read only) / set (the texts) / notes (What's new of the newest release on the alpha track) / names (releases named \"<build> (<version>)\": names = dry run, names-apply = commit; nothing is uploaded)"
         type: choice
-        options: [status, tracks, set, notes, names, names-apply]
+        options: [status, tracks, set, notes, names, names-apply, testers, testers-copy]
         default: status
       file:
         description: 'set: the JSON file with a "play" block (e.g. dict/store/listing.json)'
@@ -55,6 +55,8 @@ jobs:
           elif [ "$ACTION" = names ]; then python3 .github/scripts/play_listing.py "$P" names | tee out.txt
           elif [ "$ACTION" = names-apply ]; then python3 .github/scripts/play_listing.py "$P" names apply | tee out.txt
           elif [ "$ACTION" = notes ]; then python3 .github/scripts/play_listing.py "$P" notes "$FILE" "$LANG_CODE" alpha | tee out.txt
+          elif [ "$ACTION" = testers ]; then python3 .github/scripts/play_listing.py "$P" testers | tee out.txt
+          elif [ "$ACTION" = testers-copy ]; then python3 .github/scripts/play_listing.py "$P" testers-copy ${FILE%%|*} ${FILE#*|} | tee out.txt
           elif [ "$ACTION" = tracks ]; then python3 .github/scripts/play_listing.py "$P" tracks | tee out.txt
           else python3 .github/scripts/play_listing.py "$P" status | tee out.txt; fi
           { echo "### Play listing: $ACTION ($APP)"; echo '```'; cat out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

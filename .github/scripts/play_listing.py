@@ -11,6 +11,11 @@ changed, the edit committed; nothing else in the edit). Run by play-listing.yml 
                                                     console's own (432 (1.18)); an API upload without a name showed only
                                                     the version. Only the name changes, nothing is uploaded; without
                                                     "apply" it only prints what it would rename
+  play_listing.py <package> testers                  who each track reaches: its Google Groups and countries (read only)
+  play_listing.py <package> testers-copy <from package> <track>  that track's Google Groups taken from another app's
+                                                    same track (owner 2026-10-30: DG closed testing had no testers, so
+                                                    alpha uploads reached nobody), committed. The API sees Google Groups
+                                                    only; e-mail lists are kept in the console
 """
 import json, os, sys
 
@@ -55,6 +60,25 @@ try:
         api.edits().commit(packageName=pkg, editId=edit).execute()
         edit = None
         print(f"{track}: release {rel.get('name')} ({rel.get('versionCodes')}, {rel.get('status')}): What's new set for {lang} and committed")
+    elif action == "testers":
+        for t in api.edits().tracks().list(packageName=pkg, editId=edit).execute().get("tracks", []):
+            tr = t["track"]
+            try: g = api.edits().testers().get(packageName=pkg, editId=edit, track=tr).execute().get("googleGroups", [])
+            except Exception as e: g = f"n/a ({str(e)[:80]})"
+            try: c = api.edits().countryavailability().get(packageName=pkg, editId=edit, track=tr).execute()
+            except Exception as e: c = {"error": str(e)[:80]}
+            print(f"{tr}: googleGroups={g} restOfWorld={c.get('restOfWorld')} countries={len(c.get('countries', []))}")
+    elif action == "testers-copy":
+        src, track = rest
+        sedit = api.edits().insert(packageName=src, body={}).execute()["id"]
+        groups = api.edits().testers().get(packageName=src, editId=sedit, track=track).execute().get("googleGroups", [])
+        api.edits().delete(packageName=src, editId=sedit).execute()
+        if not groups:
+            sys.exit(f"{src} {track}: no Google Groups to copy (its testers are e-mail lists, kept in the console only)")
+        api.edits().testers().update(packageName=pkg, editId=edit, track=track, body={"googleGroups": groups}).execute()
+        api.edits().commit(packageName=pkg, editId=edit).execute()
+        edit = None
+        print(f"{track}: googleGroups {groups} set from {src} and committed")
     elif action == "names":
         import re
         changed = False

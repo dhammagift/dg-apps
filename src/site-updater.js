@@ -58,6 +58,18 @@
 
   // The bar that tells the reader the page has new files (the files are already saved: the next start uses them anyway,
   // the button only reloads the page now). Shown once per update; "x" hides it until the next start.
+  // The offline library's consent sheet (dg-node offline-status.js, #dgConsent) sits at the bottom too: on a first start the bar
+  // lay over its Download button, and a tap there was a tap on Update - the page reloaded and the download never began (Test Lab
+  // 2026-10-30, DG 566). The bar waits until the sheet is answered.
+  function afterConsent(fn) {
+    if (!document.getElementById('dgConsent')) { fn(); return; }
+    var mo = new MutationObserver(function () {
+      if (document.getElementById('dgConsent')) return;
+      mo.disconnect();
+      fn();
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }
   function showUpdateBar() {
     if (document.getElementById('dg-upd')) return;
     function barText() {
@@ -355,7 +367,7 @@
         if (failed) res.state = 'failed'; else if (shown) res.state = 'new';
         // A file the bundle never had (the page names it, the snapshot did not carry it: the manifest, the icons) is saved quietly; the
         // bar is for files that CHANGED since the bundle - a first check used to announce an update on every fresh install.
-        if (shown && !failed && !SITE_CONFIG.silent) showUpdateBar();
+        if (shown && !failed && !SITE_CONFIG.silent) afterConsent(showUpdateBar);
       });
     }
     return chain.catch(function (e) {

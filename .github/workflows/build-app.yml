@@ -1197,7 +1197,7 @@ jobs:
     # suite ran on every dg-ios build, and a flaky launcher check failed the whole run AFTER the
     # IPA had already been uploaded to TestFlight (owner, 2026-10-01).
     if: needs.plan.outputs.dg_android_tests == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 45   # the offline-library download scenario adds up to ~12 min
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1246,11 +1246,17 @@ jobs:
             adb shell am force-stop gift.dhamma.twa
             TRAY_ENGINE=audio bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-audio gift.dhamma.mobile tray || touch emu-failed
             TRAY_ENGINE=native bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-native gift.dhamma.mobile tray || touch emu-failed
+            # The offline library on every build (owner 2026-10-30: basic function, not a one-off check): a fresh app (the
+            # player scenarios answered its consent sheet with "Not now"), Download, the app sent to the background, the native
+            # download to the end, the library installed, then search and a text with the network off.
+            adb shell pm clear gift.dhamma.mobile > /dev/null
+            bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-download gift.dhamma.mobile download || touch emu-failed
             test ! -f emu-failed
       - name: Verdict, notification player
         if: always()
         run: |
           for e in audio native; do { echo "### Notification player, $e voices"; echo '```'; cat shots-tray-$e/tray-result.txt 2>/dev/null | grep -E "^(PASS|FAIL)" || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"; done
+          { echo "### Offline library (download, background, offline search)"; echo '```'; cat shots-download/download-result.txt 2>/dev/null || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -1258,6 +1264,7 @@ jobs:
           path: |
             shots-tray-audio
             shots-tray-native
+            shots-download
           retention-days: 14
 
       - name: Verdict

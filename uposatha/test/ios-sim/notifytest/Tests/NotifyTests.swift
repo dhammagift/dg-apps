@@ -2,7 +2,7 @@ import XCTest
 
 // The test reminder of the settings, driven the way a reader does it, and the notification looked for where iOS shows it
 // (SpringBoard's banner): first "now" with the app open (the app has to let iOS show it in front), then "in 1 min" with the
-// app sent Home. The page is English on the simulator: Menu, Test reminders, now, in 1 min, Test; the title "Uposatha (test)".
+// app sent Home. The page is English on the simulator: Settings (the gear), Test reminders, now, in 1 min, Test; the title "Uposatha (test)".
 // Pictures go to /tmp/upo-notify-shots (notify.sh collects them).
 final class NotifyTests: XCTestCase {
     let app = XCUIApplication(bundleIdentifier: "gift.dhamma.uposatha")
@@ -42,7 +42,8 @@ final class NotifyTests: XCTestCase {
         sleep(12)
         allowAlerts()
         shot("01-start")
-        XCTAssertTrue(tapWeb("Menu"), "no Menu button on the page")
+        // In the app the menu opens from the top bar's gear (Settings); the site's burger (Menu) is hidden there.
+        XCTAssertTrue(tapWeb("Settings") || tapWeb("Menu", timeout: 3), "no Settings / Menu button on the page")
         sleep(2)
         XCTAssertTrue(tapWeb("Test reminders"), "no 'Test reminders' group in the menu")
         sleep(2)

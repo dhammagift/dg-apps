@@ -214,6 +214,20 @@ def beta(bundle, arg):
     print(f"build {number}: sent to Apple's beta review")
 
 
+def certs():
+    """Read only: when the account's signing certificates and provisioning profiles expire (owner 2026-10-30: the
+    deadlines that break a build without warning). Sorted by date; the soonest first."""
+    rows = []
+    for c in call("GET", "/v1/certificates?limit=200&fields[certificates]=certificateType,displayName,name,expirationDate")["data"]:
+        a = c["attributes"]
+        rows.append((a.get("expirationDate") or "", "certificate", a.get("certificateType"), a.get("displayName") or a.get("name")))
+    for pr in call("GET", "/v1/profiles?limit=200&fields[profiles]=name,profileType,profileState,expirationDate")["data"]:
+        a = pr["attributes"]
+        rows.append((a.get("expirationDate") or "", "profile", f'{a.get("profileType")} {a.get("profileState")}', a.get("name")))
+    for exp, kind, typ, name in sorted(rows):
+        print(f"{exp[:10]}  {kind:11} {typ:28} {name}")
+
+
 def screens(bundle, out="screens"):
     v = editable_version(app_id(bundle))
     os.makedirs(out, exist_ok=True)
@@ -257,4 +271,4 @@ if __name__ == "__main__":
      "set-text": lambda: set_text(bundle, rest[0]), "delete-locale": lambda: delete_locale(bundle, rest[0]),
      "testflight": lambda: testflight(bundle), "beta": lambda: beta(bundle, rest[0]),
      "submit": lambda: submit(bundle), "testflight": lambda: testflight(bundle),
-     "screens": lambda: screens(bundle, *rest)}[action]()
+     "screens": lambda: screens(bundle, *rest), "certs": certs}[action]()

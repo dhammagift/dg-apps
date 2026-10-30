@@ -15,7 +15,7 @@ on:
       action:
         description: 'status (read only) / testflight (read only: groups, public link, builds) / beta (a build to the external TestFlight groups and Apple beta review) / screens (read only: the version screenshots, as an artifact) / cancel / set-build / set-text / submit'
         type: choice
-        options: [status, testflight, screens, cancel, set-build, set-version, set-text, screenshots, delete-locale, submit, beta]
+        options: [status, testflight, screens, cancel, set-build, set-version, set-text, screenshots, delete-locale, submit, beta, certs]
         default: status
       arg:
         description: 'beta: "<build number>|<What to Test>"; set-build: the build number; set-text: the JSON file (e.g. dict/store/listing.json); screenshots: TYPE=dir (e.g. APP_IPHONE_69=dict/store/iphone69), replaces that set in en-US'

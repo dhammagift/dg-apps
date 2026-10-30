@@ -90,6 +90,13 @@ jobs:
           brew install xcodegen >/dev/null 2>&1 || brew install xcodegen
           (cd uposatha/test/ios-sim/widgettest && xcodegen generate)
 
+      # The reminders (owner 2026-10-30): the settings' test reminder must show iOS's banner with the app open and in the background.
+      - name: The reminders (test reminder, banner in front and behind)
+        if: always()
+        run: |
+          (cd uposatha/test/ios-sim/notifytest && xcodegen generate)
+          uposatha/test/ios-sim/notify.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app notify-shots
+
       - name: The widget gallery and the Home Screen
         run: uposatha/test/ios-sim/widget-gallery.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app widget-shots
 
@@ -112,6 +119,7 @@ jobs:
         with:
           name: uposatha-widget-ios-${{ github.run_number }}
           path: |
+            notify-shots
             widget-shots
             control-shots
             uposatha/ios-build.log

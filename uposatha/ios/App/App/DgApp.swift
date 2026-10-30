@@ -516,7 +516,11 @@ public class DgNotifyPlugin: CAPPlugin, CAPBridgedPlugin {
 
     // An absolute instant (dg-apps U6): with the zone in the components the trigger does not follow a later change of the
     // phone's zone (without it, a reminder for 17:42 rang at 17:42 of wherever the phone was by then).
-    private static func trigger(at date: Date) -> UNCalendarNotificationTrigger {
+    private static func trigger(at date: Date) -> UNNotificationTrigger {
+        // Due within a minute (the settings' test reminder "now", or one whose second has passed while it travelled here): an
+        // interval. A calendar trigger for a moment already gone never fires - the year is part of it.
+        let wait = date.timeIntervalSinceNow
+        if wait < 60 { return UNTimeIntervalNotificationTrigger(timeInterval: max(1, wait), repeats: false) }
         let calendar = Calendar.current
         var parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
         parts.timeZone = calendar.timeZone
@@ -570,7 +574,11 @@ public class DgNotifyPlugin: CAPPlugin, CAPBridgedPlugin {
             let group = DispatchGroup()
             for r in toSet {
                 group.enter()
-                center.add(r) { _ in group.leave() }
+                center.add(r) { error in
+                    // A refused notification used to vanish without a trace.
+                    if let error = error { NSLog("[DgNotify] %@ was not set: %@", r.identifier, error.localizedDescription) }
+                    group.leave()
+                }
             }
             group.notify(queue: .main) { done?(toSet.count) }
         }
@@ -599,8 +607,11 @@ public class DgNotifyPlugin: CAPPlugin, CAPBridgedPlugin {
             if let id = Self.number(item["id"]) { byId[Int(id)] = item }
         }
         for item in call.getArray("items", JSObject.self) ?? [] {
-            guard let id = Self.number(item["id"]), let at = Self.number(item["at"]), at > now else { continue }
-            byId[Int(id)] = ["id": Int(id), "at": at, "title": (item["title"] as? String) ?? "", "body": (item["body"] as? String) ?? "", "sound": (item["sound"] as? String) ?? "",
+            // Up to a minute late is still due: the test reminder "now" is stamped by the page before it reaches here (it was
+            // dropped as past, so the test never rang on iOS - owner's iPhone 8, 2026-10-30).
+            guard let id = Self.number(item["id"]), let at = Self.number(item["at"]), at > now - 60_000 else { continue }
+            // a due one is kept as "in a second", so a later refill does not set it again once it has rung
+            byId[Int(id)] = ["id": Int(id), "at": max(at, now + 1000), "title": (item["title"] as? String) ?? "", "body": (item["body"] as? String) ?? "", "sound": (item["sound"] as? String) ?? "",
                              "first": (item["first"] as? Bool) ?? false]
         }
         Self.save(Array(byId.values))

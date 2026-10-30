@@ -1970,6 +1970,13 @@ jobs:
           VIDEO: ${{ inputs.ios_video && '1' || '0' }}
         run: tools/ios-edgetoedge.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app shots gift.dhamma.uposatha
 
+      # The reminders on every build (owner 2026-10-30: «что это за проверки, если не проверять приложения»): the settings' test
+      # reminder must show iOS's banner with the app open ("now") and with it in the background ("in 1 min").
+      - name: The reminders (test reminder, banner in front and behind)
+        run: |
+          (cd uposatha/test/ios-sim/notifytest && xcodegen generate)
+          uposatha/test/ios-sim/notify.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app shots/notify
+
       - name: Upload the screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -434,6 +434,11 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
     var LN = window.Capacitor && window.Capacitor.Plugins.LocalNotifications; if (!LN) return 'no LocalNotifications';
     var p = await LN.getPending(), ours = (p.notifications || []).filter(function (n) { return n.id >= 8100 && n.id < 8200; });
     var all = (p.notifications || []).map(function (n) { return n.id; }).join(',');
+    // The page swallows the plugin's answer (.catch(function () {})): the same call made here shows it.
+    var direct;
+    try { direct = JSON.stringify(await LN.schedule({ notifications: [{ id: 8199, title: 'CI direct', body: 'x', schedule: { at: new Date(Date.now() + 60000), allowWhileIdle: true } }] })); }
+    catch (e) { direct = 'ERROR ' + (e && (e.message || e.code)) ; }
+    var p2 = await LN.getPending(); all += ' | direct schedule: ' + direct + ', pending after: ' + (p2.notifications || []).map(function (n) { return n.id; }).join(',');
     return hm + ' ' + ours.length + ' pending' + (ours[0] ? ': ' + ours[0].title : '') + ' | all pending ids: ' + (all || 'none') +
       ' | refreshSubscriptionsUI ' + typeof window.refreshSubscriptionsUI + ', dgNativeLN ' + typeof window.dgNativeLN + ', subs ' + window.subGetAll().length +
       ', next ' + JSON.stringify(window.subProgress(window.subGetAll()[0], at.getTime()));

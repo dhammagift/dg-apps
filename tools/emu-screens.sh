@@ -428,7 +428,7 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
   made=$(node "$REPO/tools/emu-eval.js" "(async function () {
     if (typeof window.subUpsert !== 'function') return 'no subUpsert on the page';
     var at = new Date(Date.now() + 120000), hm = ('0' + at.getHours()).slice(-2) + ':' + ('0' + at.getMinutes()).slice(-2);
-    window.subUpsert({ type: 'random', title: 'CI daily', remind: { app: { when: 'schedule', times: [hm], days: 'every' } } });
+    window.subUpsert({ type: 'random', title: 'CI daily', suttaIds: ['sn56.11', 'mn10', 'dn22'], remind: { app: { when: 'schedule', times: [hm], days: 'every' } } });
     await new Promise(function (r) { setTimeout(r, 6000); });
     var LN = window.Capacitor && window.Capacitor.Plugins.LocalNotifications; if (!LN) return 'no LocalNotifications';
     var p = await LN.getPending(), ours = (p.notifications || []).filter(function (n) { return n.id >= 8100 && n.id < 8200; });

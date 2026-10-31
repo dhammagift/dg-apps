@@ -64,7 +64,11 @@ final class NotifyTests: XCTestCase {
         sleep(6)           // the banner goes away
         XCTAssertTrue(tapWeb("in 1 min"), "no 'in 1 min' choice")
         XCTAssertTrue(tapWeb("Test"), "no Test button (second time)")
-        sleep(2)
+        sleep(3)
+        // what the page answered under the button ("Will arrive at …" / not allowed / cannot)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.75))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.55)))
+        sleep(1)
         shot("05-set-in-1-min")
         XCUIDevice.shared.press(.home)
         let behind = banner(110)

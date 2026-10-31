@@ -26,7 +26,7 @@ xcodebuild build-for-testing -project "$HERE/NotifyTests.xcodeproj" -scheme Noti
   || { echo "notify: the test did not build"; tail -40 "$OUT/notify-test-build.log"; exit 1; }
 ( i=0; while :; do i=$((i + 1)); xcrun simctl io "$UDID" screenshot "$OUT/$(printf 'loop-%03d.png' "$i")" >/dev/null 2>&1; sleep 5; done ) &
 LOOP=$!
-xcrun simctl spawn "$UDID" log stream --level debug --predicate 'eventMessage CONTAINS "DgNotify" OR eventMessage CONTAINS "dg-uposatha"' > "$OUT/notify-log.txt" 2>&1 &
+xcrun simctl spawn "$UDID" log stream --level debug --predicate 'eventMessage CONTAINS "DgNotify" OR eventMessage CONTAINS "dg-uposatha" OR eventMessage CONTAINS "⚡️"' > "$OUT/notify-log.txt" 2>&1 &
 LOG=$!
 xcrun simctl launch "$UDID" "$BUNDLE" > /dev/null
 xcodebuild test-without-building -project "$HERE/NotifyTests.xcodeproj" -scheme NotifyTests \

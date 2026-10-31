@@ -580,7 +580,10 @@ public class DgNotifyPlugin: CAPPlugin, CAPBridgedPlugin {
                     group.leave()
                 }
             }
-            group.notify(queue: .main) { done?(toSet.count) }
+            group.notify(queue: .main) {
+                NSLog("[DgNotify] refill: %d set, %d stale taken back", toSet.count, stale.count)
+                done?(toSet.count)
+            }
         }
     }
 
@@ -615,6 +618,7 @@ public class DgNotifyPlugin: CAPPlugin, CAPBridgedPlugin {
                              "first": (item["first"] as? Bool) ?? false]
         }
         Self.save(Array(byId.values))
+        NSLog("[DgNotify] schedule: %d items asked, %d kept", (call.getArray("items", JSObject.self) ?? []).count, byId.count)
         if let renew = call.getObject("renew"), let title = renew["title"] as? String, let body = renew["body"] as? String {
             UserDefaults.standard.set(["title": title, "body": body], forKey: Self.renewKey)
         }

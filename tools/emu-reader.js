@@ -237,6 +237,50 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     await stop();
   } else check(false, 'voice: sn56.11 or its title speaker did not load');
 
+  // The voice reads down the column it was started on (dg-node 9376884 / 397345a, Cakkhu 2026-10-31): the second translation's
+  // speaker in multi mode reads that translation, an edition's speaker reads that edition's lines (BJT online in the app).
+  const stopVoice = () => ev(`(document.querySelector('.close-tts-btn') || {click: function () {}}).click()`);
+  const nowItem = () => ev(`(function () { if (typeof ttsState === 'undefined' || !ttsState.speaking) return null;
+    var it = ttsState.playlist[ttsState.currentIndex] || {}; return JSON.stringify({ lang: it.lang, text: String(it.text || '').slice(0, 200) }); })()`)
+    .then((v) => (v ? JSON.parse(v) : null));
+  if (await open('/sn56.11?lang=ru&mode=multi&langs=ru,en', '2nd') && await waitFor(`document.querySelectorAll('#sutta .title-play-btn').length > 1`, 15000)) {
+    await ev(`(function () { var b = Array.from(document.querySelectorAll('#sutta .title-play-btn')).filter(function (e) { return !e.closest('.pli-lang'); }); b[1].click(); })()`);
+    await waitFor(`typeof ttsState !== 'undefined' && ttsState.speaking`, 15000); await sleep(1500);
+    const it = await nowItem(); shot('12-voice-second-translation');
+    check(it && it.lang === 'en', `voice: the second translation's speaker (ru,en) reads ${it ? it.lang + ' "' + it.text.slice(0, 40) + '"' : 'nothing'}, want en`);
+    await stopVoice(); await sleep(1500);
+  } else check(false, 'voice: sn56.11 in multi ru,en or its translation speakers did not load');
+
+  if (await open('/sn56.11?lang=ru&editions=ms,bjt', 'pli-2nd') && await waitFor(`!!document.querySelector('.dg-ed-speaker[data-ed="bjt"] .title-play-btn')`, 20000)) {
+    await ev(`document.querySelector('.dg-ed-speaker[data-ed="bjt"] .title-play-btn').click()`);
+    await waitFor(`typeof ttsState !== 'undefined' && ttsState.speaking`, 15000); await sleep(1500);
+    const it = await nowItem();
+    const where = it ? JSON.parse(await ev(`(function (t) { var n = function (s) { return String(s).toLowerCase().replace(/[^\\p{L}]+/gu, ''); }, w = n(t);
+      var has = function (ed) { return Array.from(document.querySelectorAll('#sutta .dg-ed-line[data-ed="' + ed + '"]')).some(function (e) { return n(e.textContent).indexOf(w) !== -1; }); };
+      return JSON.stringify({ bjt: has('bjt'), ms: has('ms') }); })(${JSON.stringify(it.text)})`)) : {};
+    shot('13-voice-edition-bjt');
+    check(it && where.bjt && !where.ms, `voice: the BJT speaker reads ${it ? '"' + it.text.slice(0, 50) + '"' : 'nothing'} (in a BJT line ${where.bjt}, in an MS line ${where.ms})`);
+    await stopVoice(); await sleep(1500);
+  } else check(false, 'voice: sn56.11 with the BJT edition or its speaker did not load');
+
+  // Translations window, "↺ Default" in multi mode (owner's iPhone, build 567: it did nothing - a reload to /sn56.11 is no file in
+  // the WebView; dg-node home.js now reloads through /?_nativeRoute=). Back on the reader, without mode/langs, one translation.
+  if (await open('/sn56.11?lang=ru&mode=multi&langs=ru,en', '2nd')) {
+    await ev(`window.__beforeReset = 1; (document.querySelector('.dg-lpill-more') || {click: function () {}}).click()`);
+    const has = await waitFor(`!!document.querySelector('[data-ts-reset]')`, 8000);
+    shot('14-translations-window');
+    if (has) {
+      await ev(`document.querySelector('[data-ts-reset]').click()`); await sleep(4000);
+      await waitFor(`!window.__beforeReset && !!document.querySelector('#sutta article .quote')`, 25000);
+      const st = JSON.parse(await ev(`JSON.stringify({ reloaded: !window.__beforeReset, url: location.pathname + location.search, mode: localStorage.getItem('dgReaderMode'),
+        langs: Array.from(new Set(Array.from(document.querySelectorAll('#sutta article p .quote:not(.pli-lang)')).filter(function (e) { return e.offsetParent; })
+          .map(function (e) { return (e.className.match(/(\\w+)-lang/) || [])[1]; }))) })`));
+      shot('15-translations-default');
+      check(st.reloaded && /^\/sn56\.11/.test(st.url) && !/[?&](mode|langs)=/.test(st.url) && st.langs.length === 1,
+        `translations window, Default: reloaded ${st.reloaded}, at ${st.url}, mode ${st.mode}, translations shown ${st.langs.join(',')}`);
+    } else check(false, 'translations window: no "↺ Default" button after the ⋯ pill');
+  } else check(false, 'translations window: sn56.11 in multi ru,en did not load');
+
   ws.close();
   finished = true;
   console.log(failed ? 'RESULT FAIL' : 'RESULT PASS');

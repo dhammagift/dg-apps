@@ -1197,7 +1197,7 @@ jobs:
     # suite ran on every dg-ios build, and a flaky launcher check failed the whole run AFTER the
     # IPA had already been uploaded to TestFlight (owner, 2026-10-01).
     if: needs.plan.outputs.dg_android_tests == 'true'
-    timeout-minutes: 45   # the offline-library download scenario adds up to ~12 min
+    timeout-minutes: 60   # the offline-library download (~12 min) and the daily-text reminder (~12 min) scenarios
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1251,12 +1251,16 @@ jobs:
             # download to the end, the library installed, then search and a text with the network off.
             adb shell pm clear gift.dhamma.mobile > /dev/null
             bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-download gift.dhamma.mobile download || touch emu-failed
+            # "A text a day" reminders must reach the shade (2026-10-31: none was ever set on Android 12+, dg-node 5ad8fc2)
+            adb shell pm clear gift.dhamma.mobile > /dev/null
+            bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-subs gift.dhamma.mobile subs || touch emu-failed
             test ! -f emu-failed
       - name: Verdict, notification player
         if: always()
         run: |
           for e in audio native; do { echo "### Notification player, $e voices"; echo '```'; cat shots-tray-$e/tray-result.txt 2>/dev/null | grep -E "^(PASS|FAIL)" || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"; done
           { echo "### Offline library (download, background, offline search)"; echo '```'; cat shots-download/download-result.txt 2>/dev/null || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "### Daily-text reminders"; echo '```'; cat shots-subs/subs-result.txt 2>/dev/null || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -1265,6 +1269,7 @@ jobs:
             shots-tray-audio
             shots-tray-native
             shots-download
+            shots-subs
           retention-days: 14
 
       - name: Verdict

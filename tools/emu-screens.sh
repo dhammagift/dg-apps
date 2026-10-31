@@ -436,7 +436,9 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
     var all = (p.notifications || []).map(function (n) { return n.id; }).join(',');
     // The page swallows the plugin's answer (.catch(function () {})): the same call made here shows it.
     var direct;
-    try { direct = JSON.stringify(await LN.schedule({ notifications: [{ id: 8199, title: 'CI direct', body: 'x', schedule: { at: new Date(Date.now() + 60000), allowWhileIdle: true } }] })); }
+    // inexact, as the page asks since dg-node 5ad8fc2: an exact request without the permission never answers (hence the race)
+    try { direct = JSON.stringify(await Promise.race([LN.schedule({ notifications: [{ isExactNotification: false, id: 8199, title: 'CI direct * inexact', body: 'x', schedule: { at: new Date(Date.now() + 60000), allowWhileIdle: true } }] }),
+      new Promise(function (r) { setTimeout(function () { r('no answer in 15 s'); }, 15000); })])); }
     catch (e) { direct = 'ERROR ' + (e && (e.message || e.code)) ; }
     var p2 = await LN.getPending(); all += ' | direct schedule: ' + direct + ', pending after: ' + (p2.notifications || []).map(function (n) { return n.id; }).join(',');
     return hm + ' ' + ours.length + ' pending' + (ours[0] ? ': ' + ours[0].title : '') + ' | all pending ids: ' + (all || 'none') +

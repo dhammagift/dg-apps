@@ -680,7 +680,12 @@ const SITE_PREFIXES = (() => {
     return [...new Set(routes.concat(mounts, ['__']))].filter(n => !n.startsWith('.') && !APP_ROUTES.includes(n)).sort();
 })();
 function copyNative(name, to) {
+    // A test build (talking to test.dhamma.gift) takes the library in packs from that site: the owner tries the partial
+    // databases there first (2026-10-31). Store builds talk to dhamma.gift only (build-app.yml refuses anything else), so
+    // the packs cannot reach a store before he says so.
+    const packsBase = ONLINE_ORIGIN && ONLINE_ORIGIN !== 'https://dhamma.gift' ? ONLINE_ORIGIN + '/mobile-data' : '';
     const head = (ONLINE_ORIGIN ? `window.DG_ONLINE_ORIGIN = ${JSON.stringify(ONLINE_ORIGIN)};\n` : '') +
+        (packsBase ? `window.DG_PACKS_BASE = ${JSON.stringify(packsBase)};\n` : '') +
         `window.DG_SITE_ONLY_PATHS = ${JSON.stringify(SITE_ONLY_PATHS)};\n` +
         `window.DG_SITE_PREFIXES = ${JSON.stringify(SITE_PREFIXES)};\n` +
         `window.DG_BUNDLED_PAGES = ${JSON.stringify(bundledPages())};\n`;

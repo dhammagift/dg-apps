@@ -9,6 +9,7 @@ import json, os, re, sys, time, urllib.request, urllib.error
 from datetime import datetime, timezone
 
 GH = "https://api.github.com"
+ALERTS = []   # what needs a person now (ios_alerts); the hub sends them to Telegram once a day
 GH_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129 Safari/537.36"
 errors = []
@@ -132,12 +133,16 @@ def asc_app(asc, bundle):
         state = next((k for k, sts in ASC_STATES.items() if st in sts), "")
         if state:
             res["review"], res["state"] = ver, state
-    b = asc(f"/v1/builds?filter[app]={app_id}&sort=-uploadedDate&limit=1&include=preReleaseVersion")
+    b = asc(f"/v1/builds?filter[app]={app_id}&sort=-uploadedDate&limit=1&include=preReleaseVersion,buildBetaDetail")
     if b["data"]:
         res["tf_build"] = b["data"][0]["attributes"]["version"]
         res["tf_state"] = b["data"][0]["attributes"].get("processingState", "")
+        res["tf_uploaded"] = b["data"][0]["attributes"].get("uploadedDate", "")
+        res["tf_expires"] = b["data"][0]["attributes"].get("expirationDate", "")
         pre = next((i for i in b.get("included", []) if i["type"] == "preReleaseVersions"), None)
         res["tf_version"] = pre["attributes"]["version"] if pre else ""
+        beta = next((i for i in b.get("included", []) if i["type"] == "buildBetaDetails"), None)
+        res["tf_external"] = beta["attributes"].get("externalBuildState", "") if beta else ""
     for g in asc(f"/v1/betaGroups?filter[app]={app_id}&limit=20")["data"]:
         if g["attributes"].get("publicLinkEnabled") and g["attributes"].get("publicLink"):
             res["public_link"] = g["attributes"]["publicLink"]
@@ -266,7 +271,33 @@ def main():
             "store_url": store_url, "console_url": f"{ASC_URL}/{a['id']}" if a.get("id") else ASC_URL,
             "repo_url": f"https://github.com/{REPO}", "apk_url": "", "testflight_url": a.get("public_link", "")},
             waiting=f"Версия {a['review']} на проверке Apple." if a.get("state") == "review" else "")
+        ios_alerts(product, a)
         return apple_state(r, a)
+
+    def ios_alerts(product, a):
+        """What needs a person, said once a day by the hub (owner 2026-10-30: DG 566 sat a day unsent to beta review,
+        and nobody noticed; the hub relays these)."""
+        tf, ext = a.get("tf_build", ""), a.get("tf_external", "")
+        def hours_since(iso):
+            try: return (datetime.now(timezone.utc) - datetime.fromisoformat(iso.replace("Z", "+00:00"))).total_seconds() / 3600
+            except Exception: return 0
+        up = hours_since(a.get("tf_uploaded", ""))
+        if tf and ext == "READY_FOR_BETA_SUBMISSION" and up > 3:
+            ALERTS.append({"key": product + "-ios-beta", "ru": f"{product} iOS: сборка {tf} в TestFlight не отправлена на бета-проверку — внешние тестеры её не получат.",
+                           "en": f"{product} iOS: build {tf} is in TestFlight but not sent to beta review; external testers won't get it."})
+        if tf and ext == "WAITING_FOR_BETA_REVIEW" and up > 36:
+            ALERTS.append({"key": product + "-ios-beta-wait", "ru": f"{product} iOS: сборка {tf} ждёт бета-проверку Apple больше полутора суток.",
+                           "en": f"{product} iOS: build {tf} has waited for Apple's beta review for over 36 hours."})
+        if tf and ext == "BETA_REJECTED":
+            ALERTS.append({"key": product + "-ios-beta-rejected", "ru": f"{product} iOS: Apple отклонил сборку {tf} на бета-проверке.",
+                           "en": f"{product} iOS: Apple rejected build {tf} in beta review."})
+        left = -hours_since(a.get("tf_expires", "")) / 24
+        if tf and a.get("tf_expires") and 0 < left < 14:
+            ALERTS.append({"key": product + "-ios-expiry", "ru": f"{product} iOS: сборка {tf} в TestFlight истекает через {int(left)} дн. — нужна новая.",
+                           "en": f"{product} iOS: TestFlight build {tf} expires in {int(left)} days; a new one is needed."})
+        if a.get("state") == "rejected":
+            ALERTS.append({"key": product + "-ios-rejected", "ru": f"{product} iOS: отказ Apple по версии {a.get('review')}, причина в App Store Connect.",
+                           "en": f"{product} iOS: Apple rejected version {a.get('review')}; the reason is in App Store Connect."})
 
     rows.append(ios_row("dg-ios", "Dhamma.Gift", "gift.dhamma.mobile", "dg-app-full-ipa", "https://apps.apple.com/app/id6813706217"))
     rows.append(ios_row("dict-ios", "Словарь", "gift.dhamma.pali", "", ""))
@@ -378,7 +409,7 @@ def main():
         for rx, rp in EN:
             a = re.sub(rx, rp, a)
         r["action_en"] = a.strip()
-    out = {"generated_at": now, "run_url": os.environ.get("RUN_URL", ""), "rows": rows, "errors": errors}
+    out = {"generated_at": now, "run_url": os.environ.get("RUN_URL", ""), "rows": rows, "errors": errors, "alerts": ALERTS}
     json.dump(out, open(sys.argv[1] if len(sys.argv) > 1 else "status.json", "w"), ensure_ascii=False, indent=1)
     print(json.dumps({"rows": len(rows), "errors": errors}, ensure_ascii=False, indent=1))
 

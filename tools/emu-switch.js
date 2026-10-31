@@ -48,7 +48,7 @@ async function target() {
   for (const scenario of ['playing', 'paused']) {
     say('=== ' + scenario + ': sn12.2 -> dn22 in the search box');
     await ev(`location.assign('/sn12.2')`); await sleep(10000);
-    say('start: ' + await ev(`(function(){ var l = document.querySelector('.voice-link'); if (!l) return 'no .voice-link'; l.click(); return 'clicked'; })()`));
+    say('start: ' + await ev(`(function(){ var l = document.querySelector('.voice-link') || document.querySelector('.voice-start-btn'); if (!l) return 'no .voice-link / .voice-start-btn'; l.click(); return 'clicked'; })()`));
     let s;
     for (let i = 0; i < 30; i++) { await sleep(2000); s = await state(); if (s.googleAudio && s.googleAudio.startsWith('playing@') && s.mediaSession === 'playing') break; }
     say('reading sn12.2: ' + JSON.stringify(s));

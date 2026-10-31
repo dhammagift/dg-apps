@@ -215,7 +215,7 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     check(spoke, `voice: the title's Pali speaker starts (${spoke ? await mode() : 'not speaking'})`);
     check((await ev(`localStorage.getItem('tts_preferred_mode')`)) !== 'pi', `voice: the speaker did not save Pali as the mode (tts_preferred_mode=${await ev(`localStorage.getItem('tts_preferred_mode')`)})`);
     await stop(); await sleep(1500);
-    await ev(`document.querySelector('.voice-link').click()`); await sleep(2500);
+    await ev(`(document.querySelector('.voice-link') || document.querySelector('.voice-start-btn')).click()`); await sleep(2500);
     const v = await mode(); shot('10-voice-link');
     check(v === 'trn', `voice: Voice after the speaker plays ${v}, want trn`);
     await stop(); await sleep(1500);

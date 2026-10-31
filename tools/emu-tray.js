@@ -50,7 +50,7 @@ async function target() {
     say('engine: native (OS voices): ' + await ev(`(function(){ localStorage.setItem('tts_native_trn_enabled','true'); localStorage.setItem('tts_native_pali_enabled','true'); return 'set'; })()`));
     await ev('location.reload()'); await sleep(8000);
   }
-  say('start: ' + await ev(`(function(){ var l = document.querySelector('.voice-link'); if (!l) return 'no .voice-link'; l.click(); return 'clicked'; })()`));
+  say('start: ' + await ev(`(function(){ var l = document.querySelector('.voice-link') || document.querySelector('.voice-start-btn'); if (!l) return 'no .voice-link / .voice-start-btn'; l.click(); return 'clicked'; })()`));
   let s;
   for (let i = 0; i < 30; i++) { await sleep(2000); s = await state(); const o = JSON.parse(s); if (audible(o) && o.mediaSession === 'playing') break; }
   say('reading: ' + s);

@@ -63,7 +63,7 @@ async function target() {
 
   await ev(`location.assign('/pli-tv-bu-pm')`); await sleep(12000);
   await shot('1-reader'); await verify('reader');
-  say('voice: ' + await click('.voice-link')); await sleep(5000);
+  say('voice: ' + await click(await ev(`document.querySelector('.voice-link') ? '.voice-link' : '.voice-start-btn'`))); await sleep(5000);
   // Paused, the player stays open and the page stops scrolling along (the owner's screenshot had it open).
   say('pause: ' + await click('.play-main-button')); await sleep(1500);
   await shot('2-voice-open'); await verify('voice open');

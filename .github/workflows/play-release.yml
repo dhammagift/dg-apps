@@ -90,8 +90,22 @@ jobs:
           name: ${{ inputs.aab_artifact }}
           path: aab
 
+      # Google now and then answers "This edit has expired" (run 41195548505, 2026-10-31): the upload is tried once more.
       - name: Upload to Google Play
+        id: upload
+        continue-on-error: true
         if: steps.play.outputs.have == 'yes'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ inputs.package }}
+          releaseFiles: aab/app-release.aab
+          track: alpha
+          releaseName: ${{ steps.name.outputs.name }}
+          status: completed
+
+      - name: Upload to Google Play (second try)
+        if: steps.upload.outcome == 'failure'
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}

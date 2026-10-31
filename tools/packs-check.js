@@ -3,7 +3,9 @@
 // node tools/packs-check.js [site] [packs base]   (defaults: test.dhamma.gift and its own mobile-data)
 const { chromium } = require('/usr/lib/node_modules/@playwright/cli/node_modules/playwright');
 const BASE = process.argv[2] || 'https://test.dhamma.gift';
-const PACKS = process.argv[3] || (BASE + '/mobile-data');
+// Relative by default, as the page hands it (offline-library-settings.js): a full URL here hid 'Invalid base URL' in the worker,
+// and no pack downloaded from the site's own picker (2026-10-31).
+const PACKS = process.argv[3] || '/mobile-data';
 (async () => {
   const b = await chromium.launch(); const c = await b.newContext(); const p = await c.newPage();
   p.on('console', m => { if (/dg-offline|error/i.test(m.text())) console.log('  [page]', m.text().slice(0, 200)); });
@@ -76,7 +78,7 @@ const PACKS = process.argv[3] || (BASE + '/mobile-data');
     const buf = await (await fetch(u)).arrayBuffer();
     const fh = await (await navigator.storage.getDirectory()).getFileHandle(name, { create: true });
     const wr = await fh.createWritable(); await wr.write(buf); await wr.close();
-  }, [new URL(rm.url, PACKS + '/').href, `dg-mobile.pack.${rm.id}.${rm.build_id}.gz.partial`]);
+  }, [new URL(rm.url, (/^https?:/.test(PACKS) ? PACKS : BASE + PACKS) + '/').href, `dg-mobile.pack.${rm.id}.${rm.build_id}.gz.partial`]);
   await p.evaluate(() => window.restart());
   const reopened = await call('open', { distBase: '/mobile-data', download: false, packsBase: PACKS, packsOn: true });
   expect(reopened.present === false, `interrupted unpack is not adopted: ${JSON.stringify(reopened)}`);

@@ -21,14 +21,18 @@ final class NotifyTests: XCTestCase {
         }
     }
 
-    // An element of the page by its accessible label; scrolled into reach when it is below the fold.
-    private func tapWeb(_ label: String, timeout: TimeInterval = 15) -> Bool {
-        let el = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
-        guard el.waitForExistence(timeout: timeout) else { return false }
-        for _ in 0..<6 where !el.isHittable { app.webViews.firstMatch.swipeUp(); sleep(1) }
-        guard el.isHittable else { return false }
-        el.tap()
-        return true
+    // An element of the page by its accessible label (any case: the group titles are uppercased by CSS), scrolled to by
+    // dragging the open menu upwards when it is below the fold - the menu is a scroller of its own, so not swipeUp on the page.
+    private func tapWeb(_ label: String, scrolls: Int = 12) -> Bool {
+        let el = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label ==[c] %@", label)).firstMatch
+        for i in 0...scrolls {
+            if el.exists && el.isHittable { el.tap(); return true }
+            if i == 0 { _ = el.waitForExistence(timeout: 3); continue }
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.75))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.35)))
+            sleep(1)
+        }
+        return false
     }
 
     private func banner(_ timeout: TimeInterval) -> Bool {
@@ -43,7 +47,7 @@ final class NotifyTests: XCTestCase {
         allowAlerts()
         shot("01-start")
         // In the app the menu opens from the top bar's gear (Settings); the site's burger (Menu) is hidden there.
-        XCTAssertTrue(tapWeb("Settings") || tapWeb("Menu", timeout: 3), "no Settings / Menu button on the page")
+        XCTAssertTrue(tapWeb("Settings") || tapWeb("Menu", scrolls: 0), "no Settings / Menu button on the page")
         sleep(2)
         XCTAssertTrue(tapWeb("Test reminders"), "no 'Test reminders' group in the menu")
         sleep(2)

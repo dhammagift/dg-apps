@@ -424,6 +424,7 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
   adb shell input tap 309 2184; sleep 2                       # "Not now" on the offline-library sheet
+  adb logcat -c
   pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}'); adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}" > /dev/null
   made=$(node "$REPO/tools/emu-eval.js" "(async function () {
     if (typeof window.subUpsert !== 'function') return 'no subUpsert on the page';
@@ -432,7 +433,10 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
     await new Promise(function (r) { setTimeout(r, 6000); });
     var LN = window.Capacitor && window.Capacitor.Plugins.LocalNotifications; if (!LN) return 'no LocalNotifications';
     var p = await LN.getPending(), ours = (p.notifications || []).filter(function (n) { return n.id >= 8100 && n.id < 8200; });
-    return hm + ' ' + ours.length + ' pending' + (ours[0] ? ': ' + ours[0].title : '');
+    var all = (p.notifications || []).map(function (n) { return n.id; }).join(',');
+    return hm + ' ' + ours.length + ' pending' + (ours[0] ? ': ' + ours[0].title : '') + ' | all pending ids: ' + (all || 'none') +
+      ' | refreshSubscriptionsUI ' + typeof window.refreshSubscriptionsUI + ', dgNativeLN ' + typeof window.dgNativeLN + ', subs ' + window.subGetAll().length +
+      ', next ' + JSON.stringify(window.subProgress(window.subGetAll()[0], at.getTime()));
   })()")
   echo "made: $made" >> "$res"
   case "$made" in *" pending"*) n=$(echo "$made" | awk '{print $2}');; *) n=0;; esac
@@ -445,6 +449,7 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
   done
   adb shell dumpsys notification --noredact > "$OUT/dumpsys-notification.txt"
   adb shell cmd statusbar expand-notifications; sleep 2; adb exec-out screencap -p > "$OUT/subs-shade.png"; adb shell cmd statusbar collapse
+  adb logcat -d -s Capacitor/Console:* Capacitor:* Capacitor/Plugin:* > "$OUT/logcat.txt" 2>/dev/null || true
   [ "$got" = 1 ] && ok "the daily-text reminder arrived with the app in the background" || ko "no daily-text reminder in the shade within 5 minutes (dumpsys-notification.txt)"
   cat "$res"; exit $fail
 fi

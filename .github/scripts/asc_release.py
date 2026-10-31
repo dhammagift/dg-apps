@@ -59,6 +59,12 @@ def submissions(aid):
 
 def status(bundle):
     aid = app_id(bundle)
+    # Read only: every version on sale and nothing in preparation is a state, not a failure (it used to exit 1 and mail
+    # the owner a "run failed", owner 2026-10-31).
+    if all(x["attributes"]["appStoreState"] == "READY_FOR_SALE"
+           for x in call("GET", f"/v1/apps/{aid}/appStoreVersions?filter[platform]={PLATFORM}&limit=10")["data"]):
+        print(f"every {PLATFORM} version is on sale; none is being prepared or reviewed")
+        return
     v = editable_version(aid)
     a = v["attributes"]
     print(f"version {a['versionString']} ({v['id']}): appStoreState={a['appStoreState']} appVersionState={a.get('appVersionState')}")

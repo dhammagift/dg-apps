@@ -384,6 +384,16 @@
             openExternal((window.DG_ONLINE_ORIGIN || 'https://dhamma.gift') + route);
             return;
         }
+        // A page under /assets (the line-by-line editor, the trainers, a materials page) is a file, not an SPA route: the bundled
+        // ones open as themselves, the rest on the site. Put on the search page's address instead, its query was read as a
+        // text id - the editor's link (…/assets/lbl.html?…mn10) opened mn10 in the reader (owner, 2026-10-31).
+        var asset = /^\/(?:ru\/)?(assets\/[^?#]*)/.exec(route);
+        if (asset) {
+            var file = '/' + asset[1] + (/\/$/.test(asset[1]) ? 'index.html' : '');
+            if ((window.DG_BUNDLED_PAGES || []).indexOf(file) !== -1) location.replace(file + route.slice(asset[0].length));
+            else openExternal((window.DG_ONLINE_ORIGIN || 'https://dhamma.gift') + route);
+            return;
+        }
         // The memorisation app IS bundled now (build-assets.js copies siteroot/memo), and it is a
         // real file: Capacitor cannot resolve the /memo/ directory, so the shortcut points at it.
         // Pages of their own (not SPA routes) are loaded as files. replaceState only renamed the address

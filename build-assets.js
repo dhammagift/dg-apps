@@ -682,10 +682,28 @@ const SITE_PREFIXES = (() => {
 function copyNative(name, to) {
     const head = (ONLINE_ORIGIN ? `window.DG_ONLINE_ORIGIN = ${JSON.stringify(ONLINE_ORIGIN)};\n` : '') +
         `window.DG_SITE_ONLY_PATHS = ${JSON.stringify(SITE_ONLY_PATHS)};\n` +
-        `window.DG_SITE_PREFIXES = ${JSON.stringify(SITE_PREFIXES)};\n`;
+        `window.DG_SITE_PREFIXES = ${JSON.stringify(SITE_PREFIXES)};\n` +
+        `window.DG_BUNDLED_PAGES = ${JSON.stringify(bundledPages())};\n`;
     const body = fs.readFileSync(path.join(SRC, name), 'utf8')
         .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(SRC, 'site-updater.js'), 'utf8'));
     fs.writeFileSync(to, head + `window.__DG_APP_VERSION__ = ${JSON.stringify(appStamp())};\n` + body);
+}
+
+// The pages under /assets this bundle carries ("/assets/lbl.html", "/assets/diff/index.html", …). A dhamma.gift/assets/… link
+// opens one of them as the page it is; any other /assets page goes to the browser. Before this, such a link was put on the
+// search page's address and the page read the text id in its query: the editor's link opened the sutta in the reader
+// (owner, 2026-10-31).
+function bundledPages() {
+    const out = [], root = path.join(WWW, 'assets');
+    const walk = (dir) => {
+        for (const e of fs.existsSync(dir) ? fs.readdirSync(dir, { withFileTypes: true }) : []) {
+            const full = path.join(dir, e.name);
+            if (e.isDirectory()) walk(full);
+            else if (/\.html?$/.test(e.name)) out.push('/' + path.relative(WWW, full).split(path.sep).join('/'));
+        }
+    };
+    walk(root);
+    return out.sort();
 }
 
 // What identifies THIS build to the page: files an older build downloaded must not shadow this build's own (site-updater.js,

@@ -161,6 +161,16 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     if (top() !== 'gift.dhamma.mobile') { execSync('adb shell monkey -p gift.dhamma.mobile -c android.intent.category.LAUNCHER 1 > /dev/null'); await sleep(4000); }
   }
 
+  // A link to a page under /assets opens that page, not the reader (owner 2026-10-31: the editor's link opened the sutta).
+  {
+    execSync('adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/assets/lbl.html?s=mn10" gift.dhamma.mobile > /dev/null');
+    await sleep(6000);
+    const where = top() === 'gift.dhamma.mobile' ? await ev(`location.pathname + location.search`) : 'on top: ' + top();
+    shot('applink-assets-lbl');
+    check(/^\/assets\/lbl\.html/.test(where), `App Link dhamma.gift/assets/lbl.html?s=mn10: the app shows ${where}`);
+    await ev(`location.assign('/')`); await sleep(4000);
+  }
+
   // Memo -> download the audio (dg-apps#58): an Android WebView ignores <a download> of a blob, so the bridge writes the mp3 to the
   // cache and opens the share sheet (shareMemoMp3). The sheet on top within a minute is a PASS; Back closes it.
   await ev(`location.assign('/memo/index.html?text=' + encodeURIComponent('atthi imasmiṁ kāye kesā lomā'))`); await sleep(5000);

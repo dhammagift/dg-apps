@@ -430,7 +430,7 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
     if (typeof window.subUpsert !== 'function') return 'no subUpsert on the page';
     var at = new Date(Date.now() + 120000), hm = ('0' + at.getHours()).slice(-2) + ':' + ('0' + at.getMinutes()).slice(-2);
     window.subUpsert({ type: 'random', title: 'CI daily', suttaIds: ['sn56.11', 'mn10', 'dn22'], remind: { app: { when: 'schedule', times: [hm], days: 'every' } } });
-    await new Promise(function (r) { setTimeout(r, 6000); });
+    await new Promise(function (r) { setTimeout(r, 20000); });   // the page names the texts (/api/text) before it schedules
     var LN = window.Capacitor && window.Capacitor.Plugins.LocalNotifications; if (!LN) return 'no LocalNotifications';
     var p = await LN.getPending(), ours = (p.notifications || []).filter(function (n) { return n.id >= 8100 && n.id < 8200; });
     var all = (p.notifications || []).map(function (n) { return n.id; }).join(',');
@@ -443,14 +443,15 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
   [ "${n:-0}" -gt 0 ] && ok "the reminder is scheduled ($made)" || ko "nothing scheduled: $made"
   adb shell input keyevent KEYCODE_HOME
   got=0
-  for i in $(seq 1 30); do   # up to 5 minutes: Android may deliver an inexact alarm a little late
+  adb shell dumpsys alarm | grep -B2 -A6 "$PKG" > "$OUT/dumpsys-alarm.txt"
+  for i in $(seq 1 60); do   # up to 10 minutes: an inexact alarm (no exact-alarm permission) may come late
     sleep 10
     if adb shell dumpsys notification --noredact | grep -q "pkg=$PKG.*" && adb shell dumpsys notification --noredact | grep -qE "android.title=String \(.*\* "; then got=1; break; fi
   done
   adb shell dumpsys notification --noredact > "$OUT/dumpsys-notification.txt"
   adb shell cmd statusbar expand-notifications; sleep 2; adb exec-out screencap -p > "$OUT/subs-shade.png"; adb shell cmd statusbar collapse
   adb logcat -d -s Capacitor/Console:* Capacitor:* Capacitor/Plugin:* > "$OUT/logcat.txt" 2>/dev/null || true
-  [ "$got" = 1 ] && ok "the daily-text reminder arrived with the app in the background" || ko "no daily-text reminder in the shade within 5 minutes (dumpsys-notification.txt)"
+  [ "$got" = 1 ] && ok "the daily-text reminder arrived with the app in the background (after about $((i*10)) s)" || ko "no daily-text reminder in the shade within 10 minutes (dumpsys-notification.txt, dumpsys-alarm.txt)"
   cat "$res"; exit $fail
 fi
 if [ "${4:-}" = reader ] && [ "$PKG" = gift.dhamma.mobile ]; then

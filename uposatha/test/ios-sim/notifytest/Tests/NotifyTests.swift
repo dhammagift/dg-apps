@@ -65,6 +65,9 @@ final class NotifyTests: XCTestCase {
         XCTAssertTrue(tapWeb("in 1 min"), "no 'in 1 min' choice")
         XCTAssertTrue(tapWeb("Test"), "no Test button (second time)")
         sleep(3)
+        // The page answers under the button ("It will come at …"); a tap that did not land (run 15) is tried once more.
+        let answer = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", "will come")).firstMatch
+        if !answer.waitForExistence(timeout: 5) { _ = tapWeb("Test", scrolls: 2); sleep(3) }
         // what the page answered under the button ("Will arrive at …" / not allowed / cannot)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.75))
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.55)))

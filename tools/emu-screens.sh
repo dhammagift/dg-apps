@@ -415,6 +415,39 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
   grep -qi "FATAL" "$OUT/download-logcat.txt" && ko "a crash is in the log" || ok "no crash in the log"
   cat "$res"; exit $fail
 fi
+# "A text a day" with a reminder on a schedule (owner 2026-10-30: check what the reader gets, not the page): a random-text
+# subscription reminding in about two minutes is made through the page's own subUpsert, the app is sent Home, and the
+# notification (the page schedules it with LocalNotifications, ids 8100+) must be in the shade. Debug APK (DevTools).
+if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
+  res="$OUT/subs-result.txt"; : > "$res"; fail=0
+  ok() { echo "PASS $*" >> "$res"; }; ko() { echo "FAIL $*" >> "$res"; fail=1; }
+  adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
+  adb shell input tap 309 2184; sleep 2                       # "Not now" on the offline-library sheet
+  pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}'); adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}" > /dev/null
+  made=$(node "$REPO/tools/emu-eval.js" "(async function () {
+    if (typeof window.subUpsert !== 'function') return 'no subUpsert on the page';
+    var at = new Date(Date.now() + 120000), hm = ('0' + at.getHours()).slice(-2) + ':' + ('0' + at.getMinutes()).slice(-2);
+    window.subUpsert({ type: 'random', title: 'CI daily', remind: { app: { when: 'schedule', times: [hm], days: 'every' } } });
+    await new Promise(function (r) { setTimeout(r, 6000); });
+    var LN = window.Capacitor && window.Capacitor.Plugins.LocalNotifications; if (!LN) return 'no LocalNotifications';
+    var p = await LN.getPending(), ours = (p.notifications || []).filter(function (n) { return n.id >= 8100 && n.id < 8200; });
+    return hm + ' ' + ours.length + ' pending' + (ours[0] ? ': ' + ours[0].title : '');
+  })()")
+  echo "made: $made" >> "$res"
+  case "$made" in *" pending"*) n=$(echo "$made" | awk '{print $2}');; *) n=0;; esac
+  [ "${n:-0}" -gt 0 ] && ok "the reminder is scheduled ($made)" || ko "nothing scheduled: $made"
+  adb shell input keyevent KEYCODE_HOME
+  got=0
+  for i in $(seq 1 30); do   # up to 5 minutes: Android may deliver an inexact alarm a little late
+    sleep 10
+    if adb shell dumpsys notification --noredact | grep -q "pkg=$PKG.*" && adb shell dumpsys notification --noredact | grep -qE "android.title=String \(.*\* "; then got=1; break; fi
+  done
+  adb shell dumpsys notification --noredact > "$OUT/dumpsys-notification.txt"
+  adb shell cmd statusbar expand-notifications; sleep 2; adb exec-out screencap -p > "$OUT/subs-shade.png"; adb shell cmd statusbar collapse
+  [ "$got" = 1 ] && ok "the daily-text reminder arrived with the app in the background" || ko "no daily-text reminder in the shade within 5 minutes (dumpsys-notification.txt)"
+  cat "$res"; exit $fail
+fi
 if [ "${4:-}" = reader ] && [ "$PKG" = gift.dhamma.mobile ]; then
   # The reader fixes of dg-node 8309381 in the app's WebView (tools/emu-reader.js, debug APK, DevTools; a test-origin build).
   adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1

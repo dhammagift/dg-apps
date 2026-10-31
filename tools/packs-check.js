@@ -47,9 +47,22 @@ const PACKS = process.argv[3] || (BASE + '/mobile-data');
   console.log('dn22 languages after removing tr-small:', JSON.stringify(dn.availableLangs), dn.availableLangs.includes('sr') ? 'BAD: sr still there' : 'ok');
   if (dn.availableLangs.includes('sr')) bad++;
   const expect = (ok, what) => { if (!ok) bad++; console.log(`${ok ? 'ok  ' : 'BAD '} ${what}`); };
+  // The other Pali editions offline (owner 2026-11-01): the ed-bjt pack added, then sn56.11 with &editions=bjt from the
+  // worker must carry the same Buddha Jayanti lines as the site's /api/text, and say the device holds bjt.
+  const man0 = await p.evaluate(async (u) => (await fetch(u + '/packs-manifest.json', { cache: 'no-store' })).json(), PACKS);
+  if (man0.packs.some(x => x.id === 'ed-bjt')) {
+    await call('update', { distBase: '/mobile-data', packs: ['tr-ru', 'ed-bjt'], packsBase: PACKS });
+    const off = await call('text', { suttaId: 'sn56.11', langs: 'ru', editions: 'bjt' });
+    const on = await p.evaluate(async () => (await fetch('/api/text/sn56.11?langs=ru&editions=bjt')).json());
+    const lines = (r) => (r.segments || []).filter(sg => sg.editions && sg.editions.bjt).map(sg => sg.segment + ' ' + sg.editions.bjt).join('\n');
+    const a = lines(off), b = lines(on);
+    expect(a && a === b, `editions offline: sn56.11 BJT ${a.split('\n').length} lines, ${a === b ? 'the same as the site' : 'DIFFERENT from the site (' + b.split('\n').length + ' lines there)'}`);
+    expect(JSON.stringify(off.downloadedEditions || []).includes('bjt'), `downloadedEditions: ${JSON.stringify(off.downloadedEditions)}`);
+  } else console.log('(no ed-bjt pack in the manifest: editions not checked)');
   // Default packs, no selection saved (Cakkhu's review 1): check and update must stay on packs, never the whole dg.db.gz.
   const keepSel = await call('update', { distBase: '/mobile-data', packsBase: PACKS });
-  expect(JSON.stringify(keepSel.packs) === '["root-ms","tr-ru"]', `update with no selection keeps the packs on disk: ${JSON.stringify(keepSel.packs)}`);
+  const onDisk = man0.packs.some(x => x.id === 'ed-bjt') ? '["root-ms","tr-ru","ed-bjt"]' : '["root-ms","tr-ru"]';   // the editions case added ed-bjt
+  expect(JSON.stringify(keepSel.packs) === onDisk, `update with no selection keeps the packs on disk: ${JSON.stringify(keepSel.packs)}`);
   await call('update', { distBase: '/mobile-data', packs: [], packsBase: PACKS });
   const chk = await call('check', { distBase: '/mobile-data', packsBase: PACKS });
   expect(chk.current === true, `check with no selection: ${JSON.stringify(chk)}`);

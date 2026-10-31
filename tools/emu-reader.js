@@ -149,6 +149,18 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     if (top() !== 'gift.dhamma.mobile') { execSync('adb shell monkey -p gift.dhamma.mobile -c android.intent.category.LAUNCHER 1 > /dev/null'); await sleep(4000); }
   }
 
+  // Firebase's sign-in handler (/__/auth/handler) from outside must not open the app's search (f3-sadda2 2026-10-31): Chrome on top.
+  {
+    execSync('adb shell am start -W -a android.intent.action.VIEW -d "https://dhamma.gift/__/auth/handler" gift.dhamma.mobile > /dev/null');
+    let away = null;
+    for (let k = 0; k < 20 && !away; k++) { await sleep(1000); const t = top(); if (t && t !== 'gift.dhamma.mobile') away = t; }
+    const page = away ? '' : await ev(`location.pathname + location.search`);
+    shot('applink-auth-handler');
+    check(!!away, `App Link dhamma.gift/__/auth/handler: on top ${away || 'the app, at ' + page}`);
+    for (let k = 0; k < 3 && top() !== 'gift.dhamma.mobile'; k++) { execSync('adb shell input keyevent 4'); await sleep(2500); }
+    if (top() !== 'gift.dhamma.mobile') { execSync('adb shell monkey -p gift.dhamma.mobile -c android.intent.category.LAUNCHER 1 > /dev/null'); await sleep(4000); }
+  }
+
   // Memo -> download the audio (dg-apps#58): an Android WebView ignores <a download> of a blob, so the bridge writes the mp3 to the
   // cache and opens the share sheet (shareMemoMp3). The sheet on top within a minute is a PASS; Back closes it.
   await ev(`location.assign('/memo/index.html?text=' + encodeURIComponent('atthi imasmiṁ kāye kesā lomā'))`); await sleep(5000);

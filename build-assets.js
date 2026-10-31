@@ -674,7 +674,10 @@ const SITE_PREFIXES = (() => {
     const src = fs.readFileSync(f('dg-fastify.js'), 'utf8');
     const routes = [...src.matchAll(/(?:app\.(?:get|all|route)\(\s*|prefix:\s*)'\/([\w.-]+)/g)].map(m => m[1]);
     const mounts = fs.existsSync(f('siteroot')) ? fs.readdirSync(f('siteroot')) : [];
-    return [...new Set(routes.concat(mounts))].filter(n => !n.startsWith('.') && !APP_ROUTES.includes(n)).sort();
+    // '__': Firebase's own pages (/__/auth/handler, /__/firebase/init.json). The site's Google sign-in opened /__/auth/handler and
+    // the installed app took it as an App Link and searched for "handler" (owner hit it on prod, f3-sadda2 2026-10-31); an auth or
+    // redirect page must stay in the browser.
+    return [...new Set(routes.concat(mounts, ['__']))].filter(n => !n.startsWith('.') && !APP_ROUTES.includes(n)).sort();
 })();
 function copyNative(name, to) {
     const head = (ONLINE_ORIGIN ? `window.DG_ONLINE_ORIGIN = ${JSON.stringify(ONLINE_ORIGIN)};\n` : '') +

@@ -1851,12 +1851,59 @@ jobs:
       apk_artifact: dg-uposatha-apk-release-${{ needs.plan.outputs.uposatha_number }}
       package: gift.dhamma.uposatha
 
+  # Uposatha's reminders on an emulator, on every build that checks the Android app (owner 2026-10-30: «что это за проверки, если
+  # не проверять приложения»): tools/emu-screens.sh alarms - a fresh install asks no permission while the reminders are off; the
+  # settings a backup brings back set the reminders (alarms counted, no crash, under Android's 500); the test reminder "now"
+  # reaches the notification shade; a change of the sound source keeps them; turned off, they are taken back. Debug APK (DevTools).
+  uposatha-reminders:
+    name: Uposatha reminders (emulator)
+    needs: [plan, uposatha-build]
+    if: needs.plan.outputs.upo_launch == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: dg-uposatha-apk-${{ github.run_number }}
+          path: apk
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Emulator (reminders)
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots-reminders gift.dhamma.uposatha alarms
+      - name: Verdict
+        if: always()
+        run: |
+          { echo "### Uposatha reminders (emulator)"; echo '```'; cat shots-reminders/alarms-result.txt 2>/dev/null || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: uposatha-reminders-${{ github.run_number }}
+          path: shots-reminders
+          retention-days: 14
+
   # The Uposatha app's Play release: the signed AAB uposatha-build made, uploaded to the closed testing (alpha) track of
   # gift.dhamma.uposatha. On release = uposatha, or an upo-v* tag (which also sends it to TestFlight); never with another app.
   # Waits for the bundle's browser checks (uposatha-build) and the launch check on an emulator.
   uposatha-release:
     name: Uposatha app release (Play closed testing, alpha)
-    needs: [plan, unit, uposatha-build, uposatha-launch]
+    needs: [plan, unit, uposatha-build, uposatha-launch, uposatha-reminders]
     if: needs.plan.outputs.upo_play == 'true'
     uses: ./.github/workflows/play-release.yml
     with:

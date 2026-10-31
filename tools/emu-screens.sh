@@ -103,6 +103,10 @@ if [ "$PKG" = gift.dhamma.uposatha ] && [ "${4:-}" = alarms ]; then
     s.value = '$1'; s.dispatchEvent(new Event('change', { bubbles: true })); await new Promise(function (r) { setTimeout(r, 8000); }); return 'source ' + s.value; })()" | tee -a "$res"; }
   node "$REPO/tools/emu-eval.js" "(async function () { var k = document.getElementById('tst-kind'), b = document.getElementById('tst-go'); if (!k || !b) return 'no test reminder button';
     k.value = 'upo'; b.click(); await new Promise(function (r) { setTimeout(r, 5000); }); return 'test reminder: ' + document.getElementById('tst-msg').textContent; })()" | tee -a "$res"
+  # The test reminder "now" has to be in the shade, not only answered by the page (owner 2026-10-30: check what the reader gets).
+  sleep 3; adb shell dumpsys notification --noredact > "$OUT/dumpsys-notification.txt"
+  if grep -q "Uposatha (test)" "$OUT/dumpsys-notification.txt"; then ok "the test reminder 'now' is in the notification shade"; else ko "the test reminder 'now': no notification in the shade (dumpsys-notification.txt)"; fi
+  adb shell cmd statusbar expand-notifications; sleep 2; adb exec-out screencap -p > "$OUT/alarms-3a-test-in-shade.png"; adb shell cmd statusbar collapse
   # The change takes back every alarm and sets them again, one by one: counted once the number has settled (run of 1.0.1: 13
   # at 8 s, 177 later), up to a minute. The old fault left none for good.
   settle() { local n=-1 m; for i in $(seq 12); do m=$(count); [ "$m" = "$n" ] && [ "$m" -gt 0 ] && break; n=$m; sleep 5; done; echo "$m"; }

@@ -114,6 +114,22 @@ async function open(ctx, path, mode) {
     await ctx.close();
   }
 
+  // a reader page with no text yet shows no footer (the copyright stood alone under the header in the app, whose page has no
+  // server text - owner 2026-11-01); the app's case: the server text stripped, the text request slow
+  for (const u of ['/mn152?lang=en', '/sn56.11?lang=en&editions=ms,bjt']) {
+    const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await ctx.newPage();
+    await p.route((url) => url.pathname === u.split('?')[0], async (r) => { const res = await r.fetch(); const t = (await res.text())
+      .replace(/<div id="sutta"([^>]*)>[\s\S]*?<\/div>\s*<div id="dg-rsub-line"/, '<div id="sutta" class="sutta"></div>\n<div id="dg-rsub-line"'); r.fulfill({ response: res, body: t }); });
+    await p.route(/\/api\/(text|editions)/, (r) => setTimeout(() => r.continue(), 4000));
+    await p.addInitScript(() => { window.__fv = 0; const t = () => { const f = document.getElementById('dg-footer'), s = document.getElementById('sutta');
+      if (f && s) { const r = f.getBoundingClientRect(); if (getComputedStyle(f).visibility === 'visible' && getComputedStyle(f).display !== 'none' && r.top < innerHeight && r.height > 0 && f.textContent.trim() && !s.querySelector('article')) window.__fv++; }
+      requestAnimationFrame(t); }; requestAnimationFrame(t); });
+    await p.goto(ORIGIN + u, { waitUntil: 'commit' }); await p.waitForTimeout(8000);
+    const fv = await p.evaluate(() => window.__fv), text = await p.evaluate(() => !!document.querySelector('#sutta article'));
+    check(fv === 0 && text, `${u} with no server text: no footer before the text (${fv} frames), the text came (${text})`);
+    await ctx.close();
+  }
+
   // the toolbar is never shown half-parsed (a slow phone: CPU x6), sampled on every frame
   {
     const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await ctx.newPage();

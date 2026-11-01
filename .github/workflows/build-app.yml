@@ -772,6 +772,8 @@ jobs:
           mkdir -p "$DG_SHOTS"
           node test/rate-prompt-ui.js
           node test/shortcuts-ui.js
+          # the sign-in page on test, whatever site the build talks to: a check account's data is not written through prod
+          node test/phrase-sync.js https://test.dhamma.gift
 
       # The app's own checks, run in dg-node against the server that is already up: every bundled
       # page compared with the live site (the "tile opens the search page" family — a missing path

@@ -241,27 +241,51 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
   // speaker in multi mode reads that translation, an edition's speaker reads that edition's lines (BJT online in the app).
   const stopVoice = () => ev(`(document.querySelector('.close-tts-btn') || {click: function () {}}).click()`);
   const nowItem = () => ev(`(function () { if (typeof ttsState === 'undefined' || !ttsState.speaking) return null;
-    var it = ttsState.playlist[ttsState.currentIndex] || {}; return JSON.stringify({ lang: it.lang, text: String(it.text || '').slice(0, 200) }); })()`)
+    var it = ttsState.playlist[ttsState.currentIndex] || {}, el = it.element;
+    return JSON.stringify({ lang: it.lang, text: String(it.iast || it.text || '').slice(0, 200),
+      column: el ? (el.getAttribute('lang') || (el.className.match(/(\\w+)-lang/) || [])[1] || null) : null }); })()`)
     .then((v) => (v ? JSON.parse(v) : null));
-  if (await open('/sn56.11?lang=ru&mode=multi&langs=ru,en', '2nd') && await waitFor(`document.querySelectorAll('#sutta .title-play-btn').length > 1`, 15000)) {
-    await ev(`(function () { var b = Array.from(document.querySelectorAll('#sutta .title-play-btn')).filter(function (e) { return !e.closest('.pli-lang'); }); b[1].click(); })()`);
-    await waitFor(`typeof ttsState !== 'undefined' && ttsState.speaking`, 15000); await sleep(1500);
-    const it = await nowItem(); shot('12-voice-second-translation');
-    check(it && it.lang === 'en', `voice: the second translation's speaker (ru,en) reads ${it ? it.lang + ' "' + it.text.slice(0, 40) + '"' : 'nothing'}, want en`);
-    await stopVoice(); await sleep(1500);
-  } else check(false, 'voice: sn56.11 in multi ru,en or its translation speakers did not load');
+  // Every column, not only the second (owner 2026-11-01: «любого, третьего, четвёртого, пятого… и перевода, и канона»): each
+  // translation's speaker reads its own language, each edition's speaker its own edition's lines.
+  const LANGS = ['ru', 'en', 'de', 'fr'];
+  if (await open(`/sn56.11?lang=ru&mode=multi&langs=${LANGS.join(',')}`, '2nd') && await waitFor(`Array.from(document.querySelectorAll('#sutta .title-play-btn')).filter(function (e) { return !e.closest('.pli-lang'); }).length >= ${LANGS.length}`, 20000)) {
+    for (let k = 0; k < LANGS.length; k++) {
+      await ev(`Array.from(document.querySelectorAll('#sutta .title-play-btn')).filter(function (e) { return !e.closest('.pli-lang'); })[${k}].click()`);
+      await waitFor(`typeof ttsState !== 'undefined' && ttsState.speaking`, 15000); await sleep(1500);
+      const it = await nowItem(); shot(`12-voice-translation-${k + 1}-${LANGS[k]}`);
+      // Two things: the column read is the one tapped, and the voice speaks that column's language (German read by an English
+      // voice was what the site did on 2026-11-01: voice.js named every Latin-script line 'en').
+      check(it && it.column === LANGS[k], `voice: translation ${k + 1} of ${LANGS.length} (${LANGS[k]}) reads the ${it ? it.column : 'no'} column: "${it ? it.text.slice(0, 40) : ''}"`);
+      check(it && it.lang === LANGS[k], `voice: translation ${k + 1} of ${LANGS.length} (${LANGS[k]}) is spoken as ${it ? it.lang : 'nothing'}`);
+      await stopVoice(); await sleep(1500);
+    }
+  } else check(false, `voice: sn56.11 in multi ${LANGS.join(',')} or its translation speakers did not load`);
 
-  if (await open('/sn56.11?lang=ru&editions=ms,bjt', 'pli-2nd') && await waitFor(`!!document.querySelector('.dg-ed-speaker[data-ed="bjt"] .title-play-btn')`, 20000)) {
-    await ev(`document.querySelector('.dg-ed-speaker[data-ed="bjt"] .title-play-btn').click()`);
-    await waitFor(`typeof ttsState !== 'undefined' && ttsState.speaking`, 15000); await sleep(1500);
-    const it = await nowItem();
-    const where = it ? JSON.parse(await ev(`(function (t) { var n = function (s) { return String(s).toLowerCase().replace(/[^\\p{L}]+/gu, ''); }, w = n(t);
-      var has = function (ed) { return Array.from(document.querySelectorAll('#sutta .dg-ed-line[data-ed="' + ed + '"]')).some(function (e) { return n(e.textContent).indexOf(w) !== -1; }); };
-      return JSON.stringify({ bjt: has('bjt'), ms: has('ms') }); })(${JSON.stringify(it.text)})`)) : {};
-    shot('13-voice-edition-bjt');
-    check(it && where.bjt && !where.ms, `voice: the BJT speaker reads ${it ? '"' + it.text.slice(0, 50) + '"' : 'nothing'} (in a BJT line ${where.bjt}, in an MS line ${where.ms})`);
-    await stopVoice(); await sleep(1500);
-  } else check(false, 'voice: sn56.11 with the BJT edition or its speaker did not load');
+  // Each edition: its line's ✦ menu -> Audio (the title row has a speaker only where a line has text, dg-node 8471bf3). The
+  // whole playlist is checked: every Pali item reads this edition's line of its segment, or the Mahāsaṅgīti's where the
+  // edition has none.
+  const EDS = ['ms', 'bjt', 'my', 'th', 'mso', 'pts'];
+  if (await open(`/sn56.11?lang=ru&editions=${EDS.join(',')}`, 'pli-2nd') && await waitFor(`${JSON.stringify(EDS)}.every(function (e) { return !!document.querySelector('#sutta .dg-ed-line[data-ed="' + e + '"] .copyLink'); })`, 20000)) {
+    for (const ed of EDS) {
+      await ev(`(function () { var l = Array.from(document.querySelectorAll('#sutta .dg-ed-line[data-ed="${ed}"]')).filter(function (x) { return x.querySelector('.copyLink') && x.textContent.trim().length > 20; })[1];
+        l.scrollIntoView({ block: 'center' }); l.querySelector('.copyLink').click(); })()`);
+      await sleep(800);
+      await ev(`document.getElementById('sm-audio').click()`);
+      await waitFor(`typeof ttsState !== 'undefined' && ttsState.speaking`, 15000); await sleep(1500);
+      // (the voice leaves out what an edition puts in brackets - MY's "(tena layena)" - so a line is taken with and without them)
+      const r = JSON.parse(await ev(`(function (ed) { var n = function (s) { return String(s).toLowerCase().replace(/[^\\p{L}]+/gu, ''); };
+        var has = function (el, w) { var t = el.textContent; return n(t).indexOf(w) !== -1 || n(t.replace(/\\([^)]*\\)/g, '')).indexOf(w) !== -1; };
+        var pl = (typeof ttsState !== 'undefined' && ttsState.playlist) || [], own = 0, fallback = 0, wrong = [], now = pl[ttsState.currentIndex] || {};
+        pl.forEach(function (it) { if (!/^pi/.test(it.lang || '') || !it.element || !it.element.querySelector) return; var w = n(it.iast || it.text); if (!w) return;
+          var line = it.element.querySelector('.dg-ed-line[data-ed="' + ed + '"]'), ms = it.element.querySelector('.dg-ed-line[data-ed="ms"]');
+          if (line && n(line.textContent)) { if (has(line, w)) own++; else wrong.push(String(it.iast || it.text).slice(0, 30)); }
+          else if (ms && has(ms, w)) fallback++; else wrong.push(String(it.iast || it.text).slice(0, 30)); });
+        return JSON.stringify({ speaking: !!ttsState.speaking, own: own, fallback: fallback, wrong: wrong.slice(0, 3), nwrong: wrong.length, now: String(now.iast || now.text || '').slice(0, 40) }); })(${JSON.stringify(ed)})`));
+      shot(`13-voice-edition-${ed}`);
+      check(r.speaking && r.own > 0 && r.nwrong === 0, `voice: ${ed.toUpperCase()} (its line's menu -> Audio) reads "${r.now}" - ${r.own} lines of its own, ${r.fallback} from the Mahāsaṅgīti where it has none, ${r.nwrong} from elsewhere${r.nwrong ? ' (' + r.wrong.join(' | ') + ')' : ''}`);
+      await stopVoice(); await sleep(1500);
+    }
+  } else check(false, `voice: sn56.11 with the editions ${EDS.join(',')} did not load`);
 
   // Translations window, "↺ Default" in multi mode (owner's iPhone, build 567: it did nothing - a reload to /sn56.11 is no file in
   // the WebView; dg-node home.js now reloads through /?_nativeRoute=). Back on the reader, without mode/langs, one translation.

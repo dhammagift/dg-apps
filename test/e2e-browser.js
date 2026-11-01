@@ -83,6 +83,9 @@ const CASES = [
     await page.addInitScript((packs) => {
         window.DG_DIST_BASE = '/mobile-data';
         if (packs) {
+            // The reader has agreed (the picker's Download does this, dg-node app.js agreedNow): a packs build's first launch
+            // opens the picker instead of downloading, and the pass compared the online site's answers (run 664, f3-ultra).
+            try { localStorage.setItem('dg.offline.downloadStarted', '1'); } catch (e) { /* none */ }
             // pinned: a test-origin build bakes DG_PACKS_BASE = the test site's (build-assets.js), which would replace this
             // after the page's own head script ran - and the check compared the test site's older packs (run 41283750842)
             Object.defineProperty(window, 'DG_PACKS_BASE', { get: () => '/mobile-data', set: () => {}, configurable: false });
@@ -126,10 +129,13 @@ const CASES = [
             opened = { ok: false, error: e.message };
         }
         console.log(`dgOfflineLibrary (attempt ${attempt}) ->`, JSON.stringify(opened));
+        // Only a library on THIS device counts: local:false means every answer below would be the online site's.
+        if (opened.ok && !(opened.result && opened.result.local === true)) opened = { ok: false, error: 'the library did not open on the device (local: ' + (opened.result && opened.result.local) + ')' };
         if (opened.ok) break;
         if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
     }
     if (!opened.ok) {
+        console.log('FAIL ' + opened.error);
         console.log(errors.join('\n'));
         await browser.close();
         process.exit(1);
@@ -220,6 +226,10 @@ const CASES = [
     // not hidden, and not treated as a build failure of the app.
     const KNOWN_DIFFS = new Set(['search-russian', 'search-punctuation']);
 
+    // Any data request that leaves for the online site while the cases run is a failure: the answer compared would not be
+    // the device's (run 664). The mp3 line (/api/text-online) is meant to come from there.
+    const online = [];
+    page.on('request', (r) => { const u = r.url(); if (!u.startsWith(BASE) && /\/(api\/text\/|search\b|api\/nav\/)/.test(u) && !/text-online/.test(u)) online.push(u); });
     let same = 0;
     const differing = [];
     const known = [];
@@ -254,5 +264,6 @@ const CASES = [
         (differing.length ? `; differing: ${differing.join(', ')}` : ''));
     if (errors.length) console.log('\npage errors:\n  ' + errors.slice(0, 8).join('\n  '));
     await browser.close();
-    process.exit(differing.length ? 1 : 0);
+    if (online.length) console.log(`FAIL ${online.length} data request(s) went to the online site, e.g. ${online[0]}`);
+    process.exit(differing.length || online.length ? 1 : 0);
 })();

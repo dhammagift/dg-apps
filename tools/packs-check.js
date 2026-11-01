@@ -7,7 +7,11 @@ const BASE = process.argv[2] || 'https://test.dhamma.gift';
 // and no pack downloaded from the site's own picker (2026-10-31).
 const PACKS = process.argv[3] || '/mobile-data';
 (async () => {
-  const b = await chromium.launch(); const c = await b.newContext(); const p = await c.newPage();
+  // A profile on disk, not an incognito context: there the storage lives in memory, and on a busy box a 600 MB library was
+  // refused ("not enough storage", 2026-11-01). Removed at the end.
+  const dir = require('fs').mkdtempSync(require('os').tmpdir() + '/packs-check-');
+  const c = await chromium.launchPersistentContext(dir); const b = { close: async () => { await c.close(); require('fs').rmSync(dir, { recursive: true, force: true }); } };
+  const p = c.pages()[0] || await c.newPage();
   p.on('console', m => { if (/dg-offline|error/i.test(m.text())) console.log('  [page]', m.text().slice(0, 200)); });
   await p.goto(BASE + '/robots.txt');
   // window.restart(): a fresh worker, as a reload or a killed app would give

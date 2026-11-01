@@ -373,12 +373,14 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb exec-out screencap -p > "$OUT/download-0-consent.png"
   adb shell input tap 768 2184; sleep 3                       # "Download" on the offline-library sheet
   adb shell input keyevent KEYCODE_HOME; sleep 2              # the app is in the background from here on
-  state() { adb shell dumpsys notification --noredact | grep -oE "(Downloading the offline library[^\"]*|The library is downloaded[^\"]*)" | tail -1; }
+  # "ready" too: with packs the page imports them while still in the background and says so itself (dg-node app.js).
+  state() { adb shell dumpsys notification --noredact | grep -oE "(Downloading the offline library[^\"]*|The library is downloaded[^\"]*|The library is ready[^\"]*)" | tail -1; }
   prev=""; grew=0; finished=0
-  # Up to 6 minutes in the background: long enough for the whole archive on a CI emulator, so the closing notification shows too.
-  for i in $(seq 1 36); do
-    sleep 10; cur=$(state); echo "t+$((i*10+5))s background: ${cur:-<no notification>}" >> "$res"
-    case "$cur" in *downloaded*) finished=1; break ;; esac
+  # Up to 6 minutes in the background, sampled every 3 s (the default packs, ~150 MB, take seconds on a CI emulator - every
+  # 10 s saw one sample of progress and then nothing).
+  for i in $(seq 1 120); do
+    sleep 3; cur=$(state); echo "t+$((i*3+5))s background: ${cur:-<no notification>}" >> "$res"
+    case "$cur" in *downloaded*|*ready*) finished=1; break ;; esac
     mb=$(echo "$cur" | grep -oE "[0-9]+ of" | grep -oE "[0-9]+"); pmb=$(echo "$prev" | grep -oE "[0-9]+ of" | grep -oE "[0-9]+")
     if [ -n "$mb" ] && [ -n "$pmb" ] && [ "$mb" -gt "$pmb" ]; then grew=1; fi
     prev="$cur"
@@ -386,7 +388,7 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb shell cmd statusbar expand-notifications; sleep 2; adb exec-out screencap -p > "$OUT/download-1-shade-in-background.png"
   adb shell cmd statusbar collapse
   if [ "$grew" = 1 ]; then ok "the download goes on with the app in the background"; else ko "no progress in the background"; fi
-  if [ "$finished" = 1 ]; then ok "the closing notification (\"The library is downloaded\") arrived with the app in the background"; else ko "no closing notification within 6 minutes"; fi
+  if [ "$finished" = 1 ]; then ok "the closing notification (\"The library is downloaded\" or \"ready\") arrived with the app in the background"; else ko "no closing notification within 6 minutes"; fi
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 45
   adb exec-out screencap -p > "$OUT/download-2-reopened.png"
   # The page unpacks the archive into its storage; when it is done the notification says the library is ready.

@@ -151,13 +151,24 @@
             return null;
         },
 
-        askConsent: function () {
+        askConsent: function askConsent() {
             var Network = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Network;
             if (!Network) return Promise.resolve(true);
             return Promise.all([Network.getStatus(), packsOn() ? readPacksPlan() : readManifest()]).then(function (out) {
                 var status = out[0];
                 var m = out[1] || {};
-                if (status.connected === false) return true; // the download itself will fail visibly
+                // Offline: ask once the network is back, with the real sizes - answering "yes" here marked the transfer as
+                // agreed, and the next launch online downloaded ~150 MB with no question at all (f3-ultra's review
+                // 2026-11-01; App Store 4.2.3 wants the question).
+                if (status.connected === false) {
+                    return new Promise(function (resolve) {
+                        var handle = Network.addListener('networkStatusChange', function (st) {
+                            if (!st || !st.connected) return;
+                            Promise.resolve(handle).then(function (h) { if (h && h.remove) h.remove(); });
+                            resolve(askConsent());
+                        });
+                    });
+                }
                 // The site's own consent sheet (dg-node offline-status.js, 'dg:need-consent'): themed,
                 // both figures — the archive that downloads and the database on the device. The native
                 // AlertDialog showed only the on-device size ("584 MB"), which read as the download.

@@ -65,6 +65,7 @@ public class DgDownloadService extends Service {
     }
     static final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     static volatile boolean running = false;
+    static volatile String currentFiles = "";   // the pack list of the transfer under way ("" = the single archive)
     static volatile boolean cancelled = false;
     static volatile long lastLoaded = 0, lastTotal = 0;
     static volatile boolean transferred = false;   // bytes really crossed the network in this run (not an archive already in place)
@@ -130,6 +131,7 @@ public class DgDownloadService extends Service {
         }
         if (running) return;   // a second start joins the running transfer
         running = true;
+        currentFiles = files == null ? "" : files;
         cancelled = false;
         transferred = false;
         new Thread(new Runnable() {

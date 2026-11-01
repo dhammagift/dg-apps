@@ -70,7 +70,10 @@ public class DgDownloadPlugin extends Plugin {
         // A list of packs while another transfer runs would join it and get its files, not these (ultra's review): refused,
         // and the page downloads them itself.
         String files = call.getString("files", "");
-        if (files != null && !files.isEmpty() && DgDownloadService.running) { call.reject("a download is already running"); return; }
+        // The same list (a reload while it runs: pull to refresh, the page coming back) joins it, as the single archive does.
+        if (files != null && !files.isEmpty() && DgDownloadService.running && !files.equals(DgDownloadService.currentFiles)) {
+            call.reject("a download is already running"); return;
+        }
         synchronized (waiting) { waiting.add(call); }
         if (!DgDownloadService.listeners.contains(listener)) DgDownloadService.listeners.add(listener);
         call.setKeepAlive(true);

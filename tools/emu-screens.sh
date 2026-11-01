@@ -439,7 +439,7 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
     // The page swallows the plugin's answer (.catch(function () {})): the same call made here shows it.
     var direct;
     // inexact, as the page asks since dg-node 5ad8fc2: an exact request without the permission never answers (hence the race)
-    try { direct = JSON.stringify(await Promise.race([LN.schedule({ notifications: [{ isExactNotification: false, id: 8199, title: 'CI direct * inexact', body: 'x', schedule: { at: new Date(Date.now() + 60000), allowWhileIdle: true } }] }),
+    try { direct = JSON.stringify(await Promise.race([LN.schedule({ notifications: [{ isExactNotification: false, id: 8199, title: 'CI direct check, inexact', body: 'x', schedule: { at: new Date(Date.now() + 60000), allowWhileIdle: true } }] }),
       new Promise(function (r) { setTimeout(function () { r('no answer in 15 s'); }, 15000); })])); }
     catch (e) { direct = 'ERROR ' + (e && (e.message || e.code)) ; }
     var p2 = await LN.getPending(); all += ' | direct schedule: ' + direct + ', pending after: ' + (p2.notifications || []).map(function (n) { return n.id; }).join(',');
@@ -455,7 +455,7 @@ if [ "${4:-}" = subs ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb shell dumpsys alarm | grep -B2 -A6 "$PKG" > "$OUT/dumpsys-alarm.txt"
   for i in $(seq 1 60); do   # up to 10 minutes: an inexact alarm (no exact-alarm permission) may come late
     sleep 10
-    if adb shell dumpsys notification --noredact | grep -q "pkg=$PKG.*" && adb shell dumpsys notification --noredact | grep -qE "android.title=String \(.*\* "; then got=1; break; fi
+    if adb shell dumpsys notification --noredact | grep -q "pkg=$PKG.*" && adb shell dumpsys notification --noredact | grep -E "android.title=String \(.*\* " | grep -vq "CI direct"; then got=1; break; fi   # the page's reminder, not the check's own 8199
   done
   adb shell dumpsys notification --noredact > "$OUT/dumpsys-notification.txt"
   adb shell cmd statusbar expand-notifications; sleep 2; adb exec-out screencap -p > "$OUT/subs-shade.png"; adb shell cmd statusbar collapse

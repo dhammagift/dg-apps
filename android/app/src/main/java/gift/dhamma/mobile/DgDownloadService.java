@@ -292,6 +292,8 @@ public class DgDownloadService extends Service {
                         if (have > 0) c.setRequestProperty("Range", "bytes=" + have + "-");
                         int code = c.getResponseCode();
                         if (code == 200 && have > 0) { part.delete(); have = 0; }
+                        // gone from the server (an old pack is removed a day after a new build): no use retrying for minutes
+                        else if (code == 404 || code == 403 || code == 410) throw new Exception("HTTP " + code + " for " + rel);
                         else if (code != 200 && code != 206) throw new java.io.IOException("HTTP " + code);
                         try (InputStream in = c.getInputStream(); OutputStream out = new FileOutputStream(part, have > 0)) {
                             byte[] buf = new byte[65536]; int n; long loaded = have;
@@ -317,7 +319,8 @@ public class DgDownloadService extends Service {
                         try { Thread.sleep(Math.min(30000, 2000L * attempt)); } catch (InterruptedException ie) { throw new Exception("cancelled"); }
                     } finally { if (c != null) c.disconnect(); }
                 }
-                if (size > 0 && part.length() != size) throw new Exception("the downloaded pack has the wrong size: " + rel);
+                // too long (a server answering a different file): dropped, so the next start fetches it afresh
+                if (size > 0 && part.length() != size) { part.delete(); throw new Exception("the downloaded pack has the wrong size: " + rel); }
                 if (!sha.isEmpty()) {
                     MessageDigest md = MessageDigest.getInstance("SHA-256");
                     try (InputStream in = new FileInputStream(part)) { byte[] buf = new byte[65536]; int n; while ((n = in.read(buf)) > 0) md.update(buf, 0, n); }

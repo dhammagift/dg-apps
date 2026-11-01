@@ -2034,7 +2034,11 @@ jobs:
       - name: The reminders (test reminder, banner in front and behind)
         run: |
           (cd uposatha/test/ios-sim/notifytest && xcodegen generate)
-          uposatha/test/ios-sim/notify.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app shots/notify
+          # One more try before it fails the release: the simulator's taps miss now and then (run 15 of a865bb3, ultra's review);
+          # a real fault fails both.
+          uposatha/test/ios-sim/notify.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app shots/notify || {
+            echo "::warning::the reminders check failed once - trying again"
+            uposatha/test/ios-sim/notify.sh uposatha/ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app shots/notify-retry; }
 
       # The widgets as iOS draws them: the gallery shows every kind, one goes on the Home Screen (widgettest, widget-gallery.sh).
       - name: The widgets (gallery and Home Screen)

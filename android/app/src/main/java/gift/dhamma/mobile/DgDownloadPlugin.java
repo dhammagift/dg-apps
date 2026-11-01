@@ -67,6 +67,10 @@ public class DgDownloadPlugin extends Plugin {
     public void start(PluginCall call) {
         String base = call.getString("base");
         if (base == null || base.isEmpty()) { call.reject("no base"); return; }
+        // A list of packs while another transfer runs would join it and get its files, not these (ultra's review): refused,
+        // and the page downloads them itself.
+        String files = call.getString("files", "");
+        if (files != null && !files.isEmpty() && DgDownloadService.running) { call.reject("a download is already running"); return; }
         synchronized (waiting) { waiting.add(call); }
         if (!DgDownloadService.listeners.contains(listener)) DgDownloadService.listeners.add(listener);
         call.setKeepAlive(true);

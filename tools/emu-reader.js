@@ -155,8 +155,17 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     let away = null;
     for (let k = 0; k < 20 && !away; k++) { await sleep(1000); const t = top(); if (t && t !== 'gift.dhamma.mobile') away = t; }
     const page = away ? '' : await ev(`location.pathname + location.search`);
+    // ...and Chrome shows that page (an app crash also leaves "something else on top" - ultra's review)
+    let tab = null;
+    for (let k = 0; k < 20 && away === 'com.android.chrome' && !tab; k++) {
+      try {
+        execSync('adb forward tcp:9223 localabstract:chrome_devtools_remote');
+        tab = (await (await fetch('http://127.0.0.1:9223/json')).json()).find((x) => x.type === 'page' && x.url.includes('/__/auth/handler')) || null;
+      } catch (e) { /* Chrome not up yet */ }
+      if (!tab) await sleep(1000);
+    }
     shot('applink-auth-handler');
-    check(!!away, `App Link dhamma.gift/__/auth/handler: on top ${away || 'the app, at ' + page}`);
+    check(away === 'com.android.chrome' && !!tab, `App Link dhamma.gift/__/auth/handler: on top ${away || 'the app, at ' + page}${tab ? ', the tab: ' + tab.url : ', no /__/auth/handler page in Chrome'}`);
     for (let k = 0; k < 3 && top() !== 'gift.dhamma.mobile'; k++) { execSync('adb shell input keyevent 4'); await sleep(2500); }
     if (top() !== 'gift.dhamma.mobile') { execSync('adb shell monkey -p gift.dhamma.mobile -c android.intent.category.LAUNCHER 1 > /dev/null'); await sleep(4000); }
   }

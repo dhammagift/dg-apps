@@ -312,6 +312,15 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     check(g0.pageW <= g0.innerW + 1 && g1.pageX === 0, `columns: the page does not scroll sideways (page ${g0.pageW} px in ${g0.innerW}, left ${g1.pageX})`);
     check(g0.firstLeft === null || g0.firstLeft >= 0, `columns: the first column starts on the screen (left ${g0.firstLeft})`);
     check(g1.names && g1.names.top >= -2 && g1.names.top < 200, `columns: the names stay at the top after a scroll (${g1.names ? g1.names.top + ' px, ' + g1.names.pos : 'no names row found'})`);
+    // The owner's case: a real finger swipe to the second column, then reading on down (the screen's own swipe, adb).
+    execSync('adb shell input swipe 900 1300 200 1300 300'); await sleep(1500);
+    const sx = await ev(`(function () { var sc = document.querySelector('#sutta.column-view, #sutta'); return JSON.stringify({ suttaX: sc ? sc.scrollLeft : null, suttaOverflowX: sc ? getComputedStyle(sc).overflowX : null, bodyOverflowX: getComputedStyle(document.body).overflowX, htmlOverflowX: getComputedStyle(document.documentElement).overflowX }); })()`);
+    const g2 = JSON.parse((await geo('swiped')) || '{}'); shot('18-columns-swiped');
+    execSync('adb shell input swipe 540 1600 540 600 400'); await sleep(1500);
+    const g3 = JSON.parse((await geo('swiped+down')) || '{}'); shot('19-columns-swiped-down');
+    console.log('columns after a swipe: ' + sx + ' | ' + JSON.stringify(g2) + ' | ' + JSON.stringify(g3));
+    check(g2.pageX === 0 && g3.pageX === 0, `columns, swiped sideways: the page itself stays put (left ${g2.pageX}, then ${g3.pageX})`);
+    check(g3.names && g3.names.top >= -2 && g3.names.top < 200, `columns, swiped sideways and down: the names at the top (${g3.names ? g3.names.top + ' px' : 'no names row'})`);
     await ev(`localStorage.removeItem('viewMode')`);
   } else check(false, 'columns: mn32 with the editions did not load');
 

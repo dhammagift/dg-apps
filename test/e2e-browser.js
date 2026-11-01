@@ -74,7 +74,12 @@ const CASES = [
     }
     const page = browser.pages()[0] || await browser.newPage();
     // Point the app at this server's own /mobile-data instead of the live host.
-    await page.addInitScript(() => { window.DG_DIST_BASE = '/mobile-data'; });
+    // The single published database, also in a test build that takes packs from the test site (build-assets.js DG_PACKS_BASE):
+    // the parity below is against this server's own data, and the packs carry no translations until a reader picks them.
+    await page.addInitScript(() => {
+        window.DG_DIST_BASE = '/mobile-data';
+        Object.defineProperty(window, 'DG_PACKS_BASE', { get: () => undefined, set: () => {}, configurable: false });
+    });
     const errors = [];
     page.on('pageerror', e => errors.push('PAGEERROR: ' + String(e).slice(0, 200)));
     page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });

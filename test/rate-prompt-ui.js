@@ -29,6 +29,9 @@ function initScript({ firstRunDaysAgo, shown, shownDaysAgo, tapped, lang }) {
         if (shownDaysAgo != null) localStorage.setItem('dgRatePromptShownAt', String(Date.now() - shownDaysAgo * 86400000)); else localStorage.removeItem('dgRatePromptShownAt');
         if (tapped) localStorage.setItem('dgRateUsTapped', '1'); else localStorage.removeItem('dgRateUsTapped');
         localStorage.setItem('dhammaLanguage', lang || 'ru');
+        // A reader 60 days in has answered the offline library's offer (here: "not now"). Without it a build that takes packs
+        // opens the picker at every launch of this check (platform.js askConsent) and the invitation rightly stands down (run 662).
+        localStorage.setItem('dg.app.downloadDeclined', '1');
     } catch (e) { /* first paint */ }
     window.Capacitor = {
         getPlatform: function () { return 'android'; },

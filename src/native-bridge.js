@@ -1515,7 +1515,10 @@
     function showRatePrompt(showing) {
         // The download consent sheet has the same z-index and the same look: never stack on it (not
         // counted as a showing, so the next launch tries again).
+        // ...nor on the offline library's picker, which a first launch with packs opens in the settings sheet (dg-apps
+        // platform.js askConsent): the same "next launch tries again".
         if (document.getElementById('dgrAsk') || document.getElementById('dgConsent')) return;
+        if (window.DgHome && typeof window.DgHome.isSettingsSheetOpen === 'function' && window.DgHome.isSettingsSheetOpen()) return;
         // Counted when it OPENS, not when it closes: back button, swipe-away or a kill while it is up
         // must not bring it back on every launch. Closing it any way but "Rate" is "later".
         try {

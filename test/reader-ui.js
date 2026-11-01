@@ -85,6 +85,19 @@ async function open(ctx, path, mode) {
     await ctx.close();
   }
 
+  // a finger on the search field before the page has loaded keeps the field (and the phone's keyboard); untouched, the
+  // autofocus is dropped on a touch screen (owner 2026-11-01: «клавиатура открывается и потом сворачивается»)
+  for (const tap of [true, false]) {
+    const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await ctx.newPage();
+    await p.route(/bootstrap\.bundle/, (r) => setTimeout(() => r.continue(), 3000));   // a slow network: the page loads after the tap
+    const nav = p.goto(ORIGIN + '/?r=' + Math.random(), { waitUntil: 'load' });
+    if (tap) { await p.waitForSelector('#paliauto', { state: 'visible' }); await p.tap('#paliauto'); }
+    await nav; await p.waitForTimeout(2500);
+    const active = await p.evaluate(() => document.activeElement && document.activeElement.id);
+    check(tap ? active === 'paliauto' : active !== 'paliauto', `search field ${tap ? 'tapped before the page loaded keeps the focus' : 'not tapped has no focus on a phone'} (focus: ${active || 'body'})`);
+    await ctx.close();
+  }
+
   // the toolbar is never shown half-parsed (a slow phone: CPU x6), sampled on every frame
   {
     const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await ctx.newPage();

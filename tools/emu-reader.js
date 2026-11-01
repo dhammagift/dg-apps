@@ -100,7 +100,7 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
       try {
         execSync('adb forward tcp:9223 localabstract:chrome_devtools_remote');
         const p = (await (await fetch('http://127.0.0.1:9223/json')).json()).find((x) => x.type === 'page' && x.url.includes('/docs/' + doc));
-        if (p && p.title && p.title !== p.url) return p;
+        if (p && p.title && p.title !== p.url && (p.title.startsWith(TITLE[doc]) || k > 30)) return p;   // the site's name first, the page's title once its route renders (run 670)
       } catch (e) { /* Chrome not up yet */ }
       await sleep(1000);
     }
@@ -294,7 +294,7 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
       check(r.speaking && r.own > 0 && r.nwrong === 0, `voice: ${ed.toUpperCase()} (its line's menu -> Audio) reads "${r.now}" - ${r.own} lines of its own, ${r.fallback} from the Mahāsaṅgīti where it has none, ${r.nwrong} from elsewhere${r.nwrong ? ' (' + r.wrong.join(' | ') + ')' : ''}`);
       await stopVoice(); await sleep(1500);
     }
-  } else check(false, `voice: sn56.11 with the editions ${EDS.join(',')} did not load`);
+  } else { shot('13-voice-editions-noload'); check(false, `voice: sn56.11 with the editions ${EDS.join(',')} did not load (${await ev(`JSON.stringify(${JSON.stringify(EDS)}.map(function (e) { return e + ':' + document.querySelectorAll('#sutta .dg-ed-line[data-ed="' + e + '"] .copyLink').length; }))`).catch(() => '?')})`); }
 
   // The editions in columns (owner 2026-11-01, app 661: the left column cut at the screen's edge, and the column names not
   // staying at the top - fine on the site). Measured: does the PAGE scroll sideways, where are the names after a scroll.
@@ -335,7 +335,8 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     shot('20-pull-sideways');
     check(kept === true, `pull to refresh: a sideways swipe on the columns (70 px down too) does not reload (${kept === true ? 'kept' : 'reloaded'})`);
     await ev(`window.scrollTo(0, 0); window.__noReload = 1`); await sleep(800);
-    execSync('adb shell input swipe 540 600 540 1800 600'); await sleep(6000);
+    // On the text, as a reader pulls: at y 600 the finger was on the fixed header, which is never a pull (run 670)
+    execSync('adb shell input swipe 540 1000 540 2000 600'); await sleep(6000);
     await waitFor(`!!document.querySelector('#sutta article .quote')`, 20000);
     const after = JSON.parse((await ev(`JSON.stringify({ reloaded: window.__noReload !== 1, at: location.pathname, text: !!document.querySelector('#sutta article .quote') })`)) || '{}');
     shot('21-pull-down');

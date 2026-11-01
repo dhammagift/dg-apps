@@ -371,13 +371,13 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>/dev/null
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 18
   adb exec-out screencap -p > "$OUT/download-0-consent.png"
-  # Packs: the first launch opens Settings' picker (dg-apps platform.js askConsent) - its own Download, through DevTools (a
-  # debug APK). The single library: "Download" on the sheet, by its place on the screen.
+  # The first-launch sheet's Download, through DevTools (a debug APK; with packs it names what downloads), else by its
+  # place on the screen.
   pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}'); adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}" > /dev/null 2>&1
-  picked=$(node "$REPO/tools/emu-eval.js" "(function () { var f = document.querySelector('#dg-settings-sheet iframe'); var d = f && f.contentDocument; var b = d && d.getElementById('pkGo');
-    if (!b) return 'no picker'; var n = Array.from(d.querySelectorAll('#pkDlg li input:checked')).length; b.click(); return 'picker, ' + n + ' ticked'; })()" 2>/dev/null)
+  picked=$(node "$REPO/tools/emu-eval.js" "(function () { var b = document.querySelector('#dgConsentSheet .dgc-primary'); if (!b) return 'no sheet';
+    var c = document.querySelector('#dgConsentSheet .dgc-cd'); var t = c ? c.textContent : ''; b.click(); return 'sheet: ' + t; })()" 2>/dev/null)
   echo "first launch: ${picked:-no answer}" >> "$res"
-  case "$picked" in picker*) sleep 3 ;; *) adb shell input tap 768 2184; sleep 3 ;; esac
+  case "$picked" in sheet:*) sleep 3 ;; *) adb shell input tap 768 2184; sleep 3 ;; esac
   adb shell input keyevent KEYCODE_HOME; sleep 2              # the app is in the background from here on
   # "ready" too: with packs the page imports them while still in the background and says so itself (dg-node app.js).
   state() { adb shell dumpsys notification --noredact | grep -oE "(Downloading the offline library[^\"]*|The library is downloaded[^\"]*|The library is ready[^\"]*)" | tail -1; }

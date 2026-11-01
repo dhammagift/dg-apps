@@ -152,20 +152,6 @@
         },
 
         askConsent: function () {
-            // Packs: the first download is chosen in the picker (owner 2026-11-01: «естественно, так и должно было быть») -
-            // Settings' "What to download" opens with the Mahāsaṅgīti and the interface language ticked, sizes shown, and its
-            // Download starts the transfer as the consent (dg-node app.js agreedNow). This automatic start stands down.
-            if (packsOn()) {
-                try { localStorage.setItem('dg.offline.openPacks', '1'); } catch (e) { /* private mode: the row is still there */ }
-                // the home page's sheet may not be set up yet this early in the load: a few seconds' patience
-                var tries = 0;
-                (function openWhenReady() {
-                    var H = window.DgHome;
-                    if (H && typeof H.openSettingsSheet === 'function') { H.openSettingsSheet(); return; }
-                    if (++tries < 40) setTimeout(openWhenReady, 250);
-                })();
-                return Promise.resolve(false);
-            }
             var Network = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Network;
             if (!Network) return Promise.resolve(true);
             return Promise.all([Network.getStatus(), packsOn() ? readPacksPlan() : readManifest()]).then(function (out) {
@@ -178,7 +164,7 @@
                 return new Promise(function (resolve) {
                     var answered = false;
                     window.dispatchEvent(new CustomEvent('dg:need-consent', { detail: {
-                        bytes: m.bytes, bytesGz: m.bytes_gz, langs: m.langs,
+                        bytes: m.bytes, bytesGz: m.bytes_gz, langs: m.langs, packs: m.packs, selected: m.selected,
                         resolve: function (p) { answered = true; resolve(p); },
                     } }));
                     if (!answered) resolve(nativeConsent(m));
@@ -214,6 +200,7 @@
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (m) {
                 if (!m || !Array.isArray(m.packs)) return readManifest();
+                // the sheet (dg-node offline-status.js) lists them, ticks these, and "Add ›" unfolds the rest (owner 2026-11-01)
                 var picked = null;
                 try { picked = JSON.parse(localStorage.getItem('dg.offline.packs') || 'null'); } catch (e) { /* none */ }
                 var ui = 'en';
@@ -223,6 +210,8 @@
                 var langs = [];
                 packs.forEach(function (p) { if (p.kind === 'translation') (p.langs || [p.lang]).forEach(function (l) { if (l && langs.indexOf(l) === -1) langs.push(l); }); });
                 return {
+                    packs: m.packs,
+                    selected: packs.map(function (p) { return p.id; }),
                     bytes: packs.reduce(function (a, p) { return a + (p.bytes || 0); }, 0),
                     bytes_gz: packs.reduce(function (a, p) { return a + (p.bytes_gz || 0); }, 0),
                     langs: langs.join(','),

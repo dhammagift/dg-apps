@@ -86,6 +86,9 @@ public class DgPullHoldPlugin extends Plugin {
         // or the answer came from a page that is no longer there (one without pull-refresh.js never answers).
         swipe.setOnChildScrollUpCallback((layout, child) -> web.getScrollY() > 0 || !allowed || !allowedOn.equals(web.getUrl()));
         swipe.setOnRefreshListener(() -> hold(web));
+        // A deliberate pull, not a finger drifting while it reads or swipes the columns (owner 2026-11-01: "реагировать,
+        // если я прям тяну вниз"): about twice the platform's 64 dp before the page refreshes.
+        swipe.setDistanceToTriggerSync(Math.round(128 * getContext().getResources().getDisplayMetrics().density));
         swipe.setColorSchemeColors(ACCENT);
         boolean night = (getContext().getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
             == Configuration.UI_MODE_NIGHT_YES;

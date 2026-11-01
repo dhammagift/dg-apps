@@ -92,7 +92,17 @@ const CASES = [
             window.DG_OFFLINE_PACKS = false;   // the single library, though this run publishes packs beside it
         }
     }, PACKS);
-    if (PACKS) console.log('packs: root-ms + tr-ru + tr-en from /mobile-data/packs-manifest.json');
+    if (PACKS) {
+        console.log('packs: root-ms + tr-ru + tr-en from /mobile-data/packs-manifest.json');
+        // Which packs this pass really reads (run 663 still showed variant lines from before dg-node 59bdefb): every pack file
+        // and manifest the page or its worker asks for, and the manifest this server publishes.
+        page.on('request', (r) => { if (/packs|mobile-data\/.*manifest/.test(r.url())) console.log('  packs request: ' + r.url()); });
+        page.context().on('request', (r) => { if (/packs\//.test(r.url())) console.log('  packs request (worker): ' + r.url()); });
+        try {
+            const m = await (await fetch(BASE + '/mobile-data/packs-manifest.json')).json();
+            console.log('  served manifest: built_at ' + m.built_at + ', build ' + m.build_id + ', root-ms ' + ((m.packs || []).find((p) => p.main) || {}).url);
+        } catch (e) { console.log('  served manifest: none (' + e.message + ')'); }
+    }
     const errors = [];
     page.on('pageerror', e => errors.push('PAGEERROR: ' + String(e).slice(0, 200)));
     page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });

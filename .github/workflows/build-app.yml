@@ -836,7 +836,11 @@ jobs:
 
       - name: List the offline library
         working-directory: /var/www/html/nodejs
-        run: ls -lah siteroot/mobile-data/ || { echo "::error::publishing the offline library produced nothing"; exit 1; }
+        run: |
+          ls -lah siteroot/mobile-data/ || { echo "::error::publishing the offline library produced nothing"; exit 1; }
+          ls -lah siteroot/mobile-data/packs/ 2>/dev/null || true
+          node -e "const m=require('./siteroot/mobile-data/packs-manifest.json');console.log('packs manifest', m.built_at, m.build_id, m.packs.map(p=>p.url).join(' '))" 2>/dev/null || true
+          node -e "const {DatabaseSync}=require('node:sqlite');const d=new DatabaseSync('dg.db',{readOnly:true});console.log('dg.db dn22:4.2 variant:', (d.prepare(\"SELECT txt FROM texts WHERE segment_id='dn22:4.2' AND kind='variant'\").get()||{}).txt)" 2>/dev/null || true
 
       # The checks below run on the database this run built, but a phone downloads the one the site
       # publishes ($DG_ONLINE_ORIGIN/mobile-data). If dg-node changed the schema and the site has not

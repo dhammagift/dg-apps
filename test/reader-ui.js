@@ -73,6 +73,22 @@ async function open(ctx, path, mode) {
     await ctx.close();
   }
 
+  // the line menu's Compare opens this text at this line in multi, with the differences on (owner 2026-11-01)
+  {
+    const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await open(ctx, '/sn56.11?lang=en', 'lines');
+    // as a person does it: tap the line, then its ✦ (the line's link shows on the active line), then Compare
+    await p.evaluate(() => { const s = [...document.querySelectorAll('#sutta span[id]')].filter((e) => e.querySelector('.copyLink') && e.textContent.trim().length > 40)[5];
+      s.scrollIntoView({ block: 'center' }); s.setAttribute('data-seg', '1'); s.querySelector('.copyLink-start, .copyLink').setAttribute('data-cmp', '1'); });
+    await p.waitForTimeout(400); await p.click('[data-seg] .pli-lang', { position: { x: 30, y: 8 } }); await p.waitForTimeout(600);
+    await p.dispatchEvent('[data-cmp]', 'click'); await p.waitForTimeout(500);   // the ◆ is the link's ::before (a box of 0 px)
+    await Promise.all([p.waitForNavigation({ timeout: 20000 }).catch(() => {}), p.click('#sm-compare')]);
+    await p.waitForSelector('#sutta .dg-ed-line', { timeout: 30000 }).catch(() => {}); await p.waitForTimeout(2500);
+    const r = await p.evaluate(() => ({ url: location.pathname + location.search, eds: new Set([...document.querySelectorAll('#sutta .dg-ed-line')].map((e) => e.dataset.ed)).size,
+      diff: typeof window.dgEditionsDiff === 'function' ? window.dgEditionsDiff() : null }));
+    check(/mode=multi/.test(r.url) && r.eds > 1 && r.diff === true, `Compare: multi with ${r.eds} editions, differences ${r.diff ? 'on' : 'off'} (${r.url})`);
+    await ctx.close();
+  }
+
   // the offline-voice card has its colours on every page that plays (memo has no home.css: it was a bare line of text)
   for (const scheme of ['light', 'dark']) {
     const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: scheme }); const p = await ctx.newPage();

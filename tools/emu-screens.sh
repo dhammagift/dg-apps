@@ -488,6 +488,20 @@ if [ "${4:-}" = reader ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb logcat -d -s Capacitor/Console:* chromium:* > "$OUT/logcat.txt" 2>/dev/null || true
   exit $code
 fi
+if [ "${4:-}" = compare ] && [ "$PKG" = gift.dhamma.mobile ]; then
+  # "Compare" opens with the Differences on, in the app, recorded (tools/emu-compare.js, debug APK, DevTools; a test-origin build).
+  adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1
+  adb shell screenrecord --bit-rate 6000000 --time-limit 175 /sdcard/compare.mp4 &
+  RECPID=$!
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
+  adb shell input tap 309 2184; sleep 2
+  pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')
+  adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
+  node "$REPO/tools/emu-compare.js" "$OUT" | tee "$OUT/compare-result.txt"; code=${PIPESTATUS[0]}
+  adb shell pkill -2 screenrecord; sleep 4; wait "$RECPID" 2>/dev/null; adb pull /sdcard/compare.mp4 "$OUT/compare.mp4" > /dev/null
+  adb logcat -d -s Capacitor/Console:* chromium:* > "$OUT/logcat.txt" 2>/dev/null || true
+  exit $code
+fi
 if [ "${4:-}" = icons ] && [ "$PKG" = gift.dhamma.mobile ]; then
   # Reader toolbar icons after the dictionary / variants toggles (tools/emu-icons.js, debug APK, DevTools).
   adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1   # the player asks; the dialog would cover the page

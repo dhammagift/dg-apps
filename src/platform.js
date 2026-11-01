@@ -116,7 +116,8 @@
     // imports them from. Android only: iOS opens its one library natively and has no packs.
     function preparePacks(opts) {
         var D = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DgDownload;
-        if (!D || typeof D.start !== 'function' || !(window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android')) return Promise.resolve(null);
+        // false = not this platform's job (a browser, iOS): the page's worker downloads; null below = the transfer failed
+        if (!D || typeof D.start !== 'function' || !(window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android')) return Promise.resolve(false);
         wireAndroidProgress(D);
         window.dgNativeDownload = true;
         try { var P = window.Capacitor.Plugins.DgProgress; if (P && P.update) P.update({ title: 'Dhamma.gift', text: 'Downloading the offline library', percent: -1 }); } catch (x) { /* no notification permission */ }

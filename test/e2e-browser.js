@@ -87,6 +87,7 @@ const CASES = [
             try { localStorage.setItem('dg.offline.packs', JSON.stringify(['tr-ru', 'tr-en'])); } catch (e) { /* none */ }
         } else {
             Object.defineProperty(window, 'DG_PACKS_BASE', { get: () => undefined, set: () => {}, configurable: false });
+            window.DG_OFFLINE_PACKS = false;   // the single library, though this run publishes packs beside it
         }
     }, PACKS);
     if (PACKS) console.log('packs: root-ms + tr-ru + tr-en from /mobile-data/packs-manifest.json');

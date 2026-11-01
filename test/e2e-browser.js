@@ -164,6 +164,8 @@ const CASES = [
         // The other Pali editions are not in the device's copy (their text comes online, or from ed-* packs), so the corpus list
         // of them stays unknown offline - the reader asks /api/text-online for it (dg-node db-worker.js, Cakkhu's three states).
         if (!('availableEditions' in actual.body)) delete copy.body.availableEditions;
+        // ...and which of them this device holds: a field of the device's answer only (the site has nothing to say there).
+        if ('downloadedEditions' in actual.body && !('downloadedEditions' in copy.body)) copy.body.downloadedEditions = actual.body.downloadedEditions;
         // The Principles line's links must be the server's (its margin differs: no mp3 line above it).
         const principles = (h) => (/<p class="dg-principles"[^>]*>([\s\S]*?)<\/p>/.exec(h || '') || [])[1];
         const line = principles(actual.body.audioHtml);

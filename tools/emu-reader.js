@@ -296,6 +296,25 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     }
   } else check(false, `voice: sn56.11 with the editions ${EDS.join(',')} did not load`);
 
+  // The editions in columns (owner 2026-11-01, app 661: the left column cut at the screen's edge, and the column names not
+  // staying at the top - fine on the site). Measured: does the PAGE scroll sideways, where are the names after a scroll.
+  if (await (async () => { await ev(`localStorage.setItem('viewMode', 'columns')`); return open('/mn32?lang=en&editions=ms,th', 'pli-2nd'); })()) {
+    await sleep(2500);
+    const geo = (when) => ev(`(function () { var se = document.scrollingElement || document.documentElement, names = document.querySelector('.dg-cols-head');
+      var first = document.querySelector('#sutta .column-view p .pli-lang, #sutta p .pli-lang');
+      return JSON.stringify({ when: ${JSON.stringify('')} + when, pageW: se.scrollWidth, innerW: innerWidth, pageX: se.scrollLeft, y: Math.round(se.scrollTop),
+        names: names ? { cls: String(names.className).slice(0, 50), top: Math.round(names.getBoundingClientRect().top), pos: getComputedStyle(names).position } : null,
+        firstLeft: first ? Math.round(first.getBoundingClientRect().left) : null, htmlMargin: getComputedStyle(document.documentElement).marginTop }); })()`);
+    const g0 = JSON.parse(await geo('top')); shot('16-columns-top');
+    await ev(`window.scrollBy(0, 1200)`); await sleep(1500);
+    const g1 = JSON.parse(await geo('scrolled')); shot('17-columns-scrolled');
+    console.log('columns: ' + JSON.stringify(g0) + ' | ' + JSON.stringify(g1));
+    check(g0.pageW <= g0.innerW + 1 && g1.pageX === 0, `columns: the page does not scroll sideways (page ${g0.pageW} px in ${g0.innerW}, left ${g1.pageX})`);
+    check(g0.firstLeft === null || g0.firstLeft >= 0, `columns: the first column starts on the screen (left ${g0.firstLeft})`);
+    check(g1.names && g1.names.top >= -2 && g1.names.top < 200, `columns: the names stay at the top after a scroll (${g1.names ? g1.names.top + ' px, ' + g1.names.pos : 'no names row found'})`);
+    await ev(`localStorage.removeItem('viewMode')`);
+  } else check(false, 'columns: mn32 with the editions did not load');
+
   // Translations window, "↺ Default" in multi mode (owner's iPhone, build 567: it did nothing - a reload to /sn56.11 is no file in
   // the WebView; dg-node home.js now reloads through /?_nativeRoute=). Back on the reader, without mode/langs, one translation.
   if (await open('/sn56.11?lang=ru&mode=multi&langs=ru,en', '2nd')) {

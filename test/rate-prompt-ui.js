@@ -234,14 +234,17 @@ function initScript({ firstRunDaysAgo, shown, shownDaysAgo, tapped, lang }) {
             const d = await page.evaluate(() => {
                 const el = document.getElementById('dgrAsk');
                 if (!el) return null;
-                return {
+                return { lang: document.documentElement.lang,
                     title: el.querySelector('.dgr-title').textContent,
                     ghost: el.querySelector('.dgr-ghost').textContent,
                     href: el.querySelector('.dgr-primary').getAttribute('href'),
                 };
             });
             check('dictionary: the sheet appears on day 61', !!d, true);
-            check('dictionary: same copy', d && [d.title, d.ghost], ['Как вам приложение?', 'Позже']);
+            // the copy in the page's own language (the dictionary's is its <html lang>): run 667 got the English page
+            // from test.dhamma.gift/dict/ru/ once while the dictionary was being published, and the Russian copy was required
+            check('dictionary: same copy (' + (d && d.lang) + ')', d && [d.title, d.ghost],
+                d && d.lang === 'ru' ? ['Как вам приложение?', 'Позже'] : ['How do you like the app?', 'Later']);
             check('dictionary: its own store listing', d && d.href, 'https://play.google.com/store/apps/details?id=gift.dhamma.pali');
             if (SHOTS && d) await page.screenshot({ path: path.join(SHOTS, 'rate-prompt-real-dict-ru-dark.png') });
             await page.evaluate(() => window.__backCb({ canGoBack: false }));

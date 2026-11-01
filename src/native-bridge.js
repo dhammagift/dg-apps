@@ -764,7 +764,9 @@
             lastSent = now;
             active = true;
             var text;
-            if (detail.phase === 'import') {
+            if (detail.phase === 'apply' && percent >= 0) {   // the packs on the device, one bar over all of them (db-worker.js applyPacks)
+                text = isRu() ? 'Распаковка и применение — ' + percent + '%' : 'Unpacking and applying — ' + percent + '%';
+            } else if (detail.phase === 'import' || detail.phase === 'apply') {
                 text = isRu() ? 'Распаковка и применение…' : 'Unpacking and applying…';
             } else if (percent >= 0) {
                 text = isRu()

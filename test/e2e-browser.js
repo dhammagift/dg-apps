@@ -76,10 +76,20 @@ const CASES = [
     // Point the app at this server's own /mobile-data instead of the live host.
     // The single published database, also in a test build that takes packs from the test site (build-assets.js DG_PACKS_BASE):
     // the parity below is against this server's own data, and the packs carry no translations until a reader picks them.
-    await page.addInitScript(() => {
+    // DG_E2E_PACKS=1: the same cases on the packs this run published (build-search-db.js --packs), the Mahāsaṅgīti with the
+    // ru and en translation packs - what the single library holds - so the packs are held to the site as strictly (ultra's
+    // review 2026-11-01: the offline search with packs failed outright and no check saw it).
+    const PACKS = process.env.DG_E2E_PACKS === '1';
+    await page.addInitScript((packs) => {
         window.DG_DIST_BASE = '/mobile-data';
-        Object.defineProperty(window, 'DG_PACKS_BASE', { get: () => undefined, set: () => {}, configurable: false });
-    });
+        if (packs) {
+            window.DG_PACKS_BASE = '/mobile-data';
+            try { localStorage.setItem('dg.offline.packs', JSON.stringify(['tr-ru', 'tr-en'])); } catch (e) { /* none */ }
+        } else {
+            Object.defineProperty(window, 'DG_PACKS_BASE', { get: () => undefined, set: () => {}, configurable: false });
+        }
+    }, PACKS);
+    if (PACKS) console.log('packs: root-ms + tr-ru + tr-en from /mobile-data/packs-manifest.json');
     const errors = [];
     page.on('pageerror', e => errors.push('PAGEERROR: ' + String(e).slice(0, 200)));
     page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });

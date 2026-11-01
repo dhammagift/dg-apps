@@ -831,7 +831,8 @@ jobs:
       # and what this run uploads, so the thing tested and the thing shipped are the same file.
       - name: Publish the offline library (dg-node)
         working-directory: /var/www/html/nodejs
-        run: node build-search-db.js --no-build
+        # --packs as well: the packs are cut from the same dg.db, and the parity check below runs on them too
+        run: node build-search-db.js --no-build --packs
 
       - name: List the offline library
         working-directory: /var/www/html/nodejs
@@ -879,6 +880,17 @@ jobs:
         run: |
           set -o pipefail
           node test/e2e-browser.js 2>&1 | tee e2e-output.log
+
+      # The same, with the library as packs (the Mahāsaṅgīti + ru + en) - a fresh profile.
+      - name: Check the app answers exactly like the site, on packs
+        env:
+          DG_PLAYWRIGHT: ${{ github.workspace }}/node_modules/playwright-core
+          PLAYWRIGHT_BROWSERS_PATH: /opt/pw-browsers
+          DG_E2E_PACKS: '1'
+          DG_PROFILE_DIR: ${{ runner.temp }}/dg-app-e2e-packs
+        run: |
+          set -o pipefail
+          node test/e2e-browser.js 2>&1 | tee e2e-packs-output.log
 
       # Every link on the home page, search results, the reader (several modes), the TOC and
       # Settings, clicked for real against a server that resolves paths the way Capacitor does

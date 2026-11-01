@@ -961,6 +961,14 @@ function copyMemoApp() {
             fs.rmSync(path.join(dest, 'app-google.html'), { force: true });
         }
     }
+    // Pull to refresh on these pages too (owner 2026-11-01: the sign-in page did not refresh): the gesture is the app's, but a
+    // page that does not load /pull-refresh.js never says a pull may start there.
+    for (const page of ['memo', 'ru/memo', 'login', 'ru/login']) {
+        const file = path.join(WWW, page, 'index.html');
+        if (!fs.existsSync(file)) continue;
+        let html = fs.readFileSync(file, 'utf8');
+        if (!html.includes('/pull-refresh.js')) fs.writeFileSync(file, html.replace('</body>', '<script src="/pull-refresh.js"></script>\n</body>'), 'utf8');
+    }
     return fs.readdirSync(path.join(WWW, 'memo')).length;
 }
 

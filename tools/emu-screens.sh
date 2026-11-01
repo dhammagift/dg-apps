@@ -406,12 +406,17 @@ if [ "${4:-}" = download ] && [ "$PKG" = gift.dhamma.mobile ]; then
     adb shell svc wifi disable; adb shell svc data disable; sleep 3
     pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}'); adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}" > /dev/null
     hits=$(node "$REPO/tools/emu-eval.js" "fetch('/search?q=kacchapa&langs=ru').then(r => r.json()).then(j => j.metadata.totalFiles).catch(e => 'ERR ' + e.message)")
-    text=$(node "$REPO/tools/emu-eval.js" "fetch('/api/text/sn56.11?lang=ru').then(r => r.json()).then(j => (j.segments || []).length).catch(e => 'ERR ' + e.message)")
+    # In a translation the device holds: with packs the first download is the Mahāsaṅgīti + the interface language's pack, and
+    # a text in a language not on the device says it needs the internet (dg-node app.js langNeedsOnline) - ?lang=ru failed on
+    # an English emulator (run 41285132777). The single library holds ru and en.
+    text=$(node "$REPO/tools/emu-eval.js" "(function () { var p = []; try { p = JSON.parse(localStorage.getItem('dg.offline.state') || '{}').packs || []; } catch (e) {}
+      var tr = p.filter(function (x) { return /^tr-[a-z]{2,3}$/.test(x); })[0], l = Array.isArray(p) && p.length ? (tr ? tr.slice(3) : '') : 'ru';
+      return fetch('/api/text/sn56.11' + (l ? '?lang=' + l : '')).then(r => r.json()).then(j => (j.segments || []).length + ' (' + (l || 'pli') + ')'); })().catch(e => 'ERR ' + e.message)")
     echo "offline: search kacchapa -> ${hits}; text sn56.11 -> ${text} segments" >> "$res"
     adb exec-out screencap -p > "$OUT/download-4-offline.png"
     adb shell svc wifi enable; adb shell svc data enable
     if [ "${hits:-0}" -gt 0 ] 2>/dev/null; then ok "offline search answers (kacchapa: $hits texts)"; else ko "offline search: $hits"; fi
-    if [ "${text:-0}" -gt 0 ] 2>/dev/null; then ok "offline text opens (sn56.11: $text segments)"; else ko "offline text: $text"; fi
+    if [ "${text%% *}" -gt 0 ] 2>/dev/null; then ok "offline text opens (sn56.11: $text segments)"; else ko "offline text: $text"; fi
   fi
   adb logcat -d | grep -iE "dg-offline|DgDownload|FATAL" | tail -40 > "$OUT/download-logcat.txt"
   grep -qi "FATAL" "$OUT/download-logcat.txt" && ko "a crash is in the log" || ok "no crash in the log"

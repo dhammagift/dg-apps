@@ -16,18 +16,29 @@ const PROFILE = require('fs').mkdtempSync(require('os').tmpdir() + '/packs-ui-')
   // tick the Buddha Jayanti row
   const ticked = await p.evaluate(() => { const li = [...document.querySelectorAll('#pkDlg li')].find(l => /Buddha Jayanti|Будда Джаянти/.test(l.textContent)); const cb = li && li.querySelector('input[type=checkbox]'); if (!cb) return 'no row'; cb.click(); return 'ticked ' + cb.checked; });
   console.log('picker:', ticked, '| go:', await p.locator('#pkGo').textContent());
-  await p.screenshot({ path: 'real-3-picker-bjt.png' });
+  await p.screenshot({ path: require('path').join(require('os').tmpdir(), 'packs-ui-picker.png') });
   await p.click('#pkGo');
   let st = '';
   for (let i = 0; i < 24; i++) { await p.waitForTimeout(5000); st = await p.evaluate(() => localStorage.getItem('dg.offline.state') || ''); if (/ed-bjt/.test(st)) break; }
   console.log('state:', st.slice(0, 200));
-  const pg = c.pages()[c.pages().length - 1];
+  // Settings redraws itself once the library is ready (a reload): the checks below run on the main page a reader uses,
+  // loaded while still online.
+  await p.waitForTimeout(4000);
+  await p.goto(BASE + '/', { waitUntil: 'networkidle' }); await p.waitForTimeout(5000);
+  const pg = p;
   await c.setOffline(true);
   const r = await pg.evaluate(async () => { try { const j = await (await fetch('/api/text/sn56.11?editions=bjt')).json(); const segs = (j.segments || []).filter(s => s.editions && s.editions.bjt); return 'offline: ' + segs.length + ' BJT lines, downloadedEditions ' + JSON.stringify(j.downloadedEditions) + ', first: ' + (segs[0] ? segs[0].editions.bjt.slice(0, 60) : '-'); } catch (e) { return 'ERR ' + e.message; } });
   console.log(r);
   const ok = /^offline: [1-9]\d* BJT lines, downloadedEditions \["bjt"\]/.test(r) && /ed-bjt/.test(st);
   const r2 = await pg.evaluate(async () => { try { const res = await fetch('/api/text/sn56.11?editions=th'); return 'not downloaded (th) offline: HTTP ' + res.status; } catch (e) { return 'not downloaded (th) offline: ' + e.message; } });
   console.log(r2);
+  // The reader's own request with the network off, in the language held and in one that is not (run 41285132777: ?lang=ru on
+  // an English library failed, and the reader retried it in a loop on an empty page): both answer from the device.
+  const real = await pg.evaluate(async () => {
+    const one = async (l) => { try { const res = await fetch('/api/text/sn56.11?mode=single&lang=' + l); const j = await res.json(); return res.status === 200 && (j.segments || []).length > 0; } catch (e) { return false; } };
+    return { en: await one('en'), ru: await one('ru') };
+  });
+  console.log('offline, the reader\'s request:', JSON.stringify(real));
   // A second tab, network off: the first one holds the library and answers for it (a text and a search; 2026-11-01 none was
   // answered - the relay handler was out of scope).
   const t2 = await c.newPage();
@@ -40,6 +51,6 @@ const PROFILE = require('fs').mkdtempSync(require('os').tmpdir() + '/packs-ui-')
   await c.setOffline(false);
   await c.close();
   console.log('errors:', errs.filter(e => !/wake lock/i.test(e)).slice(0, 8).join(' || ') || 'none');
-  const all = ok && relay.text && relay.search;
+  const all = ok && relay.text && relay.search && real.en && real.ru;
   console.log(all ? 'all ok' : 'FAIL'); process.exitCode = all ? 0 : 1;
 })();

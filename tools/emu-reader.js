@@ -76,7 +76,8 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     .then((d) => (d.result && d.result.result ? d.result.result.value : null));
   const waitFor = async (expr, ms) => { for (let i = 0; i < ms / 500; i++) { if (await ev(expr)) return true; await sleep(500); } return false; };
   const open = async (path, toggle) => {
-    await ev(`localStorage.setItem('paliToggle', ${JSON.stringify(toggle)}); localStorage.removeItem('tts_preferred_mode'); location.assign(${JSON.stringify(path)})`);
+    // A reader who has answered the offline library's offer: its sheet is a fixed layer, and a pull that lands on it is rightly no pull (run 670)
+    await ev(`localStorage.setItem('dg.app.downloadDeclined', '1'); localStorage.setItem('paliToggle', ${JSON.stringify(toggle)}); localStorage.removeItem('tts_preferred_mode'); location.assign(${JSON.stringify(path)})`);
     await sleep(3000);
     return waitFor(`!!document.querySelector('#sutta article .quote')`, 25000);
   };

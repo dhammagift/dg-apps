@@ -161,6 +161,9 @@ const CASES = [
         // public/offline/app.js dgTextOnline): its own answer carries the Principles line in that place.
         const tr = actual.body.availableTranslators, etr = expected.body.availableTranslators;
         if (Array.isArray(tr) && Array.isArray(etr) && tr.length && tr.every(t => etr.includes(t))) copy.body.availableTranslators = tr;
+        // The other Pali editions are not in the device's copy (their text comes online, or from ed-* packs), so the corpus list
+        // of them stays unknown offline - the reader asks /api/text-online for it (dg-node db-worker.js, Cakkhu's three states).
+        if (!('availableEditions' in actual.body)) delete copy.body.availableEditions;
         // The Principles line's links must be the server's (its margin differs: no mp3 line above it).
         const principles = (h) => (/<p class="dg-principles"[^>]*>([\s\S]*?)<\/p>/.exec(h || '') || [])[1];
         const line = principles(actual.body.audioHtml);

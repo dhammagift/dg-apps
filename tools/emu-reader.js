@@ -302,12 +302,12 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     await sleep(2500);
     const geo = (when) => ev(`(function () { var se = document.scrollingElement || document.documentElement, names = document.querySelector('.dg-cols-head');
       var first = document.querySelector('#sutta .column-view p .pli-lang, #sutta p .pli-lang');
-      return JSON.stringify({ when: ${JSON.stringify('')} + when, pageW: se.scrollWidth, innerW: innerWidth, pageX: se.scrollLeft, y: Math.round(se.scrollTop),
+      return JSON.stringify({ when: ${JSON.stringify(when)}, pageW: se.scrollWidth, innerW: innerWidth, pageX: se.scrollLeft, y: Math.round(se.scrollTop),
         names: names ? { cls: String(names.className).slice(0, 50), top: Math.round(names.getBoundingClientRect().top), pos: getComputedStyle(names).position } : null,
         firstLeft: first ? Math.round(first.getBoundingClientRect().left) : null, htmlMargin: getComputedStyle(document.documentElement).marginTop }); })()`);
-    const g0 = JSON.parse(await geo('top')); shot('16-columns-top');
+    const g0 = JSON.parse((await geo('top')) || '{}'); shot('16-columns-top');
     await ev(`window.scrollBy(0, 1200)`); await sleep(1500);
-    const g1 = JSON.parse(await geo('scrolled')); shot('17-columns-scrolled');
+    const g1 = JSON.parse((await geo('scrolled')) || '{}'); shot('17-columns-scrolled');
     console.log('columns: ' + JSON.stringify(g0) + ' | ' + JSON.stringify(g1));
     check(g0.pageW <= g0.innerW + 1 && g1.pageX === 0, `columns: the page does not scroll sideways (page ${g0.pageW} px in ${g0.innerW}, left ${g1.pageX})`);
     check(g0.firstLeft === null || g0.firstLeft >= 0, `columns: the first column starts on the screen (left ${g0.firstLeft})`);

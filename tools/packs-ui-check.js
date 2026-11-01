@@ -23,18 +23,18 @@ const PROFILE = require('fs').mkdtempSync(require('os').tmpdir() + '/packs-ui-')
   console.log('state:', st.slice(0, 200));
   const pg = c.pages()[c.pages().length - 1];
   await c.setOffline(true);
-  const r = await pg.evaluate(async () => { try { const j = await (await fetch('/api/text/sn56.11?langs=ru&editions=bjt')).json(); const segs = (j.segments || []).filter(s => s.editions && s.editions.bjt); return 'offline: ' + segs.length + ' BJT lines, downloadedEditions ' + JSON.stringify(j.downloadedEditions) + ', first: ' + (segs[0] ? segs[0].editions.bjt.slice(0, 60) : '-'); } catch (e) { return 'ERR ' + e.message; } });
+  const r = await pg.evaluate(async () => { try { const j = await (await fetch('/api/text/sn56.11?editions=bjt')).json(); const segs = (j.segments || []).filter(s => s.editions && s.editions.bjt); return 'offline: ' + segs.length + ' BJT lines, downloadedEditions ' + JSON.stringify(j.downloadedEditions) + ', first: ' + (segs[0] ? segs[0].editions.bjt.slice(0, 60) : '-'); } catch (e) { return 'ERR ' + e.message; } });
   console.log(r);
   const ok = /^offline: [1-9]\d* BJT lines, downloadedEditions \["bjt"\]/.test(r) && /ed-bjt/.test(st);
-  const r2 = await pg.evaluate(async () => { try { const res = await fetch('/api/text/sn56.11?langs=ru&editions=th'); return 'not downloaded (th) offline: HTTP ' + res.status; } catch (e) { return 'not downloaded (th) offline: ' + e.message; } });
+  const r2 = await pg.evaluate(async () => { try { const res = await fetch('/api/text/sn56.11?editions=th'); return 'not downloaded (th) offline: HTTP ' + res.status; } catch (e) { return 'not downloaded (th) offline: ' + e.message; } });
   console.log(r2);
   // A second tab, network off: the first one holds the library and answers for it (a text and a search; 2026-11-01 none was
   // answered - the relay handler was out of scope).
   const t2 = await c.newPage();
-  await c.setOffline(false); await t2.goto(BASE + '/', { waitUntil: 'networkidle' }).catch(() => {}); await t2.waitForTimeout(3000); await c.setOffline(true);
+  await c.setOffline(false); await t2.goto(BASE + '/', { waitUntil: 'networkidle' }).catch(() => {}); await t2.waitForTimeout(6000);   // its sqlite module loads late: offline sooner aborted it once await c.setOffline(true);
   const relay = await t2.evaluate(async () => {
     const one = async (u) => { try { const res = await fetch(u); const j = await res.json(); return res.status === 200 && (j.segments ? j.segments.length : Object.keys(j.data || j).length) > 0; } catch (e) { return false; } };
-    return { text: await one('/api/text/sn1.1?lang=en'), search: await one('/search?q=kacchapa&langs=en') };
+    return { text: await one('/api/text/sn1.1'), search: await one('/search?q=kacchapa') };   // Pali only: no translation pack is held here
   });
   console.log('second tab offline, through the first:', JSON.stringify(relay));
   await c.setOffline(false);

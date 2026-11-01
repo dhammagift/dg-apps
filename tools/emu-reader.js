@@ -324,6 +324,23 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     await ev(`localStorage.removeItem('viewMode')`);
   } else check(false, 'columns: mn32 with the editions did not load');
 
+  // Pull to refresh (owner 2026-11-01: «предсказуемо»): a sideways swipe on the columns, a little down too as a finger does,
+  // must not reload; a deliberate pull down at the top must. The page's marker survives only a page that did not reload.
+  if (await (async () => { await ev(`localStorage.setItem('viewMode', 'columns')`); return open('/mn32?lang=en&editions=ms,th', 'pli-2nd'); })()) {
+    await sleep(2000);
+    await ev(`window.scrollTo(0, 0); window.__noReload = 1`); await sleep(800);
+    execSync('adb shell input swipe 900 1400 150 1470 300'); await sleep(3500);
+    const kept = await ev(`window.__noReload === 1`);
+    shot('20-pull-sideways');
+    check(kept === true, `pull to refresh: a sideways swipe on the columns (70 px down too) does not reload (${kept === true ? 'kept' : 'reloaded'})`);
+    await ev(`window.scrollTo(0, 0); window.__noReload = 1`); await sleep(800);
+    execSync('adb shell input swipe 540 600 540 1800 600'); await sleep(6000);
+    const gone = await ev(`window.__noReload !== 1`).catch(() => true);
+    shot('21-pull-down');
+    check(gone === true, `pull to refresh: a deliberate pull down at the top reloads (${gone === true ? 'reloaded' : 'nothing happened'})`);
+    await ev(`localStorage.removeItem('viewMode')`);
+  } else check(false, 'pull to refresh: mn32 did not load');
+
   // Translations window, "↺ Default" in multi mode (owner's iPhone, build 567: it did nothing - a reload to /sn56.11 is no file in
   // the WebView; dg-node home.js now reloads through /?_nativeRoute=). Back on the reader, without mode/langs, one translation.
   if (await open('/sn56.11?lang=ru&mode=multi&langs=ru,en', '2nd')) {

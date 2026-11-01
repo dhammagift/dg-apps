@@ -20,11 +20,7 @@
 
     function blocked(t) {
         for (var n = t && t.nodeType === 1 ? t : t && t.parentElement; n && n !== document.documentElement; n = n.parentElement) {
-            var cs = getComputedStyle(n);
-            if (n.scrollTop > 0 || cs.position === 'fixed') return true;
-            // A box that scrolls sideways (the reader's columns, #sutta.dg-grid > article): its swipes are its own. A finger
-            // moving left and right never travels perfectly flat, and the page refreshed every other swipe (owner 2026-11-01).
-            if (n.scrollWidth > n.clientWidth + 1 && /^(auto|scroll)$/.test(cs.overflowX)) return true;
+            if (n.scrollTop > 0 || getComputedStyle(n).position === 'fixed') return true;
             if (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)) return true;
         }
         return (document.scrollingElement || document.documentElement).scrollTop > 0;

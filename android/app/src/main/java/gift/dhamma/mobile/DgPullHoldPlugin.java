@@ -8,7 +8,9 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.MotionEvent;
 import android.view.PixelCopy;
+import android.view.ViewConfiguration;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
@@ -39,6 +41,30 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  */
 @CapacitorPlugin(name = "DgPullHold")
 public class DgPullHoldPlugin extends Plugin {
+
+    // Pull to refresh only for a pull that is mostly DOWN. A finger swiping the reader's columns sideways never moves
+    // perfectly flat, and the platform's layout took its few pixels down as a pull - the page refreshed every other swipe
+    // (owner 2026-11-01). Decided once per touch, from its first movement past the touch slop: more sideways than down,
+    // and this touch is not a pull at all. Everything else (where a pull may start, the distance) stays the platform's.
+    static class VerticalOnlyRefresh extends SwipeRefreshLayout {
+        private final int slop;
+        private float downX, downY;
+        private boolean decided, sideways;
+        VerticalOnlyRefresh(android.content.Context c) { super(c); slop = ViewConfiguration.get(c).getScaledTouchSlop(); }
+        @Override public boolean onInterceptTouchEvent(MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN: downX = e.getX(); downY = e.getY(); decided = false; sideways = false; break;
+                case MotionEvent.ACTION_MOVE:
+                    if (!decided) {
+                        float dx = Math.abs(e.getX() - downX), dy = Math.abs(e.getY() - downY);
+                        if (dx > slop || dy > slop) { decided = true; sideways = dx > dy; }
+                    }
+                    if (sideways) return false;
+                    break;
+            }
+            return super.onInterceptTouchEvent(e);
+        }
+    }
     // A page that never says it is ready (an error, a page without pull-refresh.js) is not held for ever.
     private static final long MAX_HOLD_MS = 8000;
     private static final int ACCENT = 0xFF149C7C;   // the pages' --dg-accent
@@ -78,7 +104,7 @@ public class DgPullHoldPlugin extends Plugin {
         shot.setVisibility(View.GONE);
         box.addView(shot, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        swipe = new SwipeRefreshLayout(getContext());
+        swipe = new VerticalOnlyRefresh(getContext());
         swipe.addView(box, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         parent.addView(swipe, index, lp);
 
@@ -86,9 +112,9 @@ public class DgPullHoldPlugin extends Plugin {
         // or the answer came from a page that is no longer there (one without pull-refresh.js never answers).
         swipe.setOnChildScrollUpCallback((layout, child) -> web.getScrollY() > 0 || !allowed || !allowedOn.equals(web.getUrl()));
         swipe.setOnRefreshListener(() -> hold(web));
-        // A deliberate pull, not a finger drifting while it reads or swipes the columns (owner 2026-11-01: "реагировать,
-        // если я прям тяну вниз"): about twice the platform's 64 dp before the page refreshes.
-        swipe.setDistanceToTriggerSync(Math.round(128 * getContext().getResources().getDisplayMetrics().density));
+        // A deliberate pull (owner 2026-11-01: «реагировать, если я прям тяну вниз»): a little further than the platform's
+        // 64 dp; the sideways swipes are left out by VerticalOnlyRefresh, not by a longer pull.
+        swipe.setDistanceToTriggerSync(Math.round(96 * getContext().getResources().getDisplayMetrics().density));
         swipe.setColorSchemeColors(ACCENT);
         boolean night = (getContext().getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
             == Configuration.UI_MODE_NIGHT_YES;

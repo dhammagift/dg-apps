@@ -91,7 +91,7 @@ jobs:
 
       # tools/emu-tray.js talks to the app's WebView over DevTools with the WebSocket that comes with Node 22+.
       - name: Node for the notification player test
-        if: inputs.mode == 'tray' || inputs.mode == 'icons' || inputs.mode == 'alarms' || inputs.mode == 'reader' || inputs.mode == 'compare'
+        if: inputs.mode == 'tray' || inputs.mode == 'icons' || inputs.mode == 'alarms' || inputs.mode == 'reader' || inputs.mode == 'compare' || inputs.mode == 'pause'
         uses: actions/setup-node@v4
         with:
           node-version: '24.20.0'

@@ -152,6 +152,20 @@
         },
 
         askConsent: function () {
+            // Packs: the first download is chosen in the picker (owner 2026-11-01: «естественно, так и должно было быть») -
+            // Settings' "What to download" opens with the Mahāsaṅgīti and the interface language ticked, sizes shown, and its
+            // Download starts the transfer as the consent (dg-node app.js agreedNow). This automatic start stands down.
+            if (packsOn()) {
+                try { localStorage.setItem('dg.offline.openPacks', '1'); } catch (e) { /* private mode: the row is still there */ }
+                // the home page's sheet may not be set up yet this early in the load: a few seconds' patience
+                var tries = 0;
+                (function openWhenReady() {
+                    var H = window.DgHome;
+                    if (H && typeof H.openSettingsSheet === 'function') { H.openSettingsSheet(); return; }
+                    if (++tries < 40) setTimeout(openWhenReady, 250);
+                })();
+                return Promise.resolve(false);
+            }
             var Network = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Network;
             if (!Network) return Promise.resolve(true);
             return Promise.all([Network.getStatus(), packsOn() ? readPacksPlan() : readManifest()]).then(function (out) {

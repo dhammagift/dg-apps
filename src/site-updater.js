@@ -140,9 +140,9 @@
   function siteRu() { return typeof isRu === 'function' ? isRu() : /^ru/i.test(document.documentElement.lang || ''); }
   var ST = {
     ru: { busy: 'Проверяю…', current: 'Всё актуально', new: 'Есть обновление - нажмите «Обновить» внизу', offline: 'Нет соединения', failed: 'Не удалось проверить, попробуйте позже',
-          done: 'Обновление применено', doneSub: 'Теперь у вас свежая версия', broke: 'Обновление не заработало', brokeSub: 'Включена встроенная версия. Если что-то не работает, переустановите приложение из магазина' },
+          done: 'Обновление установлено', doneSub: 'Закройте и снова откройте приложение, если изменений не видно', broke: 'Обновление не заработало', brokeSub: 'Включена встроенная версия. Если что-то не работает, переустановите приложение из магазина' },
     en: { busy: 'Checking…', current: 'Everything is up to date', new: 'Update found - use the Update button below', offline: 'No connection', failed: 'Could not check, try again later',
-          done: 'Update applied', doneSub: 'You now have the latest version', broke: 'The update did not work', brokeSub: 'The built-in version is back. If something is broken, reinstall the app from the store' }
+          done: 'Update installed', doneSub: 'Close and reopen the app if you don\'t see the changes', broke: 'The update did not work', brokeSub: 'The built-in version is back. If something is broken, reinstall the app from the store' }
   };
   function st() { return ST[siteRu() ? 'ru' : 'en']; }
   // Checks now (the version row's button) and says the result through say(text); resolves when done.
@@ -162,7 +162,7 @@
     n.lastChild.textContent = sub;
     n.addEventListener('click', function () { n.remove(); });
     document.body.appendChild(n);
-    setTimeout(function () { n.remove(); }, bad ? 15000 : 4500);
+    setTimeout(function () { n.remove(); }, bad ? 15000 : 6000);   // long enough to read the reopen hint (owner 2026-11-01)
   }
   function showPendingNotice() {
     var applied = store('dgSiteApplied') === '1', broke = store('dgSiteBroke') === '1';
@@ -269,7 +269,7 @@
     return !!built && site.commitTime > built;
   }
 
-  var checking = false;
+  var checking = null;   // the round under way: a person's check joins it (it answered 'busy' at once - the icon stopped, "Checking…" stayed)
   var staged = false;   // a round is kept apart for the next start (Dhamma.Gift): no second round in this run
   function stamp() { try { localStorage.setItem('dgSiteCheckedAt', String(Date.now())); } catch (e) { /* checked again next time */ } }
   // force: a person asked (the version row in the menu) - no waiting for SITE_CHECK_EVERY. Resolves {state: 'offline' | 'busy' | 'failed' | 'new' | 'current'}.
@@ -278,12 +278,11 @@
     var res = { state: 'current' };
     if (!DS || !window.crypto || !crypto.subtle) return Promise.resolve({ state: 'failed' });
     if (SITE_CONFIG.manual && !force) return Promise.resolve(res);   // no network unless a person asks
-    if (checking) return Promise.resolve({ state: 'busy' });
+    if (checking) return checking;
     if (staged) return Promise.resolve({ state: 'new' });
     if (navigator.onLine === false) return Promise.resolve({ state: 'offline' });
     // A first start has no time stamp and always checks; after that, not sooner than SITE_CHECK_EVERY.
     if (!force && Date.now() - (parseInt(store('dgSiteCheckedAt'), 10) || 0) < SITE_CHECK_EVERY) return Promise.resolve(res);
-    checking = true;
     var hashes = {};
     try { hashes = JSON.parse(store('dgSiteHashes')) || {}; } catch (e) { hashes = {}; }
     var chain = Promise.all([
@@ -370,11 +369,11 @@
         if (shown && !failed && !SITE_CONFIG.silent) afterConsent(showUpdateBar);
       });
     }
-    return chain.catch(function (e) {
+    return (checking = chain.catch(function (e) {
       res.state = 'failed';
       if (e && e.definite) stamp();   // the site answered no: asking again on every return to the app changes nothing
       console.log('[dg-site] update failed:', (e && e.message) || e);
-    }).then(function () { checking = false; return res; });
+    }).then(function () { checking = null; return res; }));
   }
   window.__dgCheckSiteUpdate = function () { return updateSite(true); };
 

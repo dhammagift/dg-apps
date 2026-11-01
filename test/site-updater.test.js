@@ -43,7 +43,7 @@ function dgPlugin(log, { failPut = 0 } = {}) {
     };
 }
 
-async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1000, gateOpen = true, failPath, plugin, manual, force = true, ls = { dgAppVersion: '1.0.1' } }) {
+async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1000, gateOpen = true, failPath, plugin, manual, force = true, twice = false, ls = { dgAppVersion: '1.0.1' } }) {
     const log = [];
     const bundleFiles = { '/read/js/voice.js': 'old voice', '/read/css/voice.css': 'same css' };
     const site = siteFiles || { '/read/js/voice.js': 'new voice', '/read/css/voice.css': 'same css' };
@@ -62,8 +62,8 @@ async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1
         return { ok: true, status: 200, arrayBuffer: async () => new Uint8Array(Buffer.from(served)).buffer };
     };
     const pg = page({ ls, plugin: plugin ? plugin(log) : dgPlugin(log), fetchFn, config: { manual, gate: async () => gateOpen } });
-    const res = await pg.update(force);
-    return { res, log, ls: pg.ls };
+    const [res, res2] = await Promise.all([pg.update(force), twice ? pg.update(true) : null]);
+    return { res, res2, log, ls: pg.ls };
 }
 
 (async () => {
@@ -138,6 +138,13 @@ async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1
     const ls3 = { dgSiteFresh: '1', dgSiteBoots: '1', dgAppVersion: '1.0.1' };
     page({ ls: ls3, ss: {}, plugin: dgPlugin([]), fetchFn: noFetch, readyState: 'loading' }).hide();
     assert.strictEqual(ls3.dgSiteFresh, '0', 'leaving the app (hidden) proves them too');
+
+    // A person's check while the start's own check is under way joins it: its answer, not 'busy' at once (the version row's
+    // icon stopped and "Checking…" stayed, owner 2026-11-01)
+    r = await check({ twice: true });
+    assert.strictEqual(r.res2.state, r.res.state, 'the second check answers what the running one found');
+    assert.notStrictEqual(r.res2.state, 'busy');
+    assert.strictEqual(r.log.filter((l) => l === 'commit').length, 1, 'and the round runs once');
 
     console.log('site-updater: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

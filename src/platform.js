@@ -154,7 +154,7 @@
         askConsent: function () {
             var Network = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Network;
             if (!Network) return Promise.resolve(true);
-            return Promise.all([Network.getStatus(), readManifest()]).then(function (out) {
+            return Promise.all([Network.getStatus(), packsOn() ? readPacksPlan() : readManifest()]).then(function (out) {
                 var status = out[0];
                 var m = out[1] || {};
                 if (status.connected === false) return true; // the download itself will fail visibly
@@ -189,6 +189,32 @@
             okButtonTitle: ru ? 'Скачать' : 'Download',
             cancelButtonTitle: ru ? 'Не сейчас' : 'Not now',
         }).then(function (v) { return !!v.value; });
+    }
+
+    // A build that takes the library in packs (a test build: DG_PACKS_BASE, dg-node app.js PACKS_ON) shows what that download
+    // is: the packs picked in Settings, or the first ones - the Mahāsaṅgīti and the interface language's translation (app.js
+    // firstPacks). It showed the single library's 245 MB, all languages (f3-ultra, run 661's first-launch.png).
+    function packsOn() { return !!window.DG_PACKS_BASE && !window.DG_NATIVE_SQL && window.DG_OFFLINE_PACKS !== false; }
+    function readPacksPlan() {
+        return fetch(String(window.DG_PACKS_BASE).replace(/\/$/, '') + '/packs-manifest.json')
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (m) {
+                if (!m || !Array.isArray(m.packs)) return readManifest();
+                var picked = null;
+                try { picked = JSON.parse(localStorage.getItem('dg.offline.packs') || 'null'); } catch (e) { /* none */ }
+                var ui = 'en';
+                try { ui = (localStorage.getItem('dhammaLanguage') || localStorage.getItem('siteLanguage') || 'en') === 'ru' ? 'ru' : 'en'; } catch (e) { /* none */ }
+                var want = Array.isArray(picked) ? picked : ['tr-' + ui];
+                var packs = m.packs.filter(function (p) { return p.main || p.required || want.indexOf(p.id) !== -1; });
+                var langs = [];
+                packs.forEach(function (p) { if (p.kind === 'translation') (p.langs || [p.lang]).forEach(function (l) { if (l && langs.indexOf(l) === -1) langs.push(l); }); });
+                return {
+                    bytes: packs.reduce(function (a, p) { return a + (p.bytes || 0); }, 0),
+                    bytes_gz: packs.reduce(function (a, p) { return a + (p.bytes_gz || 0); }, 0),
+                    langs: langs.join(','),
+                };
+            })
+            .catch(function () { return readManifest(); });
     }
 
     // The published manifest carries the real sizes: bytes_gz is what crosses the connection, bytes is

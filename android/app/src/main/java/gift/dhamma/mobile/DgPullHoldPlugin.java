@@ -138,13 +138,13 @@ public class DgPullHoldPlugin extends Plugin {
     private void hold(final WebView web) {
         final int mine = ++token;
         final int w = web.getWidth(), h = web.getHeight();
-        if (w == 0 || h == 0) { web.reload(); return; }
+        if (w == 0 || h == 0) { reloadPage(web); return; }
         final Bitmap picture = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Runnable then = () -> {
             if (mine != token) return;
             shot.setImageBitmap(picture);
             shot.setVisibility(View.VISIBLE);
-            web.reload();
+            reloadPage(web);
             ui.postDelayed(() -> { if (mine == token) release(); }, MAX_HOLD_MS);
         };
         // PixelCopy reads what is on the screen (the circle too: the live one is drawn over it, in the same place);
@@ -160,6 +160,26 @@ public class DgPullHoldPlugin extends Plugin {
             drawInto(web, picture);
             then.run();
         }
+    }
+
+    // A reader address (/dn2:57.2, /sn56.11) is no file here: the dot reads as an extension, and reloaded as a document it
+    // gave the WebView's own "Webpage not available (ERR_INVALID_RESPONSE)" after the held picture (owner 2026-11-01, pulling
+    // to refresh in the reader). The same place opens through the root's _nativeRoute handoff, as MainActivity does after
+    // such an error; here it is not left to the error.
+    private static void reloadPage(WebView web) {
+        String url = web.getUrl();
+        android.net.Uri u = url == null ? null : android.net.Uri.parse(url);
+        String path = u == null ? null : u.getPath();
+        if (u != null && "localhost".equals(u.getHost()) && path != null) {
+            String last = path.substring(path.lastIndexOf('/') + 1);
+            if (last.indexOf('.') >= 0 && !last.matches(".*\\.html?$")) {
+                String route = path + (u.getEncodedQuery() != null ? "?" + u.getEncodedQuery() : "")
+                    + (u.getEncodedFragment() != null ? "#" + u.getEncodedFragment() : "");
+                web.loadUrl(u.getScheme() + "://localhost/?_nativeRoute=" + android.net.Uri.encode(route));
+                return;
+            }
+        }
+        web.reload();
     }
 
     private static void drawInto(WebView web, Bitmap picture) {

@@ -326,7 +326,8 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
 
   // Pull to refresh (owner 2026-11-01: «предсказуемо»): a sideways swipe on the columns, a little down too as a finger does,
   // must not reload; a deliberate pull down at the top must. The page's marker survives only a page that did not reload.
-  if (await (async () => { await ev(`localStorage.setItem('viewMode', 'columns')`); return open('/mn32?lang=en&editions=ms,th', 'pli-2nd'); })()) {
+  // A dotted reader address on purpose: reloaded as a document it gave "Webpage not available" (owner 2026-11-01).
+  if (await (async () => { await ev(`localStorage.setItem('viewMode', 'columns')`); return open('/sn56.11?lang=en&editions=ms,th', 'pli-2nd'); })()) {
     await sleep(2000);
     await ev(`window.scrollTo(0, 0); window.__noReload = 1`); await sleep(800);
     execSync('adb shell input swipe 900 1400 150 1470 300'); await sleep(3500);
@@ -335,9 +336,10 @@ process.on('exit', (code) => { if (!finished && !code) { console.log('FAIL the s
     check(kept === true, `pull to refresh: a sideways swipe on the columns (70 px down too) does not reload (${kept === true ? 'kept' : 'reloaded'})`);
     await ev(`window.scrollTo(0, 0); window.__noReload = 1`); await sleep(800);
     execSync('adb shell input swipe 540 600 540 1800 600'); await sleep(6000);
-    const gone = await ev(`window.__noReload !== 1`).catch(() => true);
+    await waitFor(`!!document.querySelector('#sutta article .quote')`, 20000);
+    const after = JSON.parse((await ev(`JSON.stringify({ reloaded: window.__noReload !== 1, at: location.pathname, text: !!document.querySelector('#sutta article .quote') })`)) || '{}');
     shot('21-pull-down');
-    check(gone === true, `pull to refresh: a deliberate pull down at the top reloads (${gone === true ? 'reloaded' : 'nothing happened'})`);
+    check(after.reloaded && after.at === '/sn56.11' && after.text, `pull to refresh: a pull down at the top reloads the same text (reloaded ${after.reloaded}, at ${after.at}, text ${after.text})`);
     await ev(`localStorage.removeItem('viewMode')`);
   } else check(false, 'pull to refresh: mn32 did not load');
 

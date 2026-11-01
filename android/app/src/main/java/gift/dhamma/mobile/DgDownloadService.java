@@ -55,6 +55,7 @@ public class DgDownloadService extends Service {
     static final String ACTION_DOWNLOAD = "gift.dhamma.mobile.DOWNLOAD";
     static final String EXTRA_BASE = "base";
     static final String EXTRA_FRESH = "fresh";
+    static final String EXTRA_FILES = "files";
     static final String LIBRARY_DIR = "dg-library";
     static final String MANIFEST = "db-manifest.json";
 
@@ -81,7 +82,7 @@ public class DgDownloadService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_DOWNLOAD.equals(intent.getAction())) {
-            startDownload(intent.getStringExtra(EXTRA_BASE), intent.getBooleanExtra(EXTRA_FRESH, false));
+            startDownload(intent.getStringExtra(EXTRA_BASE), intent.getBooleanExtra(EXTRA_FRESH, false), intent.getStringExtra(EXTRA_FILES));
             return START_NOT_STICKY;
         }
         Notification notification = null;
@@ -116,7 +117,7 @@ public class DgDownloadService extends Service {
     }
 
 
-    private void startDownload(final String base, final boolean fresh) {
+    private void startDownload(final String base, final boolean fresh, final String files) {
         final Notification first = DgProgressPlugin.buildNotification(this, "Dhamma.gift", "Downloading the offline library", -1);
         try {
             if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
@@ -134,7 +135,10 @@ public class DgDownloadService extends Service {
         new Thread(new Runnable() {
             @Override public void run() {
                 String error = null;
-                try { download(base, fresh); }
+                try {
+                    if (files != null && !files.isEmpty()) downloadFiles(base, new org.json.JSONArray(files));
+                    else download(base, fresh);
+                }
                 catch (Exception e) { error = String.valueOf(e.getMessage() != null ? e.getMessage() : e); }
                 running = false;
                 finish(error);
@@ -255,6 +259,75 @@ public class DgDownloadService extends Service {
         partBuild.delete();
         try (OutputStream os = new FileOutputStream(localManifest)) { os.write(manifestText.getBytes("UTF-8")); }
         transferred = true;
+        lastLoaded = total; lastTotal = total;
+        for (Listener l : listeners) l.onProgress(total, total);
+    }
+
+    // Packs: each file of the list to <library dir>/<its relative path>, one after another, with the same resume, retries,
+    // progress (over the sum of the list) and checks as the single archive - sha256 of the .gz file itself here.
+    private void downloadFiles(String base, org.json.JSONArray list) throws Exception {
+        File dir = libraryDir(this);
+        long total = 0;
+        for (int i = 0; i < list.length(); i++) total += list.getJSONObject(i).optLong("bytes", 0);
+        long done = 0, lastNotify = 0;
+        for (int i = 0; i < list.length(); i++) {
+            org.json.JSONObject f = list.getJSONObject(i);
+            String rel = f.getString("path");
+            if (rel.contains("..") || rel.startsWith("/")) throw new Exception("bad pack path " + rel);
+            long size = f.optLong("bytes", 0);
+            String sha = f.optString("sha256", "");
+            File target = new File(dir, rel), part = new File(dir, rel + ".part");
+            File parent = target.getParentFile();
+            if (parent != null && !parent.isDirectory()) parent.mkdirs();
+            if (!(target.isFile() && size > 0 && target.length() == size)) {
+                target.delete();
+                int attempt = 0;
+                while (size <= 0 || part.length() < size) {
+                    if (cancelled) { part.delete(); throw new Exception("cancelled"); }
+                    long have = part.length();
+                    HttpURLConnection c = null;
+                    try {
+                        c = (HttpURLConnection) new URL(base + "/" + rel).openConnection();
+                        c.setConnectTimeout(20000); c.setReadTimeout(30000); c.setUseCaches(false);
+                        if (have > 0) c.setRequestProperty("Range", "bytes=" + have + "-");
+                        int code = c.getResponseCode();
+                        if (code == 200 && have > 0) { part.delete(); have = 0; }
+                        else if (code != 200 && code != 206) throw new java.io.IOException("HTTP " + code);
+                        try (InputStream in = c.getInputStream(); OutputStream out = new FileOutputStream(part, have > 0)) {
+                            byte[] buf = new byte[65536]; int n; long loaded = have;
+                            while ((n = in.read(buf)) > 0) {
+                                if (cancelled) throw new Exception("cancelled");
+                                out.write(buf, 0, n); loaded += n; transferred = true;
+                                long now = System.currentTimeMillis();
+                                if (total > 0 && now - lastNotify > 700) {
+                                    lastNotify = now;
+                                    long all = done + loaded;
+                                    lastLoaded = all; lastTotal = total;
+                                    int percent = (int) Math.min(100, all * 100 / total);
+                                    String text = "Downloading the offline library \u2014 " + percent + "% (" + (all / 1048576) + " of " + (total / 1048576) + " MB)";
+                                    try { NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, DgProgressPlugin.buildNotification(this, "Dhamma.gift", text, percent)); } catch (Exception e) { /* no permission */ }
+                                    for (Listener l : listeners) l.onProgress(all, total);
+                                }
+                            }
+                        }
+                        attempt = 0;
+                        if (size <= 0) break;   // no size published: one whole response is the file
+                    } catch (java.io.IOException e) {
+                        if (++attempt > 40) throw e;
+                        try { Thread.sleep(Math.min(30000, 2000L * attempt)); } catch (InterruptedException ie) { throw new Exception("cancelled"); }
+                    } finally { if (c != null) c.disconnect(); }
+                }
+                if (size > 0 && part.length() != size) throw new Exception("the downloaded pack has the wrong size: " + rel);
+                if (!sha.isEmpty()) {
+                    MessageDigest md = MessageDigest.getInstance("SHA-256");
+                    try (InputStream in = new FileInputStream(part)) { byte[] buf = new byte[65536]; int n; while ((n = in.read(buf)) > 0) md.update(buf, 0, n); }
+                    StringBuilder hex = new StringBuilder(); for (byte b : md.digest()) hex.append(String.format("%02x", b));
+                    if (!hex.toString().equalsIgnoreCase(sha)) { part.delete(); throw new Exception("the downloaded pack is damaged (checksum): " + rel); }
+                }
+                if (!part.renameTo(target)) throw new Exception("could not store the downloaded pack " + rel);
+            }
+            done += size > 0 ? size : target.length();
+        }
         lastLoaded = total; lastTotal = total;
         for (Listener l : listeners) l.onProgress(total, total);
     }

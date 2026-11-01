@@ -24,6 +24,9 @@ import java.util.List;
  * in the background and goes on only when the reader comes back (owner, issue #62). The transfer here runs in
  * DgDownloadService, a real foreground service, into the app's files directory, and resumes after any break.
  *
+ *   start({base, files})   -> {path}   packs instead (dg-node app.js prepareArchive): `files` is a JSON list of
+ *                                      {path, bytes, sha256} relative to `base`; each lands at the same relative path in
+ *                                      the library directory, which the page then imports them from.
  *   start({base}[, fresh]) -> {path}   the directory holding db-manifest.json and the archive (dg.db.gz), once both are in
  *                                      place; "progress" events {loaded, total} meanwhile. A second start joins the running
  *                                      transfer. `fresh` ignores an archive of the same build already on disk.
@@ -71,7 +74,8 @@ public class DgDownloadPlugin extends Plugin {
         Intent intent = new Intent(context, DgDownloadService.class)
                 .setAction(DgDownloadService.ACTION_DOWNLOAD)
                 .putExtra(DgDownloadService.EXTRA_BASE, base)
-                .putExtra(DgDownloadService.EXTRA_FRESH, Boolean.TRUE.equals(call.getBoolean("fresh", false)));
+                .putExtra(DgDownloadService.EXTRA_FRESH, Boolean.TRUE.equals(call.getBoolean("fresh", false)))
+                .putExtra(DgDownloadService.EXTRA_FILES, call.getString("files", ""));
         try {
             if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
             else context.startService(intent);
@@ -109,17 +113,24 @@ public class DgDownloadPlugin extends Plugin {
     @PluginMethod
     public void cancel(PluginCall call) {
         DgDownloadService.cancelled = true;
-        File dir = DgDownloadService.libraryDir(getContext());
-        File[] parts = dir.listFiles();
-        if (parts != null) for (File f : parts) if (f.getName().contains(".part")) f.delete();
+        deleteUnder(DgDownloadService.libraryDir(getContext()), true);
         call.resolve();
     }
 
     @PluginMethod
     public void clear(PluginCall call) {
-        File dir = DgDownloadService.libraryDir(getContext());
-        File[] files = dir.listFiles();
-        if (files != null) for (File f : files) if (!f.getName().equals(DgDownloadService.MANIFEST)) f.delete();
+        deleteUnder(DgDownloadService.libraryDir(getContext()), false);
         call.resolve();
+    }
+
+    // The packs sit in a subdirectory (packs/…): `partsOnly` = only unfinished downloads, else everything but the archive's
+    // manifest (a few hundred bytes the single-library path reads).
+    private static void deleteUnder(File dir, boolean partsOnly) {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            if (f.isDirectory()) { deleteUnder(f, partsOnly); if (!partsOnly) f.delete(); }
+            else if (partsOnly ? f.getName().contains(".part") : !f.getName().equals(DgDownloadService.MANIFEST)) f.delete();
+        }
     }
 }

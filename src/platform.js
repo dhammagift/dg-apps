@@ -88,7 +88,7 @@
     // imports the archive as before, only much sooner. The native progress becomes the page's own progress events, and the
     // native notification replaces the mirrored one while the transfer runs (native-bridge.js looks at dgNativeDownload).
     var androidProgressWired = false;
-    function prepareAndroid(D, fresh) {
+    function wireAndroidProgress(D) {
         if (!androidProgressWired && typeof D.addListener === 'function') {
             androidProgressWired = true;
             // The plugin's "progress" events reach the page through native-bridge.js (bridgeNativeDownloadProgress): a
@@ -98,6 +98,9 @@
                 if (e.detail && e.detail.done && typeof D.clear === 'function') { try { D.clear(); } catch (x) { /* nothing to clear */ } }
             });
         }
+    }
+    function prepareAndroid(D, fresh) {
+        wireAndroidProgress(D);
         window.dgNativeDownload = true;
         // The first notification, and with it Android 13+'s permission prompt (the native service posts the later ones).
         try { var P = window.Capacitor.Plugins.DgProgress; if (P && P.update) P.update({ title: 'Dhamma.gift', text: 'Downloading the offline library', percent: -1 }); } catch (x) { /* no notification */ }
@@ -108,11 +111,26 @@
         }).catch(function () { return false; }).then(function (ok) { window.dgNativeDownload = false; return ok; });
     }
 
+    // Packs (dg-node app.js prepareArchive): the files the worker lacks, {path, bytes, sha256} relative to `base`, fetched by
+    // the same foreground service into the library directory; the answer is that directory's file URL, which the worker
+    // imports them from. Android only: iOS opens its one library natively and has no packs.
+    function preparePacks(opts) {
+        var D = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DgDownload;
+        if (!D || typeof D.start !== 'function' || !(window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android')) return Promise.resolve(null);
+        wireAndroidProgress(D);
+        window.dgNativeDownload = true;
+        try { var P = window.Capacitor.Plugins.DgProgress; if (P && P.update) P.update({ title: 'Dhamma.gift', text: 'Downloading the offline library', percent: -1 }); } catch (x) { /* no notification permission */ }
+        return Promise.resolve(D.start({ base: opts.base, files: JSON.stringify(opts.files || []) })).then(function (r) {
+            return r && r.path ? window.Capacitor.convertFileSrc(r.path) : null;
+        }).catch(function () { return null; }).then(function (b) { window.dgNativeDownload = false; return b; });
+    }
+
     window.dgPlatform = {
         name: 'native',
         distBase: window.DG_DIST_BASE || REMOTE_BASE,
         onlineBase: ONLINE_ORIGIN,
         prepareArchive: prepareArchive,
+        preparePacks: preparePacks,
         cancelArchive: cancelArchive,
         // Set by the iOS shell (DgSharedLibrary.userScript): SQL runs natively at this path on the
         // page's own origin, and db-worker.js takes its native branch. Undefined on Android.

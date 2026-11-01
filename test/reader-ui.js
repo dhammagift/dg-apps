@@ -73,6 +73,18 @@ async function open(ctx, path, mode) {
     await ctx.close();
   }
 
+  // the offline-voice card has its colours on every page that plays (memo has no home.css: it was a bare line of text)
+  for (const scheme of ['light', 'dark']) {
+    const ctx = await b.newContext({ ...devices['Pixel 7'], colorScheme: scheme }); const p = await ctx.newPage();
+    for (const path of ['/memo/?q=sn35.243']) {   // (the reader loads voice.css only with the voice)
+      await p.goto(ORIGIN + path, { waitUntil: 'networkidle' }); await p.waitForTimeout(1500);
+      const bg = await p.evaluate(() => { document.body.insertAdjacentHTML('beforeend', '<div class="tts-card on" id="__card">x</div>');
+        return getComputedStyle(document.getElementById('__card')).backgroundColor; });
+      check(!/rgba\(0, 0, 0, 0\)|transparent/.test(bg), `${scheme} ${path}: the offline-voice card has a background (${bg})`);
+    }
+    await ctx.close();
+  }
+
   // the toolbar is never shown half-parsed (a slow phone: CPU x6), sampled on every frame
   {
     const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await ctx.newPage();

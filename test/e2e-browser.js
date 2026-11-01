@@ -83,7 +83,9 @@ const CASES = [
     await page.addInitScript((packs) => {
         window.DG_DIST_BASE = '/mobile-data';
         if (packs) {
-            window.DG_PACKS_BASE = '/mobile-data';
+            // pinned: a test-origin build bakes DG_PACKS_BASE = the test site's (build-assets.js), which would replace this
+            // after the page's own head script ran - and the check compared the test site's older packs (run 41283750842)
+            Object.defineProperty(window, 'DG_PACKS_BASE', { get: () => '/mobile-data', set: () => {}, configurable: false });
             try { localStorage.setItem('dg.offline.packs', JSON.stringify(['tr-ru', 'tr-en'])); } catch (e) { /* none */ }
         } else {
             Object.defineProperty(window, 'DG_PACKS_BASE', { get: () => undefined, set: () => {}, configurable: false });
@@ -159,6 +161,23 @@ const CASES = [
     // "Решение по языкам среза"), so the field is legitimately narrower offline. The subset is
     // allowed; everything else in the response is compared strictly. dg-node's own
     // test/offline-e2e.js applies the same rule for the same reason.
+    // `titles` and `translations` are compared as unordered maps (f3-ultra, 2026-11-01). The site's key order is dg.db's rowid
+    // order across translators (dn22: de, en_sujato, ru, sr, en_thanissaro, th); packs are one schema per language, unioned
+    // language by language, so that interleave cannot be reproduced. The only reader of the order is home.js firstTr's
+    // fallback when the interface language has no key. Everything else stays compared in order.
+    function unorderedMaps(v) {
+        if (Array.isArray(v)) return v.map(unorderedMaps);
+        if (!v || typeof v !== 'object') return v;
+        const out = {};
+        for (const k of Object.keys(v)) {
+            const x = v[k];
+            out[k] = (k === 'titles' || k === 'translations') && x && typeof x === 'object' && !Array.isArray(x)
+                ? Object.fromEntries(Object.keys(x).sort().map((y) => [y, unorderedMaps(x[y])]))
+                : unorderedMaps(x);
+        }
+        return out;
+    }
+
     function normalizeForSlice(expected, actual) {
         const expectedLangs = expected && expected.body && expected.body.availableLangs;
         const actualLangs = actual && actual.body && actual.body.availableLangs;
@@ -202,7 +221,7 @@ const CASES = [
             return { status: r.status, body };
         }, url);
         const { expected, sliced } = normalizeForSlice(expectedRaw, actual);
-        const a = JSON.stringify(expected), b = JSON.stringify(actual);
+        const a = JSON.stringify(unorderedMaps(expected)), b = JSON.stringify(unorderedMaps(actual));
         if (a === b) {
             same++;
             console.log('SAME  ' + name + (sliced ? '  (availableLangs narrowed to the ru+en slice)' : ''));

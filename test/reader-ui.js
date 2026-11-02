@@ -89,6 +89,21 @@ async function open(ctx, path, mode) {
     await ctx.close();
   }
 
+  // switching Pāḷi / translation keeps the line being read where it is and the header where it was (owner 2026-11-02:
+  // «текст скачет, непонятно, как продолжать читать»; the old code moved it 76-1600 px and brought the header out)
+  {
+    const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await open(ctx, '/mn53?lang=ru', 'lines');
+    await p.evaluate(() => { localStorage.setItem('paliToggle', 'pli-2nd'); window.setLanguage('pli-2nd'); window.scrollTo(0, 6000); });
+    await p.waitForTimeout(800); await p.mouse.move(200, 500); await p.mouse.wheel(0, 300); await p.waitForTimeout(800);
+    for (const mode of ['pli', 'pli-2nd', '2nd', 'pli-2nd']) {
+      const before = await p.evaluate(() => { const t = innerHeight * 0.3; const s = [...document.querySelectorAll('#sutta span[id]')].find((e) => e.getBoundingClientRect().bottom > t); return { id: s.id, top: s.getBoundingClientRect().top, hidden: document.body.classList.contains('dg-header-hidden') }; });
+      await p.evaluate((m) => window.setLanguage(m), mode); await p.waitForTimeout(600);
+      const after = await p.evaluate((id) => ({ top: document.getElementById(id).getBoundingClientRect().top, hidden: document.body.classList.contains('dg-header-hidden') }), before.id);
+      check(Math.abs(after.top - before.top) <= 4 && after.hidden === before.hidden, `switch to ${mode}: line ${before.id} moved ${Math.round(after.top - before.top)} px, header ${before.hidden === after.hidden ? 'stayed' : 'changed'}`);
+    }
+    await ctx.close();
+  }
+
   // the line menu's Compare opens this text at this line in multi, with the differences on (owner 2026-11-01)
   {
     const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await open(ctx, '/sn56.11?lang=en', 'lines');

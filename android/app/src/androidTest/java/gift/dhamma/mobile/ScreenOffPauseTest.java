@@ -57,20 +57,27 @@ public class ScreenOffPauseTest {
             js(s, line + ".click(); 1");
             Thread.sleep(1500);
             js(s, "document.querySelector('.dynamic-tts-btn').click(); 1");
-            Thread.sleep(4000);
+            // the voice really speaking before it is paused: on a slower phone (Pixel 8a, DG 569) a late start of the
+            // player came after the A-B start and switched the loop off (Sadda's reading of the logcat)
+            for (int i = 0; i < 30 && !"true".equals(js(s, "!!(window.ttsAPI && ttsAPI.getState && ttsAPI.getState().speaking)")); i++) Thread.sleep(1000);
+            Thread.sleep(2000);
             js(s, "var p = document.querySelector('.play-main-button'); p && p.click(); 1");
             Thread.sleep(1500);
             js(s, "document.getElementById('ab-loop-toggle-btn').click(); 1");
             Thread.sleep(1500);
+            js(s, "var m = document.getElementById('mem-interval'); m.innerText = '10'; m.dispatchEvent(new Event('input', { bubbles: true })); m.dispatchEvent(new Event('focusout', { bubbles: true })); 1");
+            Thread.sleep(800);
+            js(s, line + ".click(); 1");
+            Thread.sleep(800);
+            js(s, line + ".click(); 1");
+            // the loop running with the screen ON first (a 10 s pause, a second pass), so a failure below can only come from
+            // the screen being off; then the pause the owner uses, 180 s
+            for (int i = 0; i < 60 && number(js(s, "window.__loops || 0")) < 2; i++) Thread.sleep(1000);
+            assertTrue("the A-B loop did not reach a second pass with the screen on", number(js(s, "window.__loops || 0")) >= 2);
             js(s, "var m = document.getElementById('mem-interval'); m.innerText = '180'; m.dispatchEvent(new Event('input', { bubbles: true })); m.dispatchEvent(new Event('focusout', { bubbles: true })); 1");
-            Thread.sleep(800);
-            js(s, line + ".click(); 1");
-            Thread.sleep(800);
-            js(s, line + ".click(); 1");
-            Thread.sleep(15000);
+            Thread.sleep(1000);
             int before = number(js(s, "window.__loops || 0"));
-            Log.i(TAG, "A-B loop: " + before + " passes in 15 s; screen off for 420 s");
-            assertTrue("the A-B loop did not run (0 passes in 15 s)", before >= 1);
+            Log.i(TAG, "A-B loop: " + before + " passes with the screen on (10 s pause), now 180 s; screen off for 420 s");
             device.sleep();
             Thread.sleep(420000);
             device.wakeUp();

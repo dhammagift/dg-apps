@@ -17,6 +17,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertTrue;
 
+import android.app.UiAutomation;
+import android.os.ParcelFileDescriptor;
+import java.io.FileInputStream;
+
 /**
  * Pauses between phrases run out with the screen off (owner 2026-11-01/02, Motorola: an A-B loop with a pause stopped until
  * the app was opened again). On a real phone in Test Lab: SN 56.11 read with a 60 s pause after each phrase, the screen off
@@ -36,6 +40,42 @@ public class ScreenOffPauseTest {
         });
         done.await(20, TimeUnit.SECONDS);
         return out.get();
+    }
+
+    // A shell command as the test (dumpsys): its output, also into logcat
+    private static String sh(String cmd) {
+        UiAutomation ua = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        StringBuilder out = new StringBuilder();
+        try (ParcelFileDescriptor pfd = ua.executeShellCommand(cmd); FileInputStream in = new FileInputStream(pfd.getFileDescriptor())) {
+            byte[] buf = new byte[8192]; int n;
+            while ((n = in.read(buf)) > 0) out.append(new String(buf, 0, n));
+        } catch (Exception e) { out.append("(failed: ").append(e.getMessage()).append(')'); }
+        return out.toString();
+    }
+    private static void state(String when) {
+        Log.i(TAG, when + " | deep idle: " + sh("dumpsys deviceidle get deep").trim() + " | light: " + sh("dumpsys deviceidle get light").trim());
+        for (String line : sh("dumpsys activity services gift.dhamma.mobile").split("\n"))
+            if (line.toLowerCase().contains("foreground")) Log.i(TAG, when + " | service: " + line.trim());
+        for (String line : sh("dumpsys power").split("\n"))
+            if (line.contains("dg:") || line.toLowerCase().contains("read-aloud")) Log.i(TAG, when + " | wake lock: " + line.trim());
+    }
+    // A phone on battery, its screen off, going into Doze - as the owner's Motorola; Test Lab's phones sit on USB power and
+    // never get there by themselves (Sadda 2026-11-02: the PASS on 569 meant nothing)
+    private static void sleepLikeAPhoneInAPocket(UiDevice device, long ms) throws Exception {
+        sh("dumpsys battery unplug");
+        sh("dumpsys deviceidle enable");
+        device.sleep();
+        Thread.sleep(3000);
+        state("screen off, before Doze");
+        Log.i(TAG, "light Doze: " + sh("dumpsys deviceidle step light").trim());
+        Thread.sleep(ms / 3);
+        Log.i(TAG, "deep Doze: " + sh("dumpsys deviceidle force-idle").trim());
+        state("in Doze");
+        Thread.sleep(ms - ms / 3);
+        state("end of the sleep");
+        sh("dumpsys deviceidle unforce");
+        sh("dumpsys battery reset");
+        device.wakeUp();
     }
 
     private static int number(String v) {
@@ -78,9 +118,7 @@ public class ScreenOffPauseTest {
             Thread.sleep(1000);
             int before = number(js(s, "window.__loops || 0"));
             Log.i(TAG, "A-B loop: " + before + " passes with the screen on (10 s pause), now 180 s; screen off for 420 s");
-            device.sleep();
-            Thread.sleep(420000);
-            device.wakeUp();
+            sleepLikeAPhoneInAPocket(device, 420000);
             Thread.sleep(2000);
             int after = number(js(s, "window.__loops || 0"));
             Log.i(TAG, "A-B loop, screen on again: passes " + before + " -> " + after + ", status: " + js(s, "(document.getElementById('mem-status') || {}).textContent"));
@@ -105,9 +143,7 @@ public class ScreenOffPauseTest {
             int before = number(js(s, "(typeof ttsState !== 'undefined' && ttsState.speaking) ? ttsState.currentIndex : -1"));
             Log.i(TAG, "speaking, phrase " + before + "; screen off for 300 s");
             assertTrue("the voice did not start", before >= 0);
-            device.sleep();
-            Thread.sleep(300000);
-            device.wakeUp();
+            sleepLikeAPhoneInAPocket(device, 300000);
             Thread.sleep(2000);
             int after = number(js(s, "(typeof ttsState !== 'undefined') ? ttsState.currentIndex : -1"));
             String speaking = js(s, "(typeof ttsState !== 'undefined') && !!ttsState.speaking");

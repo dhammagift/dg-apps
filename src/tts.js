@@ -91,8 +91,13 @@
         var handlers = {}, meta = null, playback = 'none';
         var media = {
             setActionHandler: function (action, fn) { handlers[action] = fn; },
-            // Speech is not a seekable track, and nothing asks for a scrubber.
-            setPositionState: function () { },
+            // How long the line still plays (owner 2026-11-02: a line with a 3-minute pause in it): the notification draws
+            // a bar with the time. voice.js gives it on every line's loadedmetadata/playing; no scrubbing.
+            setPositionState: function (st) {
+                if (typeof P.setPositionState !== 'function') return;
+                st = st || {};
+                P.setPositionState({ duration: +st.duration || 0, position: +st.position || 0, rate: +st.playbackRate || 1 });
+            },
         };
         Object.defineProperty(media, 'metadata', {
             get: function () { return meta; },

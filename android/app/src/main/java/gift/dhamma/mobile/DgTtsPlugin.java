@@ -211,6 +211,36 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
         call.resolve();
     }
 
+    // The line's length and where in it the reading is (voice.js mediaSession.setPositionState): the notification shows a bar
+    // with the time left (owner 2026-11-02). Android moves the bar itself from position, rate and the time it was set.
+    private long durationMs = 0, positionMs = PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN;
+    private float rate = 1.0f;
+    private boolean lastPlaying = false;
+
+    @PluginMethod
+    public void setPositionState(PluginCall call) {
+        double d = call.getDouble("duration", 0.0), p = call.getDouble("position", 0.0);
+        durationMs = d > 0 && !Double.isInfinite(d) ? (long) (d * 1000) : 0;
+        positionMs = durationMs > 0 ? (long) (Math.max(0, Math.min(p, d)) * 1000) : PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN;
+        rate = (float) (double) call.getDouble("rate", 1.0);
+        getActivity().runOnUiThread(() -> {
+            if (session == null) return;
+            session.setMetadata(metadata());
+            session.setPlaybackState(playbackState(lastPlaying));
+        });
+        call.resolve();
+    }
+
+    private PlaybackStateCompat playbackState(boolean playing) {
+        return new PlaybackStateCompat.Builder()
+                .setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE
+                        | PlaybackStateCompat.ACTION_STOP | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
+                        | PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
+                .setState(playing ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+                        positionMs, playing ? rate : 0f)
+                .build();
+    }
+
     @PluginMethod
     public void setPlaybackState(PluginCall call) {
         // The one honest moment to ask: the reader has just started a reading, and the permission
@@ -249,13 +279,8 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
             // step, and Play in the notification does nothing (emulator test: tools/emu-tray.js, native and neural voices).
             session.setActive(true);
             session.setMetadata(metadata());
-            session.setPlaybackState(new PlaybackStateCompat.Builder()
-                    .setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE
-                            | PlaybackStateCompat.ACTION_STOP | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-                            | PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
-                    .setState(playing ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
-                            PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1.0f)
-                    .build());
+            lastPlaying = playing;
+            session.setPlaybackState(playbackState(playing));
             show(playing);
         });
         call.resolve();
@@ -266,6 +291,7 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
                 .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
                 .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist);
         if (artwork != null) b.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork);
+        if (durationMs > 0) b.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs);
         return b.build();
     }
 
@@ -379,6 +405,7 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
     private void teardown() {
         releaseForeground(getContext());
         showing = null;
+        durationMs = 0; positionMs = PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN; rate = 1.0f;   // the next reading starts without the last line's bar
         NotificationManagerCompat.from(getContext()).cancel(NOTIFICATION_ID);
         if (session != null) {
             session.setActive(false);

@@ -73,6 +73,22 @@ async function open(ctx, path, mode) {
     await ctx.close();
   }
 
+  // a contents point lands on that point (its first words at the top under the header), also on a text opened at a line
+  // (owner 2026-11-02: /mn66:1.1 - the contents went to the wrong place; the old code missed by 400-4500 px)
+  for (const u of ['/dn2:20.1?lang=en', '/mn66:1.1?lang=en', '/mn66?lang=en']) {
+    const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await open(ctx, u, 'lines');
+    await p.waitForTimeout(1500); await p.mouse.move(200, 400); await p.mouse.wheel(0, -150); await p.waitForTimeout(800);
+    await p.click('#smart-toc-btn'); await p.waitForTimeout(600);
+    const items = await p.$$('#smart-toc-panel .toc-item'); const it = items[Math.min(3, items.length - 2)];
+    const label = (await it.textContent()).trim().replace(/\s+/g, ' ').slice(0, 25);
+    await it.click(); await p.waitForTimeout(4000);
+    const top = await p.evaluate((label) => { const w = label.split(' ').slice(0, 3).join(' ');
+      const el = [...document.querySelectorAll('#sutta h1, #sutta h2, #sutta h3, #sutta span[id]')].find((e) => e.textContent.replace(/\s+/g, ' ').includes(w));
+      return el ? Math.round(el.getBoundingClientRect().top) : null; }, label);
+    check(top !== null && top > -20 && top < 400, `${u}: the contents point "${label}" is at the top of the window (${top} px)`);
+    await ctx.close();
+  }
+
   // the line menu's Compare opens this text at this line in multi, with the differences on (owner 2026-11-01)
   {
     const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await open(ctx, '/sn56.11?lang=en', 'lines');

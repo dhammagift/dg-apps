@@ -70,6 +70,19 @@
     });
     mo.observe(document.body, { childList: true, subtree: true });
   }
+  // White (or dark) card in the page's theme, also when the theme is switched while it is up (dark = a solid dark body background).
+  function paintLikePage(el) {
+    function paint() {
+      var bg = (getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g) || [255, 255, 255]).map(Number);
+      var dark = (0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]) < 128 && (bg[3] === undefined || bg[3] > 0.5);
+      el.style.borderColor = dark ? '#34414f' : '#d9e1e8';
+      el.style.background = dark ? '#1d2630' : '#fff';
+      el.style.color = dark ? '#e8eef4' : '#1b2430';
+      el.style.boxShadow = '0 8px 28px ' + (dark ? 'rgba(0,0,0,.55)' : 'rgba(15,30,50,.22)');
+    }
+    paint();
+    new MutationObserver(paint).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }
   function showUpdateBar() {
     if (document.getElementById('dg-upd')) return;
     function barText() {
@@ -84,17 +97,7 @@
     bar.setAttribute('role', 'status');
     bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(14px + max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)));z-index:2147482000;'
       + 'display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:16px;border:1px solid;font:500 15px/1.25 system-ui,sans-serif';
-    // Colours follow the page's theme, also when it is switched while the bar is up (dark = a solid dark body background).
-    function paint() {
-      var bg = (getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g) || [255, 255, 255]).map(Number);
-      var dark = (0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]) < 128 && (bg[3] === undefined || bg[3] > 0.5);
-      bar.style.borderColor = dark ? '#34414f' : '#d9e1e8';
-      bar.style.background = dark ? '#1d2630' : '#fff';
-      bar.style.color = dark ? '#e8eef4' : '#1b2430';
-      bar.style.boxShadow = '0 8px 28px ' + (dark ? 'rgba(0,0,0,.55)' : 'rgba(15,30,50,.22)');
-    }
-    paint();
-    new MutationObserver(paint).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    paintLikePage(bar);
     var text = document.createElement('div');
     text.style.cssText = 'flex:1;min-width:0';
     text.innerHTML = '<div></div><div style="font-weight:400;font-size:12.5px;opacity:.7;margin-top:2px"></div>';
@@ -158,15 +161,18 @@
     var n = document.createElement('div');
     n.setAttribute('role', 'status');
     n.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(14px + max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)));z-index:2147482000;'
-      + 'display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:16px;font:500 15px/1.25 system-ui,sans-serif;box-shadow:0 8px 28px rgba(15,30,50,.3);color:' + (bad ? '#2b1d00' : '#fff') + ';background:' + (bad ? '#f2b33d' : '#139b7b');   // warning amber, not danger red
+      + 'display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:16px;border:1px solid;font:500 15px/1.25 system-ui,sans-serif';
+    if (bad) n.style.cssText += ';border-color:#f2b33d;box-shadow:0 8px 28px rgba(15,30,50,.3);color:#2b1d00;background:#f2b33d';   // warning amber, not danger red
+    else paintLikePage(n);   // like the "New version" bar
     n.innerHTML = '<div style="flex:1;min-width:0"><div></div><div style="font-weight:400;font-size:12.5px;opacity:.9;margin-top:2px"></div></div>';
-    n.firstChild.firstChild.textContent = (bad ? '⚠ ' : '✓ ') + head;
+    n.firstChild.firstChild.innerHTML = bad ? '⚠ ' : '<span style="color:#139b7b">✓</span> ';
+    n.firstChild.firstChild.appendChild(document.createTextNode(head));
     if (sub) n.firstChild.lastChild.textContent = sub; else n.firstChild.lastChild.remove();
     if (!bad) {
       var go = document.createElement('button');
       go.type = 'button';
       go.textContent = st().restart;
-      go.style.cssText = 'font:600 14px system-ui,sans-serif;border:0;border-radius:11px;padding:10px 16px;background:#fff;color:#0f6e57';
+      go.style.cssText = 'font:600 14px system-ui,sans-serif;border:0;border-radius:11px;padding:10px 16px;background:#139b7b;color:#fff';
       go.addEventListener('click', function (e) {
         e.stopPropagation();
         nativeSite('restart').catch(function () { location.reload(); });

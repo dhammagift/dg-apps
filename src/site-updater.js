@@ -95,7 +95,7 @@
     var bar = document.createElement('div');
     bar.id = 'dg-upd';
     bar.setAttribute('role', 'status');
-    bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(14px + max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)));z-index:2147482000;'
+    bar.style.cssText = 'position:fixed;left:12px;right:12px;max-width:440px;margin:0 auto;bottom:calc(14px + max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)));z-index:2147482000;'
       + 'display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:16px;border:1px solid;font:500 15px/1.25 system-ui,sans-serif';
     paintLikePage(bar);
     var text = document.createElement('div');
@@ -160,7 +160,7 @@
     if (!document.body) return;
     var n = document.createElement('div');
     n.setAttribute('role', 'status');
-    n.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(14px + max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)));z-index:2147482000;'
+    n.style.cssText = 'position:fixed;left:12px;right:12px;max-width:440px;margin:0 auto;bottom:calc(14px + max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)));z-index:2147482000;'
       + 'display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:16px;border:1px solid;font:500 15px/1.25 system-ui,sans-serif';
     if (bad) n.style.cssText += ';border-color:#f2b33d;box-shadow:0 8px 28px rgba(15,30,50,.3);color:#2b1d00;background:#f2b33d';   // warning amber, not danger red
     else paintLikePage(n);   // like the "New version" bar

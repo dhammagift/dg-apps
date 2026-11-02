@@ -58,12 +58,25 @@ public class ScreenOffPauseTest {
             if (line.toLowerCase().contains("foreground")) Log.i(TAG, when + " | service: " + line.trim());
         for (String line : sh("dumpsys power").split("\n"))
             if (line.contains("dg:") || line.toLowerCase().contains("read-aloud")) Log.i(TAG, when + " | wake lock: " + line.trim());
+        // the app process and the WebView's renderer (a sandboxed process of its own): process state, adj, frozen
+        for (String line : sh("dumpsys activity processes gift.dhamma.mobile").split("\n")) {
+            String l = line.toLowerCase();
+            if (l.contains("procstate") || l.contains("curadj") || l.contains("frozen") || l.contains("sandboxed_process") || l.contains("processrecord"))
+                Log.i(TAG, when + " | process: " + line.trim());
+        }
     }
     // A phone on battery, its screen off, going into Doze - as the owner's Motorola; Test Lab's phones sit on USB power and
     // never get there by themselves (Sadda 2026-11-02: the PASS on 569 meant nothing)
     private static void sleepLikeAPhoneInAPocket(UiDevice device, long ms) throws Exception {
         sh("dumpsys battery unplug");
         sh("dumpsys deviceidle enable");
+        // the owner's way: the app sent home first, then the screen off (an instrumentation argument, so a run picks it
+        // without a new build: -e home 1)
+        if ("1".equals(InstrumentationRegistry.getArguments().getString("home"))) {
+            device.pressHome();
+            Thread.sleep(3000);
+            state("app sent home");
+        }
         device.sleep();
         Thread.sleep(3000);
         state("screen off, before Doze");

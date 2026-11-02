@@ -90,7 +90,8 @@ public class ScreenOffPauseTest {
             js(s, "localStorage.setItem('dg.app.downloadDeclined','1'); localStorage.setItem('paliToggle','pli-2nd'); location.assign('/sn56.11?lang=en'); 1");
             Thread.sleep(15000);
             // the reader's own voice from a line, as a tap and its play button start it, with an 8 s pause after each phrase
-            js(s, "window.TTS_SEGMENT_DELAY = 60000; var q = document.querySelector('#sutta .pli-lang.quote'); q && q.click(); 1");
+            // the pause as the settings keep it (seconds): window.TTS_SEGMENT_DELAY alone was overwritten from storage (run on 569)
+            js(s, "localStorage.setItem('dg_tts_segment_delay', '60'); window.TTS_SEGMENT_DELAY = 60000; var q = document.querySelector('#sutta .pli-lang.quote'); q && q.click(); 1");
             Thread.sleep(1500);
             js(s, "var b = document.querySelector('.dynamic-tts-btn') || document.getElementById('sm-audio'); b && b.click(); 1");
             Thread.sleep(8000);

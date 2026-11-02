@@ -981,6 +981,12 @@ jobs:
             login-handoff.log
           retention-days: 7
 
+      # A test build (talking to a site other than dhamma.gift) writes the WebView's console to logcat in its release-signed
+      # APK too ([dg-voice] lines in the owner's bug reports, Sadda 2026-11-02); store builds keep Capacitor's default (debug only)
+      - name: Console to logcat in test builds
+        if: env.DG_ONLINE_ORIGIN != 'https://dhamma.gift'
+        run: node -e "const f='capacitor.config.json',c=JSON.parse(require('fs').readFileSync(f));c.loggingBehavior='production';require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
+
       - name: Sync Capacitor
         run: npx cap sync android
 

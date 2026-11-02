@@ -19,8 +19,8 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * Pauses between phrases run out with the screen off (owner 2026-11-01/02, Motorola: an A-B loop with a pause stopped until
- * the app was opened again). On a real phone in Test Lab: SN 56.11 read with an 8 s pause after each phrase, the screen off
- * for 90 s, then the reading must have moved on. The emulator never held the timers back, so only a phone can tell.
+ * the app was opened again). On a real phone in Test Lab: SN 56.11 read with a 60 s pause after each phrase, the screen off
+ * for 5 minutes, then the reading must have moved on. The emulator never held the timers back, so only a phone can tell.
  * Progress goes to logcat under DgPauseTest.
  */
 @RunWith(AndroidJUnit4.class)
@@ -42,7 +42,8 @@ public class ScreenOffPauseTest {
         try { return (int) Double.parseDouble(v.replace("\"", "")); } catch (Exception e) { return -1; }
     }
 
-    // The owner's own case: an A-B loop on one line with a 10 s pause between passes (Sadda's recipe, DOM only, 2026-11-02).
+    // The owner's own case: an A-B loop on one line with a 180 s pause between passes (Sadda's recipe, DOM only, 2026-11-02;
+    // the owner: 90 s tells little, a pause of 3 minutes at least). The screen goes off for 7 minutes.
     // Passes are counted from the voice's own console line "[dg-voice] loop <n> <ms>".
     @Test
     public void abLoopPausesRunOutWithTheScreenOff() throws Exception {
@@ -61,23 +62,23 @@ public class ScreenOffPauseTest {
             Thread.sleep(1500);
             js(s, "document.getElementById('ab-loop-toggle-btn').click(); 1");
             Thread.sleep(1500);
-            js(s, "var m = document.getElementById('mem-interval'); m.innerText = '10'; m.dispatchEvent(new Event('input', { bubbles: true })); m.dispatchEvent(new Event('focusout', { bubbles: true })); 1");
+            js(s, "var m = document.getElementById('mem-interval'); m.innerText = '180'; m.dispatchEvent(new Event('input', { bubbles: true })); m.dispatchEvent(new Event('focusout', { bubbles: true })); 1");
             Thread.sleep(800);
             js(s, line + ".click(); 1");
             Thread.sleep(800);
             js(s, line + ".click(); 1");
-            Thread.sleep(30000);
+            Thread.sleep(15000);
             int before = number(js(s, "window.__loops || 0"));
-            Log.i(TAG, "A-B loop: " + before + " passes in 30 s; screen off for 90 s");
-            assertTrue("the A-B loop did not run (0 passes in 30 s)", before >= 1);
+            Log.i(TAG, "A-B loop: " + before + " passes in 15 s; screen off for 420 s");
+            assertTrue("the A-B loop did not run (0 passes in 15 s)", before >= 1);
             device.sleep();
-            Thread.sleep(90000);
+            Thread.sleep(420000);
             device.wakeUp();
             Thread.sleep(2000);
             int after = number(js(s, "window.__loops || 0"));
             Log.i(TAG, "A-B loop, screen on again: passes " + before + " -> " + after + ", status: " + js(s, "(document.getElementById('mem-status') || {}).textContent"));
-            // a pass is the line (a few s) plus 10 s of pause: 90 s hold 5 or more, held-back timers 0 or 1
-            assertTrue("the A-B loop stopped with the screen off: passes " + before + " -> " + after, after - before >= 4);
+            // a pass is the line (a few s) plus 180 s of pause: 420 s hold 2, a pause held back holds none
+            assertTrue("the A-B loop stopped with the screen off: passes " + before + " -> " + after, after - before >= 2);
         }
     }
 
@@ -89,22 +90,22 @@ public class ScreenOffPauseTest {
             js(s, "localStorage.setItem('dg.app.downloadDeclined','1'); localStorage.setItem('paliToggle','pli-2nd'); location.assign('/sn56.11?lang=en'); 1");
             Thread.sleep(15000);
             // the reader's own voice from a line, as a tap and its play button start it, with an 8 s pause after each phrase
-            js(s, "window.TTS_SEGMENT_DELAY = 8000; var q = document.querySelector('#sutta .pli-lang.quote'); q && q.click(); 1");
+            js(s, "window.TTS_SEGMENT_DELAY = 60000; var q = document.querySelector('#sutta .pli-lang.quote'); q && q.click(); 1");
             Thread.sleep(1500);
             js(s, "var b = document.querySelector('.dynamic-tts-btn') || document.getElementById('sm-audio'); b && b.click(); 1");
             Thread.sleep(8000);
             int before = number(js(s, "(typeof ttsState !== 'undefined' && ttsState.speaking) ? ttsState.currentIndex : -1"));
-            Log.i(TAG, "speaking, phrase " + before + "; screen off for 90 s");
+            Log.i(TAG, "speaking, phrase " + before + "; screen off for 300 s");
             assertTrue("the voice did not start", before >= 0);
             device.sleep();
-            Thread.sleep(90000);
+            Thread.sleep(300000);
             device.wakeUp();
             Thread.sleep(2000);
             int after = number(js(s, "(typeof ttsState !== 'undefined') ? ttsState.currentIndex : -1"));
             String speaking = js(s, "(typeof ttsState !== 'undefined') && !!ttsState.speaking");
             Log.i(TAG, "screen on again: phrase " + before + " -> " + after + ", still speaking " + speaking);
-            // 90 s with 8 s pauses and short phrases: 5 or more; timers held back give 0 or 1
-            assertTrue("the reading stopped with the screen off: phrase " + before + " -> " + after, after - before >= 5);
+            // 300 s with 60 s pauses and short phrases: 4 or more; timers held back give 0 or 1
+            assertTrue("the reading stopped with the screen off: phrase " + before + " -> " + after, after - before >= 4);
         }
     }
 }

@@ -178,6 +178,12 @@
         nativeSite('restart').catch(function () { location.reload(); });
       });
       n.appendChild(go);
+      var x = document.createElement('button');   // Restart is optional: a visible way out, as on the "New version" bar
+      x.type = 'button';
+      x.setAttribute('aria-label', siteRu() ? 'Закрыть' : 'Close');
+      x.textContent = '✕';
+      x.style.cssText = 'border:0;background:none;color:inherit;opacity:.55;padding:8px;font-size:18px;line-height:1';
+      n.appendChild(x);
     }
     n.addEventListener('click', function () { n.remove(); });
     document.body.appendChild(n);

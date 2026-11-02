@@ -1100,7 +1100,9 @@ function writeAppVersion() {
         || (text.match(/versionCode[^\n]*?(\d+)/) || [])[1];
     if (!version) return null;
     fs.writeFileSync(path.join(WWW, 'app-version.json'),
-        JSON.stringify({ version: version, build: build || '?', app: 'gift.dhamma.mobile' }, null, 2) + '\n');
+        // run: the CI run (GITHUB_RUN_NUMBER). Test builds keep the store's versionCode (568 for 668, 670, 671, 672...), so on a
+        // phone only the run tells one test build from another (owner 2026-11-02: «672 последний? 568 у меня»)
+        JSON.stringify({ version: version, build: build || '?', run: process.env.GITHUB_RUN_NUMBER || undefined, app: 'gift.dhamma.mobile' }, null, 2) + '\n');
     return version + ' (' + build + ')';
 }
 

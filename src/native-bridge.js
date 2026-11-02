@@ -1370,7 +1370,10 @@
             fetch('/app-version.json', { cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (info) {
-                    if (info && info.version) show('v' + info.version + ' (' + info.build + ')');
+                    if (!info || !info.version) return;
+                    // a test build (one that talks to a site other than dhamma.gift) also names its CI run: they all share the store's build number
+                    var test = info.run && !/^https:\/\/dhamma\.gift$/.test(window.DG_ONLINE_ORIGIN || (window.top && window.top.DG_ONLINE_ORIGIN) || 'https://dhamma.gift');
+                    show('v' + info.version + ' (' + info.build + ')' + (test ? (isRu() ? ' · тест ' : ' · test ') + info.run : ''));
                 })
                 .catch(function () { /* nothing to show; the row stays empty */ });
         }

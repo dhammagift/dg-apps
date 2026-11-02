@@ -6,7 +6,12 @@ One counter per app, independent of the other two apps and of the workflow's run
 
     next = max(build_floor in the app's version.properties,
                the highest versionCode Google Play has for the app's package,
-               the highest build App Store Connect has for its bundle id) + 1
+               the highest build App Store Connect has for its bundle id,
+               the highest number an earlier build of it got, uploaded or not) + 1
+
+Every build gets the next number, test builds too (owner 2026-11-02: «568 не уйдёт — следующая 569, не уйдёт — 570,
+уйдёт — 570 и есть та, что ушла»): one number for a build, on the phone, in the chat and in the store. The earlier builds'
+numbers are read from this workflow's build-info artifacts (kept 14 days; the stores and the floor cover the time before).
 
 So it never goes below what a store already has (Play refuses a lower or equal code), it moves only
 when that app is uploaded, and a re-run that reads the stores again gets a fresh number once its
@@ -72,7 +77,34 @@ def asc_max(asc, bundle):
     return max((int(b["attributes"]["version"]) for b in builds if b["attributes"]["version"].isdigit()), default=0)
 
 
-def compute(floors, read_play, read_asc, must_read):
+def built_max(app):
+    """The highest number earlier runs of this workflow gave the app (their build-info-N artifacts), or None."""
+    import io, urllib.request, zipfile
+    repo, token = os.environ.get("GITHUB_REPOSITORY"), os.environ.get("GH_TOKEN")
+    if not repo or not token:
+        raise RuntimeError("GITHUB_REPOSITORY / GH_TOKEN not set")
+    h = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    if not hasattr(built_max, "cache"):
+        url = f"https://api.github.com/repos/{repo}/actions/artifacts?per_page=100"
+        arts = json.load(urllib.request.urlopen(urllib.request.Request(url, headers=h)))["artifacts"]
+        seen = {}
+        for a in [a for a in arts if a["name"].startswith("build-info-") and not a["expired"]][:20]:
+            # the download answers with a redirect to storage that must not get the token (it refuses it: 401)
+            class NoAuthRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                    new = super().redirect_request(req, fp, code, msg, hdrs, newurl)
+                    if new is not None:
+                        new.headers.pop("Authorization", None); new.unredirected_hdrs.pop("Authorization", None)
+                    return new
+            with urllib.request.build_opener(NoAuthRedirect).open(urllib.request.Request(a["archive_download_url"], headers=h)) as r:
+                info = json.loads(zipfile.ZipFile(io.BytesIO(r.read())).read("build-info.json"))
+            for k, n in (info.get("build_numbers") or {}).items():
+                seen[k] = max(seen.get(k, 0), int(n))
+        built_max.cache = seen
+    return built_max.cache.get(app)
+
+
+def compute(floors, read_play, read_asc, must_read, read_built=None):
     """floors: {app: n}; read_*: (app) -> highest number or raises; must_read: set of plan tokens."""
     out, problems = {}, []
     for app, (_, _, _, token) in APPS.items():
@@ -87,8 +119,14 @@ def compute(floors, read_play, read_asc, must_read):
                 else:
                     print("::warning::" + msg + " - the number is not checked against it", file=sys.stderr)
                 found.append(None)
-        out[app] = next_number(floors[app], *found)
-        print(f"{app}: floor {floors[app]}, play {found[0]}, testflight {found[1]} -> {out[app]}", file=sys.stderr)
+        built = None
+        if read_built:
+            try:
+                built = read_built(app)
+            except Exception as e:  # noqa: BLE001 - a test build may go on without it; the stores still bound it
+                print(f"::warning::{app}: earlier builds not read ({str(e)[:160]})", file=sys.stderr)
+        out[app] = next_number(floors[app], *found, built)
+        print(f"{app}: floor {floors[app]}, play {found[0]}, testflight {found[1]}, built {built} -> {out[app]}", file=sys.stderr)
     return out, problems
 
 
@@ -107,7 +145,7 @@ def main():
         if asc is None:
             raise RuntimeError("ASC_KEY_P8 is not set")
         return asc_max(asc, APPS[app][2])
-    out, problems = compute(floors, read_play, read_asc, set(os.environ.get("MUST_READ", "").split()))
+    out, problems = compute(floors, read_play, read_asc, set(os.environ.get("MUST_READ", "").split()), built_max)
     for p in problems:
         print(p, file=sys.stderr)
     if problems:
@@ -137,6 +175,11 @@ def self_test():
     _, problems = compute(floors, broken, lambda a: stores[a][1], {"upo_ios"})
     assert not problems, problems
     assert floor_of("version=1.0\n# c\nbuild_floor=560\n") == 560
+    # Every build moves on: 568 built and not uploaded -> the next one is 569, and the one after 570
+    stores = {"dg": (567, 567), "dict": (566, 568), "uposatha": (569, 571)}
+    built = {"dg": 568, "dict": 569, "uposatha": 572}
+    out, _ = compute(floors, lambda a: stores[a][0], lambda a: stores[a][1], set(), lambda a: built[a])
+    assert out == {"dg": 569, "dict": 570, "uposatha": 573}, out
     print("build_numbers: self-test passed")
 
 

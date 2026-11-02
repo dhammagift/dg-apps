@@ -165,6 +165,10 @@ jobs:
     name: Plan (pinned commits, what this run releases)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # actions: read - build_numbers.py reads the numbers earlier runs gave out (their build-info artifacts)
+    permissions:
+      contents: read
+      actions: read
     outputs:
       dg_node_sha: ${{ steps.pin.outputs.dg_node_sha }}
       ddg_ui_sha: ${{ steps.pin.outputs.ddg_ui_sha }}
@@ -322,6 +326,7 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           MUST_READ: ${{ steps.what.outputs.uploads }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           pip install --quiet google-api-python-client google-auth 'pyjwt[crypto]'

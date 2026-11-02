@@ -235,7 +235,8 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
         return new PlaybackStateCompat.Builder()
                 .setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE
                         | PlaybackStateCompat.ACTION_STOP | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-                        | PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
+                        | PlaybackStateCompat.ACTION_SKIP_TO_NEXT
+                        | (durationMs > 0 ? PlaybackStateCompat.ACTION_SEEK_TO : 0))   // the bar can be dragged (owner, like MX Player)
                 .setState(playing ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
                         positionMs, playing ? rate : 0f)
                 .build();
@@ -313,6 +314,12 @@ public class DgTtsPlugin extends Plugin implements TextToSpeech.OnInitListener {
             @Override public void onStop() { action("stop"); }
             @Override public void onSkipToPrevious() { action("previoustrack"); }
             @Override public void onSkipToNext() { action("nexttrack"); }
+            @Override public void onSeekTo(long pos) {
+                JSObject o = new JSObject();
+                o.put("action", "seekto");
+                o.put("seekTime", pos / 1000.0);
+                notifyListeners("media", o);
+            }
         });
     }
 

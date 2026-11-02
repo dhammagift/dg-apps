@@ -115,7 +115,8 @@
         // registered decides what it means — this side never guesses.
         P.addListener('media', function (e) {
             var f = handlers[e && e.action];
-            if (typeof f === 'function') f();
+            // the details as the Media Session API gives them: seekto carries seekTime (s) - a drag on the notification's bar
+            if (typeof f === 'function') f(e && e.action === 'seekto' ? { action: 'seekto', seekTime: +e.seekTime || 0 } : { action: e && e.action });
         });
         try {
             Object.defineProperty(navigator, 'mediaSession', { configurable: true, value: media });

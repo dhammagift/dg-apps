@@ -986,6 +986,21 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --stacktrace
 
+      # The instrumentation tests (androidTest: ScreenOffPauseTest for Test Lab's real phones), in the same run so they carry
+      # the app's debug signature (the runner's debug keystore). A test that does not compile must not cost the app build.
+      - name: Build the instrumentation tests APK
+        continue-on-error: true
+        working-directory: android
+        run: ./gradlew assembleDebugAndroidTest --stacktrace
+
+      - name: Upload the instrumentation tests APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: dg-app-androidtest-apk-${{ github.run_number }}
+          path: android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: List build outputs
         run: ls -lah android/app/build/outputs/apk/debug/ || echo "Debug APK directory not found"
 

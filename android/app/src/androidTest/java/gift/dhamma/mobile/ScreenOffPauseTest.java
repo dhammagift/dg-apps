@@ -70,6 +70,9 @@ public class ScreenOffPauseTest {
     private static void sleepLikeAPhoneInAPocket(UiDevice device, long ms) throws Exception {
         sh("dumpsys battery unplug");
         sh("dumpsys deviceidle enable");
+        // Battery Saver on, as on the owner's phone (instrumentation argument saver=1)
+        boolean saver = "1".equals(InstrumentationRegistry.getArguments().getString("saver"));
+        if (saver) Log.i(TAG, "battery saver on: " + sh("cmd power set-mode 1").trim() + " | low_power=" + sh("settings get global low_power").trim());
         // the owner's way: the app sent home first, then the screen off (an instrumentation argument, so a run picks it
         // without a new build: -e home 1)
         if ("1".equals(InstrumentationRegistry.getArguments().getString("home"))) {
@@ -87,6 +90,7 @@ public class ScreenOffPauseTest {
         Thread.sleep(ms - ms / 3);
         state("end of the sleep");
         sh("dumpsys deviceidle unforce");
+        if (saver) sh("cmd power set-mode 0");
         sh("dumpsys battery reset");
         device.wakeUp();
     }

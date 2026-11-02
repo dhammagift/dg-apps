@@ -139,9 +139,9 @@
   // ---- what the person is told ---------------------------------------------------------------
   function siteRu() { return typeof isRu === 'function' ? isRu() : /^ru/i.test(document.documentElement.lang || ''); }
   var ST = {
-    ru: { busy: 'Проверяю…', current: 'Всё актуально', new: 'Есть обновление - нажмите «Обновить» внизу', offline: 'Нет соединения', failed: 'Не удалось проверить, попробуйте позже',
+    ru: { busy: 'Проверяю…', current: 'Актуально', new: 'Есть обновление - нажмите «Обновить» внизу', offline: 'Нет соединения', failed: 'Не удалось проверить, попробуйте позже',
           done: 'Обновление установлено', doneSub: 'Закройте и снова откройте приложение, если изменений не видно', broke: 'Обновление не заработало', brokeSub: 'Включена встроенная версия. Если что-то не работает, переустановите приложение из магазина' },
-    en: { busy: 'Checking…', current: 'Everything is up to date', new: 'Update found - use the Update button below', offline: 'No connection', failed: 'Could not check, try again later',
+    en: { busy: 'Checking…', current: 'Up to date', new: 'Update found - use the Update button below', offline: 'No connection', failed: 'Could not check, try again later',
           done: 'Update installed', doneSub: 'Close and reopen the app if you don\'t see the changes', broke: 'The update did not work', brokeSub: 'The built-in version is back. If something is broken, reinstall the app from the store' }
   };
   function st() { return ST[siteRu() ? 'ru' : 'en']; }

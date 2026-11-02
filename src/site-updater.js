@@ -140,9 +140,9 @@
   function siteRu() { return typeof isRu === 'function' ? isRu() : /^ru/i.test(document.documentElement.lang || ''); }
   var ST = {
     ru: { busy: 'Проверяю…', current: 'Актуально', new: 'Есть обновление - нажмите «Обновить» внизу', offline: 'Нет соединения', failed: 'Не удалось проверить, попробуйте позже',
-          done: 'Обновление установлено', doneSub: 'Закройте и снова откройте приложение, если изменений не видно', broke: 'Обновление не заработало', brokeSub: 'Включена встроенная версия. Если что-то не работает, переустановите приложение из магазина' },
+          done: 'Обновление установлено', restart: 'Перезапустить', broke: 'Обновление не заработало', brokeSub: 'Включена встроенная версия. Если что-то не работает, переустановите приложение из магазина' },
     en: { busy: 'Checking…', current: 'Up to date', new: 'Update found - use the Update button below', offline: 'No connection', failed: 'Could not check, try again later',
-          done: 'Update installed', doneSub: 'Close and reopen the app if you don\'t see the changes', broke: 'The update did not work', brokeSub: 'The built-in version is back. If something is broken, reinstall the app from the store' }
+          done: 'Update installed', restart: 'Restart', broke: 'The update did not work', brokeSub: 'The built-in version is back. If something is broken, reinstall the app from the store' }
   };
   function st() { return ST[siteRu() ? 'ru' : 'en']; }
   // Checks now (the version row's button) and says the result through say(text); resolves when done.
@@ -151,24 +151,37 @@
     return updateSite(true).then(function (r) { say(st()[r.state] || st().failed); }, function () { say(st().failed); });
   };
   // A short message over the page: "applied" after the reload an update asked for, "did not work" after the safety net fired.
+  // "Applied" carries a Restart button: swiping the app away only sends it to the background, so "close and reopen" could not
+  // be done (owner 2026-11-02). DgSite.restart starts the app afresh (Android) or reloads the page from scratch (iOS).
   function showNotice(head, sub, bad) {
     if (!document.body) return;
     var n = document.createElement('div');
     n.setAttribute('role', 'status');
     n.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(14px + max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px)));z-index:2147482000;'
-      + 'padding:12px 16px;border-radius:16px;font:500 15px/1.25 system-ui,sans-serif;box-shadow:0 8px 28px rgba(15,30,50,.3);color:' + (bad ? '#2b1d00' : '#fff') + ';background:' + (bad ? '#f2b33d' : '#139b7b');   // warning amber, not danger red
-    n.innerHTML = '<div></div><div style="font-weight:400;font-size:12.5px;opacity:.9;margin-top:2px"></div>';
-    n.firstChild.textContent = (bad ? '⚠ ' : '✓ ') + head;
-    n.lastChild.textContent = sub;
+      + 'display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:16px;font:500 15px/1.25 system-ui,sans-serif;box-shadow:0 8px 28px rgba(15,30,50,.3);color:' + (bad ? '#2b1d00' : '#fff') + ';background:' + (bad ? '#f2b33d' : '#139b7b');   // warning amber, not danger red
+    n.innerHTML = '<div style="flex:1;min-width:0"><div></div><div style="font-weight:400;font-size:12.5px;opacity:.9;margin-top:2px"></div></div>';
+    n.firstChild.firstChild.textContent = (bad ? '⚠ ' : '✓ ') + head;
+    if (sub) n.firstChild.lastChild.textContent = sub; else n.firstChild.lastChild.remove();
+    if (!bad) {
+      var go = document.createElement('button');
+      go.type = 'button';
+      go.textContent = st().restart;
+      go.style.cssText = 'font:600 14px system-ui,sans-serif;border:0;border-radius:11px;padding:10px 16px;background:#fff;color:#0f6e57';
+      go.addEventListener('click', function (e) {
+        e.stopPropagation();
+        nativeSite('restart').catch(function () { location.reload(); });
+      });
+      n.appendChild(go);
+    }
     n.addEventListener('click', function () { n.remove(); });
     document.body.appendChild(n);
-    setTimeout(function () { n.remove(); }, bad ? 15000 : 6000);   // long enough to read the reopen hint (owner 2026-11-01)
+    setTimeout(function () { n.remove(); }, bad ? 15000 : 10000);   // time to reach Restart
   }
   function showPendingNotice() {
     var applied = store('dgSiteApplied') === '1', broke = store('dgSiteBroke') === '1';
     if (!applied && !broke) return;
     try { localStorage.removeItem('dgSiteApplied'); localStorage.removeItem('dgSiteBroke'); } catch (e) { /* ignore */ }
-    if (broke) showNotice(st().broke, st().brokeSub, true); else showNotice(st().done, st().doneSub, false);
+    if (broke) showNotice(st().broke, st().brokeSub, true); else showNotice(st().done, '', false);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showPendingNotice); else setTimeout(showPendingNotice, 500);
 

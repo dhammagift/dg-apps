@@ -82,7 +82,8 @@ public class DgSitePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "discard", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "apply", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "list", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "restart", returnType: CAPPluginReturnPromise)
     ]
 
     private static let maxBytes = 8 * 1024 * 1024
@@ -135,6 +136,12 @@ public class DgSitePlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func apply(_ call: CAPPluginCall) {
         DgSiteStore.promote()
         call.resolve()
+    }
+
+    // iOS apps may not end themselves: the "Update installed" notice's Restart loads the page again past the web view's cache.
+    @objc func restart(_ call: CAPPluginCall) {
+        call.resolve()
+        DispatchQueue.main.async { self.bridge?.webView?.reloadFromOrigin() }
     }
 
     @objc func clear(_ call: CAPPluginCall) {

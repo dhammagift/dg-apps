@@ -1,6 +1,7 @@
 package gift.dhamma.mobile;
 
 import android.content.Context;
+import android.content.Intent;
 import android.net.Uri;
 import android.util.Base64;
 import android.webkit.MimeTypeMap;
@@ -32,6 +33,7 @@ import java.util.Map;
  *     Capacitor.Plugins.DgSite.apply()     a committed round serves now (the "Update" bar, right before it reloads the page)
  *     Capacitor.Plugins.DgSite.list()   ->  { files: [ ... ] }
  *     Capacitor.Plugins.DgSite.clear()     everything downloaded, both rounds, gone
+ *     Capacitor.Plugins.DgSite.restart()   the app starts afresh (the "Update installed" notice's button)
  *
  * A round is kept in files/site-next/ and moved into files/site/ when the plugin loads (the app starts, before the page), so a
  * running page never gets new files next to the old ones it started with. files/site/ is answered by {@link #serve}
@@ -170,6 +172,18 @@ public class DgSitePlugin extends Plugin {
     public void apply(PluginCall call) {
         promote(getContext());
         call.resolve();
+    }
+
+    // Swiping the app away leaves the process running (the read-aloud service keeps it), so "close and reopen" was not a way to
+    // get a fresh start. A new task for the launcher activity, then this process ends; Android starts the activity in a new one.
+    @PluginMethod
+    public void restart(PluginCall call) {
+        Context ctx = getContext();
+        Intent launch = ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+        if (launch == null || launch.getComponent() == null) { call.reject("no launch activity"); return; }
+        call.resolve();
+        ctx.startActivity(Intent.makeRestartActivityTask(launch.getComponent()));
+        Runtime.getRuntime().exit(0);
     }
 
     @PluginMethod

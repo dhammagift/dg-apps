@@ -4,7 +4,9 @@
 // the app's registered signature, so they are not here.
 // Usage: node test/phrase-sync.js [origin]   (default https://test.dhamma.gift)
 const { chromium, devices } = require('/usr/lib/node_modules/@playwright/cli/node_modules/playwright');
-const PHRASE = 'Dg-Check-Phrase-7419', URL = process.argv[2] || 'https://test.dhamma.gift';
+// A new account every run (a random phrase, deleted at the end): nothing to keep secret in this public repo, two runs never
+// share an account, and B must get exactly what A set (f3-ultra's review 2026-11-02)
+const PHRASE = 'dg-check-' + require('crypto').randomBytes(12).toString('hex'), URL = process.argv[2] || 'https://test.dhamma.gift';
 const login = async (p) => {
   await p.goto(URL + '/login', { waitUntil: 'networkidle' });
   await p.fill('#sync-phrase-input', PHRASE); await p.click('#btn-phrase-login'); await p.waitForTimeout(1500);
@@ -15,13 +17,14 @@ const login = async (p) => {
   const b = await chromium.launch(); let fail = 0;
   const A = await (await b.newContext({ ...devices['Pixel 7'] })).newPage(), B = await (await b.newContext({ ...devices['Pixel 7'] })).newPage();
   await login(A);
-  const want = Math.random() < 0.5 ? 'columns' : 'lines';
+  const want = 'columns';   // a new account has none: B gets it only through the cloud
   await A.evaluate((v) => localStorage.setItem('viewMode', v), want);
   await A.evaluate(() => forceSyncNow()); await A.waitForTimeout(4000);
   await login(B); await B.waitForTimeout(5000);
   const got = await B.evaluate(() => localStorage.getItem('viewMode'));
   const ok = got === want; if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'} phrase sync: A set viewMode=${want}, B signed in with the same phrase got ${got}`);
+  await A.evaluate(() => typeof syncDeleteData === 'function' && syncDeleteData()).catch(() => {}); await A.waitForTimeout(2000);   // the check account goes
   for (const [n, p] of [['A', A], ['B', B]]) { await p.evaluate(() => syncLogout()); await p.waitForTimeout(2500);
     const out = await p.evaluate(() => !document.getElementById('sync-logged-out').classList.contains('d-none') && !localStorage.getItem('dg_cloud_session'));
     if (!out) fail++; console.log(`${out ? 'PASS' : 'FAIL'} phrase logout on ${n}`); }

@@ -13,11 +13,9 @@ Every build gets the next number, test builds too (owner 2026-11-02: «568 не 
 уйдёт — 570 и есть та, что ушла»): one number for a build, on the phone, in the chat and in the store. The earlier builds'
 numbers are read from this workflow's build-info artifacts (kept 14 days; the stores and the floor cover the time before).
 
-So it never goes below what a store already has (Play refuses a lower or equal code), it moves only
-when that app is uploaded, and a re-run that reads the stores again gets a fresh number once its
-earlier upload went through. Test builds that nobody uploads leave the counter where it is: two of
-them in a row carry the same number, which is fine for a sideload (only a LOWER code refuses to
-install) and for play-upload.yml / ios-upload.yml (a store refuses a duplicate, loudly).
+So it never goes below what a store already has (Play refuses a lower or equal code), and it never
+repeats a number an earlier build got: a sideloaded test build is never followed by one with the same
+or a lower code. If the earlier builds cannot be read, the run stops here rather than guess.
 
 build_floor is the number already handed out before this rule existed (every app used the run
 number, up to 560): a sideloaded test build must never be followed by a lower one.
@@ -85,10 +83,18 @@ def built_max(app):
         raise RuntimeError("GITHUB_REPOSITORY / GH_TOKEN not set")
     h = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
     if not hasattr(built_max, "cache"):
-        url = f"https://api.github.com/repos/{repo}/actions/artifacts?per_page=100"
-        arts = json.load(urllib.request.urlopen(urllib.request.Request(url, headers=h)))["artifacts"]
+        # this workflow's own runs, newest first, and each one's build-info-<run number> by name (the repo-wide artifact
+        # list is flooded by other workflows: its first page covered hours, f3-ultra's review)
+        runs = json.load(urllib.request.urlopen(urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/actions/workflows/build-app.yml/runs?per_page=60", headers=h)))["workflow_runs"]
+        arts = []
+        for run in runs:
+            if str(run["id"]) == os.environ.get("GITHUB_RUN_ID"):
+                continue
+            arts += json.load(urllib.request.urlopen(urllib.request.Request(
+                f"https://api.github.com/repos/{repo}/actions/runs/{run['id']}/artifacts?name=build-info-{run['run_number']}", headers=h)))["artifacts"]
         seen = {}
-        for a in [a for a in arts if a["name"].startswith("build-info-") and not a["expired"]][:20]:
+        for a in [a for a in arts if not a["expired"]]:
             # the download answers with a redirect to storage that must not get the token (it refuses it: 401)
             class NoAuthRedirect(urllib.request.HTTPRedirectHandler):
                 def redirect_request(self, req, fp, code, msg, hdrs, newurl):
@@ -123,8 +129,8 @@ def compute(floors, read_play, read_asc, must_read, read_built=None):
         if read_built:
             try:
                 built = read_built(app)
-            except Exception as e:  # noqa: BLE001 - a test build may go on without it; the stores still bound it
-                print(f"::warning::{app}: earlier builds not read ({str(e)[:160]})", file=sys.stderr)
+            except Exception as e:  # noqa: BLE001 - without them a number could repeat: stop, do not guess
+                problems.append(f"::error::{app}: the numbers earlier builds got were not read ({str(e)[:160]})")
         out[app] = next_number(floors[app], *found, built)
         print(f"{app}: floor {floors[app]}, play {found[0]}, testflight {found[1]}, built {built} -> {out[app]}", file=sys.stderr)
     return out, problems

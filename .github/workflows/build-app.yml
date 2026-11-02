@@ -357,7 +357,7 @@ jobs:
         with:
           name: build-info-${{ github.run_number }}
           path: build-info.json
-          retention-days: 14
+          retention-days: 90   # build_numbers.py reads the numbers given out from these
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------------------------
@@ -777,7 +777,16 @@ jobs:
           mkdir -p "$DG_SHOTS"
           node test/rate-prompt-ui.js
           node test/shortcuts-ui.js
-          # the sign-in page on test, whatever site the build talks to: a check account's data is not written through prod
+
+      # The live test site clicked through: sign-in by passphrase (a fresh account each run, deleted after) and the reader.
+      # They check test.dhamma.gift, not this build, so they report but never gate it, and a store release (made against
+      # prod) skips them: test being down or mid-change must not stop a build (f3-ultra's review 2026-11-02).
+      - name: The live test site - sign-in by phrase, the reader (reported, not gating)
+        if: ${{ !inputs.release || inputs.release == 'none' }}
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /opt/pw-browsers
+        run: |
           node test/phrase-sync.js https://test.dhamma.gift
           node test/reader-ui.js https://test.dhamma.gift
 

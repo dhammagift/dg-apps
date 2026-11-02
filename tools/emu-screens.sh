@@ -488,17 +488,6 @@ if [ "${4:-}" = reader ] && [ "$PKG" = gift.dhamma.mobile ]; then
   adb logcat -d -s Capacitor/Console:* chromium:* > "$OUT/logcat.txt" 2>/dev/null || true
   exit $code
 fi
-if [ "${4:-}" = pause ] && [ "$PKG" = gift.dhamma.mobile ]; then
-  # Pauses between phrases run out with the screen off (tools/emu-pause.js, debug APK, DevTools; a test-origin build).
-  adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1
-  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 > /dev/null; sleep 20
-  adb shell input tap 309 2184; sleep 2
-  pid=$(adb shell pidof "$PKG" | tr -d '\r' | awk '{print $1}')
-  adb forward tcp:9222 "localabstract:webview_devtools_remote_${pid}"
-  node "$REPO/tools/emu-pause.js" "$OUT" | tee "$OUT/pause-result.txt"; code=${PIPESTATUS[0]}
-  adb logcat -d -s Capacitor/Console:* chromium:* > "$OUT/logcat.txt" 2>/dev/null || true
-  exit $code
-fi
 if [ "${4:-}" = compare ] && [ "$PKG" = gift.dhamma.mobile ]; then
   # "Compare" opens with the Differences on, in the app, recorded (tools/emu-compare.js, debug APK, DevTools; a test-origin build).
   adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1

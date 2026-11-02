@@ -14,11 +14,6 @@ earlier upload went through. Test builds that nobody uploads leave the counter w
 them in a row carry the same number, which is fine for a sideload (only a LOWER code refuses to
 install) and for play-upload.yml / ios-upload.yml (a store refuses a duplicate, loudly).
 
-Dhamma.Gift takes the run number when that is higher (owner 2026-11-02: «в магазине должно быть то, что ты называешь»): every
-test build of it then has its own number, the one it is called by (run 673 = build 673 on the phone and in the store), instead
-of all of them reading the store's last number. Run numbers only grow, so the rule above still holds. Dict and Uposatha keep
-their own counters.
-
 build_floor is the number already handed out before this rule existed (every app used the run
 number, up to 560): a sideloaded test build must never be followed by a lower one.
 
@@ -77,7 +72,7 @@ def asc_max(asc, bundle):
     return max((int(b["attributes"]["version"]) for b in builds if b["attributes"]["version"].isdigit()), default=0)
 
 
-def compute(floors, read_play, read_asc, must_read, run=None):
+def compute(floors, read_play, read_asc, must_read):
     """floors: {app: n}; read_*: (app) -> highest number or raises; must_read: set of plan tokens."""
     out, problems = {}, []
     for app, (_, _, _, token) in APPS.items():
@@ -93,8 +88,6 @@ def compute(floors, read_play, read_asc, must_read, run=None):
                     print("::warning::" + msg + " - the number is not checked against it", file=sys.stderr)
                 found.append(None)
         out[app] = next_number(floors[app], *found)
-        if app == "dg" and run:
-            out[app] = max(out[app], run)
         print(f"{app}: floor {floors[app]}, play {found[0]}, testflight {found[1]} -> {out[app]}", file=sys.stderr)
     return out, problems
 
@@ -114,8 +107,7 @@ def main():
         if asc is None:
             raise RuntimeError("ASC_KEY_P8 is not set")
         return asc_max(asc, APPS[app][2])
-    out, problems = compute(floors, read_play, read_asc, set(os.environ.get("MUST_READ", "").split()),
-                            int(os.environ.get("GITHUB_RUN_NUMBER") or 0) or None)
+    out, problems = compute(floors, read_play, read_asc, set(os.environ.get("MUST_READ", "").split()))
     for p in problems:
         print(p, file=sys.stderr)
     if problems:
@@ -145,12 +137,6 @@ def self_test():
     _, problems = compute(floors, broken, lambda a: stores[a][1], {"upo_ios"})
     assert not problems, problems
     assert floor_of("version=1.0\n# c\nbuild_floor=560\n") == 560
-    # Dhamma.Gift is called by its run: run 673 is build 673 (the store behind it); a store ahead of the run still wins
-    stores = {"dg": (568, 568), "dict": (545, 531), "uposatha": (502, 489)}
-    out, _ = compute(floors, lambda a: stores[a][0], lambda a: stores[a][1], set(), 673)
-    assert out == {"dg": 673, "dict": 561, "uposatha": 561}, out
-    stores["dg"] = (700, 568)
-    assert compute(floors, lambda a: stores[a][0], lambda a: stores[a][1], set(), 673)[0]["dg"] == 701
     print("build_numbers: self-test passed")
 
 

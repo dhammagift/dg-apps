@@ -44,20 +44,23 @@ public class DgPullHoldPlugin extends Plugin {
 
     // Pull to refresh only for a pull that is mostly DOWN. A finger swiping the reader's columns sideways never moves
     // perfectly flat, and the platform's layout took its few pixels down as a pull - the page refreshed every other swipe
-    // (owner 2026-11-01). Decided once per touch, from its first movement past the touch slop: more sideways than down,
-    // and this touch is not a pull at all. Everything else (where a pull may start, the distance) stays the platform's.
-    static class VerticalOnlyRefresh extends SwipeRefreshLayout {
+    // (owner 2026-11-01). Decided once per touch, from its first movement past the touch slop: not clearly down (sideways,
+    // or up - a scroll down the text), and this touch is not a pull at all. Everything else stays the platform's.
+    // A new touch also forgets the page's answer for the touch before it: setAllowed comes from the page's touchstart a
+    // moment after ACTION_DOWN, and until then the last touch's "yes" (one on the text) let a touch on the header or on
+    // "next" start a pull - the page refreshed while the owner was only reading on (2026-11-03, his video).
+    class VerticalOnlyRefresh extends SwipeRefreshLayout {
         private final int slop;
         private float downX, downY;
         private boolean decided, sideways;
         VerticalOnlyRefresh(android.content.Context c) { super(c); slop = ViewConfiguration.get(c).getScaledTouchSlop(); }
         @Override public boolean onInterceptTouchEvent(MotionEvent e) {
             switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN: downX = e.getX(); downY = e.getY(); decided = false; sideways = false; break;
+                case MotionEvent.ACTION_DOWN: downX = e.getX(); downY = e.getY(); decided = false; sideways = false; allowed = false; break;
                 case MotionEvent.ACTION_MOVE:
                     if (!decided) {
-                        float dx = Math.abs(e.getX() - downX), dy = Math.abs(e.getY() - downY);
-                        if (dx > slop || dy > slop) { decided = true; sideways = dx > dy; }
+                        float dx = Math.abs(e.getX() - downX), dy = e.getY() - downY;   // dy > 0: down
+                        if (dx > slop || Math.abs(dy) > slop) { decided = true; sideways = dy <= 0 || dx > dy; }
                     }
                     if (sideways) return false;
                     break;

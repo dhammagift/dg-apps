@@ -62,7 +62,22 @@ async function target() {
   function shade(tag) {
     sh('adb shell cmd statusbar expand-notifications'); try { execSync('sleep 2'); } catch (e) { /* ignore */ }
     fs.writeFileSync(`${OUT}/shade-${tag}.png`, execSync('adb exec-out screencap -p', { maxBuffer: 1 << 26 }));
-    sh('adb shell uiautomator dump /sdcard/n.xml'); return sh('adb shell cat /sdcard/n.xml');
+    // The dump waits for the screen to go still, and with the page's own (Google) audio playing the shade's media player
+    // keeps drawing its moving progress wave: the dump gives up and writes no file (577, three runs: "No such file").
+    // A few tries; none = '' and the caller presses the media key instead (Test Lab's TrayPlayerTest taps the real shade).
+    for (let i = 1; i <= 3; i++) {
+      let out = '';
+      try { sh('adb shell rm -f /sdcard/n.xml'); out = sh('adb shell uiautomator dump /sdcard/n.xml 2>&1'); } catch (e) { out = String(e.stdout || e.message); }
+      try { return sh('adb shell cat /sdcard/n.xml'); } catch (e) { say(`shade (${tag}) dump ${i}/3 gave no file: ${out.trim().slice(0, 160)}`); }
+      try { execSync('sleep 2'); } catch (e) { /* ignore */ }
+    }
+    return '';
+  }
+  // No dump of the shade: the same button through the media key, so the check still tells whether the app's media
+  // session obeys Pause / Play (a shade that cannot be read is the emulator's, not the app's)
+  function mediaKey(xml, names, tag, key) {
+    if (xml) return tap(xml, names, tag);
+    sh(`adb shell input keyevent ${key}`); say(`WARN shade (${tag}) unreadable on this emulator, sent ${key} instead`); return true;
   }
   function tap(xml, names, tag) {
     fs.writeFileSync(`${OUT}/shade-${tag}.xml`, xml);
@@ -80,7 +95,7 @@ async function target() {
   const collapse = () => { try { sh('adb shell cmd statusbar collapse'); } catch (e) { /* ignore */ } };
 
   let xml = shade('1-pause');
-  const pausedTap = tap(xml, /^pause$/i, '1-pause');
+  const pausedTap = mediaKey(xml, /^pause$/i, '1-pause', 'KEYCODE_MEDIA_PAUSE');
   await sleep(2000); collapse();
   s = await state(); say('after Pause: ' + s);
   const o1 = JSON.parse(s);
@@ -89,7 +104,7 @@ async function target() {
 
   try { fs.writeFileSync(`${OUT}/focus-after-pause.txt`, sh('adb shell dumpsys audio | grep -iA25 "Audio Focus stack"')); } catch (e) { /* ignore */ }
   xml = shade('2-play');                    // right away, as the owner does it
-  const playTap = tap(xml, /^play$/i, '2-play');
+  const playTap = mediaKey(xml, /^play$/i, '2-play', 'KEYCODE_MEDIA_PLAY');
   await sleep(3000); collapse();
   s = await state(); say('after Play: ' + s);
   try { fs.writeFileSync(`${OUT}/focus-after-play.txt`, sh('adb shell dumpsys audio | grep -iA25 "Audio Focus stack"')); fs.writeFileSync(`${OUT}/media-session.txt`, sh('adb shell dumpsys media_session | head -120')); } catch (e) { /* ignore */ }

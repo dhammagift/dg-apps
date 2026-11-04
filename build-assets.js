@@ -558,6 +558,9 @@ const ASSET_LOOSE_FILES = [
     'img/albumart-memo.png', 'img/albumart-samadhi.png',
     'materials/cases.html', 'materials/conjugations.html', 'materials/pali_cases_ru.html',
     'materials/prat.html',
+    // its stylesheet and images, dg-node's own copies since 2026-11-04 (they were taken from dhamma.ru, which stopped answering)
+    'materials/css/style.css', 'materials/css/img/button.gif', 'materials/css/img/al.png', 'materials/css/img/el.png',
+    'materials/css/img/fl.png', 'materials/css/img/upl.png', 'materials/css/img/vl.png',
     'js/nav-component.js', 'js/pmjs.js', 'js/audioLazyLoad.js', 'js/switchView.js',
     'js/lbl.js', 'js/lunar.js', 'js/settings.js', 'js/diacritics.js',
     // The site's browser error reporter, referenced by the bundled login page. In the app it

@@ -218,7 +218,9 @@ public class MainActivity extends BridgeActivity {
         try {
             android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
             long code = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? info.getLongVersionCode() : info.versionCode;
-            return info.versionName + " (" + code + ")";
+            // versionName already ends in " (code)" (build.gradle); older builds had the bare version
+            String name = info.versionName == null ? "" : info.versionName;
+            return name.endsWith(")") ? name : name + " (" + code + ")";
         } catch (Exception e) {
             return "";
         }

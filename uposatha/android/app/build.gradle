@@ -14,7 +14,10 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode ((project.findProperty('dgVersionCode') ?: '1') as Integer)
-        versionName appVersion.getProperty('version')
+        // "1.20 (573)": Android's App info screen shows only versionName, and the build number is what
+        // tells two builds of one version apart (owner 2026-11-04, Trello FCvLiOrX). iOS keeps the bare
+        // version (MARKETING_VERSION must be numbers); its Settings/TestFlight show the build themselves.
+        versionName "${appVersion.getProperty('version')} (${versionCode})"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

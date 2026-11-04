@@ -175,8 +175,9 @@ public class MainActivity extends BridgeActivity {
         if (!"localhost".equals(u.getHost()) || path == null) return false;
         String last = path.substring(path.lastIndexOf('/') + 1);
         if (last.indexOf('.') < 0 || last.matches(".*\\.html?$")) return false;
-        String route = path + (u.getQuery() != null ? "?" + u.getQuery() : "")
-            + (u.getFragment() != null ? "#" + u.getFragment() : "");
+        // encoded, as in handleIntent: a decoded query loses %0A and breaks on & # % inside a value
+        String route = u.getEncodedPath() + (u.getEncodedQuery() != null ? "?" + u.getEncodedQuery() : "")
+            + (u.getEncodedFragment() != null ? "#" + u.getEncodedFragment() : "");
         webView.post(() -> webView.loadUrl("https://localhost/?_nativeRoute=" + Uri.encode(route)));
         return true;
     }
@@ -301,8 +302,14 @@ public class MainActivity extends BridgeActivity {
                     // The browser refused: the page's own route below still sends it out.
                 }
             }
-            String route = (path == null || path.isEmpty() ? "/" : path)
-                + (data.getQuery() != null ? "?" + data.getQuery() : "");
+            // The ENCODED path, query and fragment: getQuery() decodes, so a memo link's ?text= lost its line breaks (%0A
+            // became a raw newline, which the page's URL parser drops) and any & # % inside the text broke the address;
+            // and the fragment was never passed at all — an8.73?mode=memorize#8.5 from Telegram opened at the top
+            // (owner 2026-11-04, Trello 4T39JhsG, QjENQCew).
+            String encPath = data.getEncodedPath();
+            String route = (encPath == null || encPath.isEmpty() ? "/" : encPath)
+                + (data.getEncodedQuery() != null ? "?" + data.getEncodedQuery() : "")
+                + (data.getEncodedFragment() != null ? "#" + data.getEncodedFragment() : "");
             url = "https://localhost/?_nativeRoute=" + Uri.encode(route);
         } else {
             String route = intent.getStringExtra("route");

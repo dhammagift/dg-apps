@@ -400,9 +400,12 @@
         // and left the home page on screen: the Memo shortcut and a dhamma.gift/memo link opened search.
         // Settings is a page of its own too (settings/index.html, no /ru/ copy): without it,
         // dhammagift://route/settings reached the router as the search word "settings".
-        var page = /^\/(?:(ru\/)?(memo|login)|(settings))\/?$/.exec(route);
+        // /memo, /memo/ and /memo/index.html alike, with the query and hash kept: the site's own memo links are
+        // /memo/index.html?text=… (the reader's "Memorize", a shared card), and the old /\/?$/ matched none of them —
+        // the link opened search and the text was lost (owner 2026-11-04, Trello 4T39JhsG).
+        var page = /^\/(?:(ru\/)?(memo|login)|(settings))(?:\/(?:index\.html)?)?(?=[?#]|$)/.exec(route);
         if (page) {
-            location.replace(page[3] ? '/settings/index.html' : '/' + (page[1] || '') + page[2] + '/index.html');
+            location.replace((page[3] ? '/settings/index.html' : '/' + (page[1] || '') + page[2] + '/index.html') + route.slice(page[0].length));
             return;
         }
         try {

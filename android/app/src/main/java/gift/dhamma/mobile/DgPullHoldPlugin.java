@@ -56,13 +56,17 @@ public class DgPullHoldPlugin extends Plugin {
         VerticalOnlyRefresh(android.content.Context c) { super(c); slop = ViewConfiguration.get(c).getScaledTouchSlop(); }
         @Override public boolean onInterceptTouchEvent(MotionEvent e) {
             switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN: downX = e.getX(); downY = e.getY(); decided = false; sideways = false; allowed = false; break;
+                // The page's answer for THIS touch comes a moment later (setAllowed from its touchstart). Reset here, but not
+                // as a "no": SwipeRefreshLayout asks canChildScrollUp on ACTION_DOWN and, told "can scroll", never records the
+                // touch's start - every pull failed from 583 on (owner 2026-11-05). The answer is waited for on the move instead.
+                case MotionEvent.ACTION_DOWN: downX = e.getX(); downY = e.getY(); decided = false; sideways = false; fresh = false; allowed = false; break;
                 case MotionEvent.ACTION_MOVE:
                     if (!decided) {
                         float dx = Math.abs(e.getX() - downX), dy = e.getY() - downY;   // dy > 0: down
                         if (dx > slop || Math.abs(dy) > slop) { decided = true; sideways = dy <= 0 || dx > dy; }
                     }
                     if (sideways) return false;
+                    if (!fresh) return false;   // no answer from the page yet for this touch: not a pull (yet)
                     break;
             }
             return super.onInterceptTouchEvent(e);
@@ -76,6 +80,7 @@ public class DgPullHoldPlugin extends Plugin {
     private SwipeRefreshLayout swipe;
     private ImageView shot;
     private volatile boolean allowed;
+    private volatile boolean fresh;   // the page has answered for the current touch
     private volatile String allowedOn = "";
     private int token;
     private int circleTop = -1;
@@ -85,7 +90,7 @@ public class DgPullHoldPlugin extends Plugin {
         final WebView web = getBridge().getWebView();
         web.addJavascriptInterface(new Object() {
             @JavascriptInterface
-            public void setAllowed(boolean yes, String href) { allowedOn = href == null ? "" : href; allowed = yes; }
+            public void setAllowed(boolean yes, String href) { allowedOn = href == null ? "" : href; allowed = yes; fresh = true; }
 
             @JavascriptInterface
             public void release() { ui.post(DgPullHoldPlugin.this::release); }
@@ -113,7 +118,7 @@ public class DgPullHoldPlugin extends Plugin {
 
         // "The child can scroll up" = no refresh: the page is scrolled, or the pull did not start on the page itself,
         // or the answer came from a page that is no longer there (one without pull-refresh.js never answers).
-        swipe.setOnChildScrollUpCallback((layout, child) -> web.getScrollY() > 0 || !allowed || !allowedOn.equals(web.getUrl()));
+        swipe.setOnChildScrollUpCallback((layout, child) -> web.getScrollY() > 0 || (fresh && (!allowed || !allowedOn.equals(web.getUrl()))));
         swipe.setOnRefreshListener(() -> hold(web));
         // A deliberate pull (owner 2026-11-01: «реагировать, если я прям тяну вниз»): a little further than the platform's
         // 64 dp; the sideways swipes are left out by VerticalOnlyRefresh, not by a longer pull.

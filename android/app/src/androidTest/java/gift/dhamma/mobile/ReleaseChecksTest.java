@@ -200,6 +200,16 @@ public class ReleaseChecksTest {
             sh("wm density reset");
             Thread.sleep(3000);
 
+            // 6b. A shared link's view inside the app (dg-node df1d21b): Differences off and lines chosen by the reader, then a link
+            // with view=columns&diff=1 opened by the router (as a deep link is) - both apply for that visit
+            js(s, "(function(){window.dgSetEditionsDiff(false);localStorage.setItem('viewMode','alternate');return 1})()");
+            js(s, "window.dgNavigateInternal('/mn89?editions=ms,bjt,my,th,mso,pts&view=columns&diff=1')");
+            boolean shared = until(s, "/mn89/.test(location.pathname) && document.querySelector('#sutta .dg-ed-line')", 60000)
+                && until(s, "document.querySelectorAll('#sutta mark.dg-ed-diff').length > 5", 60000);
+            Thread.sleep(1500);
+            String view = js(s, "JSON.stringify({cols:document.getElementById('sutta').classList.contains('column-view'),diff:window.dgEditionsDiff(),marks:document.querySelectorAll('#sutta mark.dg-ed-diff').length})");
+            check("08d-shared-link-view", shared && view != null && view.contains("\"cols\":true") && view.contains("\"diff\":true"), "mn89 with view=columns&diff=1 by the router: " + view);
+
             // 7. The Uposatha page in the DG app animates the theme switch too
             js(s, "location.href='/uposatha-calendar'");
             until(s, "/uposatha/.test(location.pathname) && document.readyState === 'complete'", 30000);

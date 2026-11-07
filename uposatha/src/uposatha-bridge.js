@@ -19,6 +19,9 @@
   var PLATFORM = Cap.getPlatform();
   if (PLATFORM !== 'android' && PLATFORM !== 'ios') return;
   var IOS = PLATFORM === 'ios';   // on iOS: no Back button, no notification channels or streams, no launcher icon change
+  // The theme circle is this bridge's (animateThemeSwitch): the site's theme-reveal.js stands down where this is set, and runs in
+  // Dhamma.Gift's app, which has no animation of its own (owner 2026-11-06).
+  window.dgOwnThemeSwitch = true;
 
   // Boot marks in the device log ("[dg-boot] load +812 ms"): when the page reached each step of showing itself. It is hidden until
   // window.__upoReveal (index.html's head: after load + fonts, or a safety timer of 3.5 s), so a slow step here is a blank screen

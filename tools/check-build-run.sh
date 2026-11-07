@@ -5,18 +5,31 @@
 # must have passed in it (a green run can have skipped it). Verified 2026-10-10: Uposatha 488 went to
 # Play from a failed run of a feature branch, and nothing here asked.
 #
-# Usage: tools/check-build-run.sh <run id> <name prefix of the check job that must have passed> <dg|dict|uposatha>
+# Usage: tools/check-build-run.sh <run id> <name prefix of the check job that must have passed> <dg|dict|uposatha> [android|ios]
+# The platform (default android): a failed job of the OTHER platform does not hold this one back (owner 2026-11-05:
+# «чтобы из-за падения iOS не работал мой маркет — бред»; Trello xjIPdV8a). Shared jobs (plan, unit, build) count for both.
 # Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_OUTPUT. Writes build_number=<n> to $GITHUB_OUTPUT: that app's build number in
 # that run (its signed artifacts are named by it), or the run number for a run made before each app had its own counter.
 set -euo pipefail
-RUN_ID=$1; CHECK=$2; APP=$3
+RUN_ID=$1; CHECK=$2; APP=$3; PLATFORM=${4:-android}
 fail() { echo "::error::run $RUN_ID: $*"; exit 1; }
 [[ "$RUN_ID" =~ ^[0-9]+$ ]] || fail "not a run id"
 run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
 IFS=$'\t' read -r n conclusion event branch wf < <(jq -r '[.run_number, .conclusion, .event, .head_branch, .path] | @tsv' <<< "$run")
 echo "run $RUN_ID = Build App #$n: $event on $branch, $conclusion"
 [ "$wf" = .github/workflows/build-app.yml ] || fail "is not a Build App run ($wf)"
-[ "$conclusion" = success ] || fail "did not succeed ($conclusion): a store gets only a build whose checks all passed"
+if [ "$conclusion" != success ]; then
+  # Only this platform's jobs and the shared ones must have passed; the other platform's are left out by their names.
+  case "$PLATFORM" in
+    android) other='iOS|TestFlight|IPA|Xcode|macOS|Safari' ;;
+    ios)     other='Android|emulator|Play closed|APK|AAB' ;;
+    *) fail "unknown platform $PLATFORM" ;;
+  esac
+  bad=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
+    --jq ".jobs[] | select(.conclusion != \"success\" and .conclusion != \"skipped\" and .conclusion != \"neutral\") | select(.name | test(\"$other\") | not) | .name + \" (\" + (.conclusion // .status) + \")\"")
+  [ -z "$bad" ] || fail "did not succeed ($conclusion), and these $PLATFORM or shared jobs did not pass: $(echo "$bad" | paste -sd ';' -)"
+  echo "run $RUN_ID: $conclusion, but every $PLATFORM and shared job passed; only the other platform's failed"
+fi
 case "$event:$branch" in
   push:*|workflow_dispatch:main) ;;
   *) fail "was built from $branch, not main or a tag" ;;

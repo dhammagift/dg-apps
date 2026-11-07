@@ -59,7 +59,7 @@ jobs:
           CHECK: ${{ steps.app.outputs.check }}
           APP: ${{ inputs.app }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: tools/check-build-run.sh "$RUN_ID" "$CHECK" "$APP"
+        run: tools/check-build-run.sh "$RUN_ID" "$CHECK" "$APP" android
 
       - uses: actions/download-artifact@v4
         with:

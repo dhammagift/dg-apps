@@ -54,7 +54,12 @@ rm -f "$DATA/Documents/selftest.json"
 mkdir -p "$DATA/Documents"
 log stream --style compact --predicate 'process == "App"' > "$OUT/app-console.log" 2>&1 &
 LOGPID=$!
-open "$WRAP" || { echo "mac-drive: open refused the app" >&2; kill $LOGPID 2>/dev/null; exit 1; }
+xattr -cr "$WRAP" 2>/dev/null || true
+if ! open "$WRAP"; then
+    echo "mac-drive: open refused the app; the launch services log:" >&2
+    log show --last 1m --style compact --predicate 'subsystem == "com.apple.launchservices" OR process == "amfid" OR process == "syspolicyd"' 2>/dev/null | tail -40 >&2 || true
+    kill $LOGPID 2>/dev/null; exit 1
+fi
 
 REPORT=""
 for i in $(seq 1 "$WAIT_SECONDS"); do

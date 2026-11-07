@@ -74,28 +74,31 @@ jobs:
       - name: Sync Capacitor into ios/
         run: npx cap sync ios
 
-      # Mac Catalyst: the same app built for macOS. An iOS (iphoneos) build is what "Designed for iPad" runs, but macOS only
-      # launches that with a team's development profile naming the Mac (run 42339718238: LaunchServices -10673 for an ad-hoc
-      # signed one), and every runner is another Mac. Catalyst runs signed ad hoc and shows the same pages, sizes and input.
-      - name: Build for the Mac (Catalyst)
+      # For iOS devices (arm64), unsigned: what "Designed for iPad" runs. mac-drive.sh signs it ad hoc and wraps it. Not Mac
+      # Catalyst: Capacitor's prebuilt xcframeworks have no Catalyst slice (run 42340285665).
+      - name: Build for iOS devices
         run: |
           set -o pipefail
-          # the project does not offer Catalyst (no SUPPORTS_MACCATALYST): on for this run's copy only, every target
-          sed -i '' 's/TARGETED_DEVICE_FAMILY = "1,2";/TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTS_MACCATALYST = YES;/' ios/App/App.xcodeproj/project.pbxproj
-          grep -c "SUPPORTS_MACCATALYST = YES" ios/App/App.xcodeproj/project.pbxproj
           xcodebuild \
             -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Debug \
-            -destination 'platform=macOS,variant=Mac Catalyst' \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath ios/DerivedData \
-            CODE_SIGN_IDENTITY=- CODE_SIGN_ENTITLEMENTS= DEVELOPMENT_TEAM= CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER= \
-            build 2>&1 | tee mac-build.log | tail -40
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee mac-build.log | tail -30
+
+      # A throwaway runner: Gatekeeper off, so an ad-hoc signed app may launch (LaunchServices -10673 with it on, run 42339718238)
+      - name: Let this runner open unsigned apps
+        run: |
+          sudo spctl --master-disable || sudo spctl --global-disable || true
+          spctl --status || true
 
       - name: Run it on this Mac and pull its report out
         run: |
           chmod +x test/ios-sim/mac-drive.sh
-          test/ios-sim/mac-drive.sh --catalyst --app ios/DerivedData/Build/Products/Debug-maccatalyst/App.app --out .tmp/mac-ui --library .tmp/ios-library
+          test/ios-sim/mac-drive.sh --app ios/DerivedData/Build/Products/Debug-iphoneos/App.app --out .tmp/mac-ui --library .tmp/ios-library
 
       - name: Judge the report
         run: node test/ios-sim/assert.js .tmp/mac-ui/selftest.json

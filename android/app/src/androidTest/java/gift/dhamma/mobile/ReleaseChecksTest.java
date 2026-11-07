@@ -246,6 +246,35 @@ public class ReleaseChecksTest {
             shot("10a-tablet-columns-scrolled");
             sh("wm size reset"); sh("wm density reset");
             Thread.sleep(2000);
+
+            // 9. Back from a text opened from the results is ONE step (owner 2026-11-07, DG 594: two swipes - the app and the
+            // results' own link handler both opened the text, two history entries)
+            js(s, "window.dgNavigateInternal('/kacchapa?lang=ru')");
+            boolean res = until(s, "document.querySelector('#results-tbody a[href*=\"mn129\"]')", 60000);
+            js(s, "document.querySelector('#results-tbody a[href*=\"mn129\"]').scrollIntoView({block:'center',behavior:'instant'})");
+            Thread.sleep(1500);
+            tapElement(s, "#results-tbody a[href*=\"mn129\"]");
+            boolean opened = until(s, "/mn129/.test(location.pathname) && document.querySelector('#sutta [id*=\":\"]')", 45000);
+            Thread.sleep(2000);
+            UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack();
+            boolean backOnce = until(s, "/kacchapa/.test(location.pathname) && document.body.classList.contains('dg-state-results')", 15000);
+            check("11-back-from-text-once", res && opened && backOnce, "results " + res + ", text " + opened + ", one Back -> " + js(s, "location.pathname+' '+(document.body.className.match(/dg-state-\\w+/)||[''])[0]"));
+
+            // 10. A dhamma.gift/ru/settings/ link opens the Settings sheet, not a search for "settings"; a pinch in the sheet
+            // sizes the sheet itself, not only its text sample (owner 2026-11-07, DG 594 checklist)
+            sh("am start -a android.intent.action.VIEW -d https://dhamma.gift/ru/settings/ -p gift.dhamma.mobile");
+            boolean sheetOpen = until(s, "window.DgHome && DgHome.isSettingsSheetOpen() && document.querySelector('iframe[src*=\"settings\"]').contentDocument.getElementById('sizeVal')", 45000);
+            Thread.sleep(2000);
+            String where = js(s, "location.pathname+location.search+' '+(document.body.className.match(/dg-state-\\w+/)||[''])[0]");
+            check("12-settings-link", sheetOpen, "at " + where);
+            androidx.test.uiautomator.UiObject2 wv = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).findObject(androidx.test.uiautomator.By.clazz("android.webkit.WebView"));
+            if (wv != null) wv.pinchClose(0.6f);
+            Thread.sleep(2000);
+            String zoom = js(s, "(function(){var d=document.querySelector('iframe[src*=\"settings\"]').contentDocument;return localStorage.getItem('uiScale')+' '+(d.documentElement.style.zoom||'1')+' '+d.getElementById('sizeVal').textContent})()");
+            boolean zoomOk = false;
+            try { String[] z = zoom.split(" "); zoomOk = Integer.parseInt(z[0]) < 100 && Float.parseFloat(z[1]) < 0.99f && z[2].equals(z[0] + "%"); } catch (Exception ignored) { }
+            check("13-settings-pinch", sheetOpen && zoomOk, "uiScale / sheet zoom / figure: " + zoom);
+            js(s, "(function(){localStorage.setItem('uiScale','100');DgHome.closeSettingsSheet&&DgHome.closeSettingsSheet();return 1})()");
         }
         Log.i(TAG, "DONE " + (failed.isEmpty() ? "all passed" : failed.size() + " failed: " + failed));
         assertTrue("failed: " + failed, failed.isEmpty());

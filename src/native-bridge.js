@@ -378,6 +378,14 @@
         // neither — a dhamma.gift/uposatha-calendar link (the bot's calendar button) opened search.
         // The literal origin, not ONLINE_ORIGIN: that var is declared further down and would still
         // be undefined here, since this runs at parse time.
+        // Settings are a sheet of the home page, not a page here: dhamma.gift/settings/ opened the search for "settings"
+        // (owner 2026-11-07). The home page with #dg-settings opens the sheet (dg-node home.js).
+        var settingsRoute = /^\/(ru\/)?settings\/?(?:[?#]|$)/.exec(route);
+        if (settingsRoute) {
+            var ru = settingsRoute[1] || /[?&]lang=ru\b/.test(route);
+            try { history.replaceState(history.state, '', '/' + (ru ? '?lang=ru' : '') + '#dg-settings'); } catch (e) { /* stays home */ }
+            return;
+        }
         var EXTERNAL_ROUTES = /^\/(ru\/)?(dict|memorize|docs|uposatha-calendar|apps)(\/|\?|$)/; // login is bundled now (below)
         var first = /^\/(?:ru\/)?([^\/?#]+)/.exec(route);   // or any page the site serves itself (DG_SITE_PREFIXES, build-assets.js)
         if (EXTERNAL_ROUTES.test(route) || (first && (window.DG_SITE_PREFIXES || []).indexOf(first[1]) !== -1)) {
@@ -961,6 +969,9 @@
 
     // target="_blank" on a same-origin link: capture phase, so no other handler navigates first.
     document.addEventListener('click', function (e) {
+        // Opened already by the page's own capture handler on document (the results' text link, search-render.js):
+        // a second open pushed a second history entry, and Back from the text needed two swipes (owner 2026-11-07).
+        if (e.defaultPrevented) return;
         var a = e.target.closest ? e.target.closest('a[target="_blank"][href]') : null;
         if (!a) return;
         var href = a.getAttribute('href');
@@ -969,7 +980,9 @@
         // target="_blank" link left to the WebView opened nothing — the lookup popup's
         // dict.dhamma.gift links were exactly that.
         e.preventDefault();
-        e.stopPropagation();
+        // Immediate: stopPropagation leaves the other capture listeners on document, and the results' link handler
+        // then opened the same text again.
+        e.stopImmediatePropagation();
         openInPlace(href);
     }, true);
 

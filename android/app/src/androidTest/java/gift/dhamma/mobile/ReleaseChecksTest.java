@@ -179,8 +179,12 @@ public class ReleaseChecksTest {
             // missing, joined/apart. mn88 3.4: SR "ānandoti" is the joined minority (its o|t marked), BJT's "nu kho" against
             // "no" (u and the extra kho), MS and PTS ("Ānando ti" goes with the majority) unmarked. Phone, then a tablet's size.
             String probe = "(function(){var s=document.getElementById('3.4');if(!s)return 'no 3.4';s.scrollIntoView({block:'center',behavior:'instant'});var o={};s.querySelectorAll('.dg-ed-line').forEach(function(l){o[l.dataset.ed]=[...l.querySelectorAll('mark.dg-ed-diff')].map(function(m){return m.textContent}).join('|')});var ok=o.th==='ot'&&/kho/.test(o.bjt||'')&&o.ms===''&&o.pts==='';return (ok?'ok ':'bad ')+JSON.stringify(o)})()";
-            js(s, "window.dgNavigateInternal('/mn88?editions=ms,bjt,my,th,mso,pts&diff=1')");
-            boolean marks = until(s, "document.querySelectorAll('#sutta mark.dg-ed-diff').length > 20 && document.getElementById('3.4')", 60000);
+            // opened inside the app ?diff=1 is not read (run 699: the switch stayed off, no marks): the switch is tapped, as a reader does
+            js(s, "window.dgNavigateInternal('/mn88?editions=ms,bjt,my,th,mso,pts')");
+            boolean btn = until(s, "document.getElementById('3.4') && document.querySelector('#dg-diff-btn:not([hidden])')", 60000);
+            Thread.sleep(1500);
+            if (!"true".equals(js(s, "String(window.dgEditionsDiff && window.dgEditionsDiff())"))) tapElement(s, "#dg-diff-btn");
+            boolean marks = btn && until(s, "document.querySelectorAll('#sutta mark.dg-ed-diff').length > 20", 60000);
             js(s, probe);
             Thread.sleep(2500);
             String phone = js(s, probe);

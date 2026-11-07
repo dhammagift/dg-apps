@@ -196,8 +196,10 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
         }
         let set = plan
         DispatchQueue.main.async {
-            // A second start while a set is running joins it (a reload, a relaunch: see start()).
-            if !self.packTasks.isEmpty {
+            // A second start while a set is running - or still being set up: packTasks fills only in getAllTasks' callback
+            // below - joins it (a reload, a relaunch, two presses: the page's own call and the consent sheet's Download
+            // two seconds apart overwrote the first call, which then waited forever - simulator, 2026-11-07).
+            if !self.packTasks.isEmpty || !self.packWaiting.isEmpty {
                 self.packWaiting.append(call)
                 return
             }

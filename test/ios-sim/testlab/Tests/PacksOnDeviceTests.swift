@@ -26,11 +26,14 @@ final class PacksOnDeviceTests: XCTestCase {
     }
 
     private func verdict() -> String? {
-        let predicate = NSPredicate(format: "label BEGINSWITH 'DG-SELFTEST-DONE' OR value BEGINSWITH 'DG-SELFTEST-DONE'")
+        // CONTAINS: WebKit hands the <pre> to accessibility with its text, not always first in the label (the verdict stood on
+        // the screen of iPhone 16 Pro, 2026-11-07, and BEGINSWITH never saw it)
+        let predicate = NSPredicate(format: "label CONTAINS 'DG-SELFTEST-DONE' OR value CONTAINS 'DG-SELFTEST-DONE'")
         let el = app.descendants(matching: .any).matching(predicate).firstMatch
         guard el.exists else { return nil }
-        let text = el.label.isEmpty ? ((el.value as? String) ?? "") : el.label
-        return text.isEmpty ? nil : text
+        let label = el.label.contains("DG-SELFTEST-DONE") ? el.label : ((el.value as? String) ?? el.label)
+        guard let range = label.range(of: "DG-SELFTEST-DONE") else { return nil }
+        return String(label[range.lowerBound...])
     }
 
     func testPacksOffline() {

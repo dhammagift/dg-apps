@@ -55,6 +55,15 @@
             if (!ok) throw new Error('the offline layer never started');
             step('download: root-ms + tr-ru');
             window.dgStartOfflineDownload('open', true);
+            // The first start's consent sheet waits for its Download (Test Lab iPhone 16 Pro, 2026-11-07: it stood there for
+            // 30 minutes) - pressed as a reader presses it
+            var presses = 0;
+            var press = setInterval(function () {
+                var sheet = document.getElementById('dgConsent');
+                var b = sheet && [].slice.call(sheet.querySelectorAll('button')).filter(function (x) { return /^(Download|Скачать)$/.test(x.textContent.trim()); })[0];
+                if (b) { b.click(); presses++; step('pressed Download in the consent sheet'); }
+                if (presses > 2 || Date.now() - started > 120000) clearInterval(press);
+            }, 1500);
             return wait(function () { return window.dgOfflineDiagnostics && window.dgOfflineDiagnostics().mode === 'local'; }, DEADLINE_MS);
         }).then(function (local) {
             if (!local) throw new Error('the library never became local');

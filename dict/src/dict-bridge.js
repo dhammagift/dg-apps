@@ -504,12 +504,20 @@
       return /^https?:$/.test(u.protocol) && /(^|\.)dhamma\.gift$/.test(u.hostname) && u.hostname !== 'dict.dhamma.gift';
     } catch (e) { return false; }
   }
+  // A text the DG glossary names (a.dg-seg in an entry, ddg-ui offline-dpd.js; a.dg-gloss-seg in the word's DG card, ui.js): to the system, so Dhamma.Gift's app opens it if it is
+  // installed, else the browser (owner 2026-11-07); the in-app tab if this build's plugin cannot.
+  var S = Cap.Plugins.DgShortcuts;
   document.addEventListener('click', function (e) {
     var a = e.target && e.target.closest && e.target.closest('a[href]');
     if (!a || !isSite(a.href)) return;
     e.preventDefault();
     e.stopPropagation();
-    B.open({ url: a.href });
+    var url = a.href;
+    if (a.matches('.dg-seg, .dg-gloss-seg') && S && typeof S.openOutside === 'function') {
+      Promise.resolve(S.openOutside({ url: url })).catch(function () { B.open({ url: url }); });
+      return;
+    }
+    B.open({ url: url });
   }, true);
   var open = window.open;
   window.open = function (url) {

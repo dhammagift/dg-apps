@@ -561,10 +561,25 @@ public class DgShortcutsPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "DgShortcuts"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "set", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "launchRoute", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "launchRoute", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openOutside", returnType: CAPPluginReturnPromise)
     ]
 
     static let routeKey = "route"
+
+    // A text of the DG glossary (a.dg-seg, dict-bridge.js) goes to the system: a Universal Link opens Dhamma.Gift's app when
+    // it is installed, Safari otherwise (owner 2026-11-07). The in-app Safari sheet never hands a link to an app.
+    @objc func openOutside(_ call: CAPPluginCall) {
+        guard let raw = call.getString("url"), let url = URL(string: raw), url.scheme == "https" else {
+            call.reject("no url")
+            return
+        }
+        DispatchQueue.main.async {
+            UIApplication.shared.open(url, options: [:]) { ok in
+                if ok { call.resolve() } else { call.reject("cannot open \(raw)") }
+            }
+        }
+    }
     static var pendingRoute: String?
     private static weak var current: DgShortcutsPlugin?
 

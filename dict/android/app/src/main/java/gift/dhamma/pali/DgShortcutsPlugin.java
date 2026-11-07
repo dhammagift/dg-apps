@@ -2,6 +2,7 @@ package gift.dhamma.pali;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 
 import androidx.core.content.pm.ShortcutInfoCompat;
@@ -46,6 +47,21 @@ import java.util.List;
  */
 @CapacitorPlugin(name = "DgShortcuts")
 public class DgShortcutsPlugin extends Plugin {
+
+    // A text of the DG glossary in the dictionary (a.dg-seg, dict-bridge.js): opened by the system, not the in-app browser tab,
+    // so Dhamma.Gift's app takes it when it is installed (its App Links for dhamma.gift) and the browser does otherwise
+    // (owner 2026-11-07). A Custom Tab never hands a link to an app.
+    @PluginMethod
+    public void openOutside(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || !url.startsWith("https://")) { call.reject("no url"); return; }
+        try {
+            getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("cannot open " + url);
+        }
+    }
 
     private static final int MAX_SHORTCUTS = 15;   // ShortcutManager's own cap for a single app
     // The launcher renders the SHORT label and ellipsizes whatever does not fit its own width, so

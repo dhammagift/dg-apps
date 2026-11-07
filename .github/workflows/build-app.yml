@@ -1343,6 +1343,45 @@ jobs:
           path: shots
           retention-days: 14
 
+      # A test build's own checks in one run (androidTest ReleaseChecksTest: theme circle, reader header, next text, Settings,
+      # the offline picker, the update notice, a DG glossary link, the Uposatha page), here first, where runs are free (owner
+      # 2026-11-07: new tests on the ordinary build before any Test Lab device). Not a gate yet; its screenshots and PASS/FAIL
+      # lines are the artifact android-release-checks-N.
+      - name: Test APK for the release checks
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: dg-app-androidtest-apk-${{ github.run_number }}
+          path: apk-test
+      - name: Release checks (ReleaseChecksTest, one run)
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            mkdir -p release-checks
+            adb install -r "$(ls apk-debug/*.apk | head -1)" > /dev/null
+            adb install -r "$(ls apk-test/*.apk | head -1)" > /dev/null
+            adb shell am instrument -w -e class gift.dhamma.mobile.ReleaseChecksTest gift.dhamma.mobile.test/androidx.test.runner.AndroidJUnitRunner > release-checks/instrument.txt 2>&1 || true
+            adb logcat -d -s DgReleaseTest > release-checks/checks.txt || true
+            adb pull /sdcard/Android/data/gift.dhamma.mobile/files/shots release-checks/ > /dev/null 2>&1 || true
+            grep -E "PASS|FAIL|DONE" release-checks/checks.txt || tail -30 release-checks/instrument.txt
+      - name: Verdict, release checks
+        if: always()
+        run: |
+          { echo "### Release checks (ReleaseChecksTest)"; echo '```'; grep -hoE "(PASS|FAIL) .*|DONE .*" release-checks/checks.txt 2>/dev/null || echo "no result"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-release-checks-${{ github.run_number }}
+          path: release-checks
+          retention-days: 14
+
   android-release:
     name: Android release (Play closed testing, alpha)
     needs: [plan, unit, build, android-tests]

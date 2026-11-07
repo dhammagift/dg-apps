@@ -113,11 +113,18 @@
 
     // Packs (dg-node app.js prepareArchive): the files the worker lacks, {path, bytes, sha256} relative to `base`, fetched by
     // the same foreground service into the library directory; the answer is that directory's file URL, which the worker
-    // imports them from. Android only: iOS opens its one library natively and has no packs.
+    // imports them from. iOS (DG_NATIVE_PACKS): DgDownloadPlugin.swift fetches them on its background URLSession and unpacks
+    // each beside the old dg.db, where the worker opens them natively (no import); the answer only says they are there.
     function preparePacks(opts) {
         var D = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DgDownload;
-        // false = not this platform's job (a browser, iOS): the page's worker downloads; null below = the transfer failed
-        if (!D || typeof D.start !== 'function' || !(window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android')) return Promise.resolve(false);
+        var android = window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android';
+        if (D && typeof D.start === 'function' && !android && window.DG_NATIVE_PACKS) {
+            return Promise.resolve(D.start({ base: opts.base, files: JSON.stringify(opts.files || []) })).then(function (r) {
+                return r && r.path ? 'native:' + r.path : null;
+            }).catch(function () { return null; });
+        }
+        // false = not this platform's job (a browser): the page's worker downloads; null below = the transfer failed
+        if (!D || typeof D.start !== 'function' || !android) return Promise.resolve(false);
         wireAndroidProgress(D);
         window.dgNativeDownload = true;
         try { var P = window.Capacitor.Plugins.DgProgress; if (P && P.update) P.update({ title: 'Dhamma.gift', text: 'Downloading the offline library', percent: -1 }); } catch (x) { /* no notification permission */ }
@@ -134,7 +141,7 @@
         preparePacks: preparePacks,
         cancelArchive: cancelArchive,
         // Set by the iOS shell (DgSharedLibrary.userScript): SQL runs natively at this path on the
-        // page's own origin, and db-worker.js takes its native branch. Undefined on Android.
+        // page's own origin, and db-worker.js takes its native branch (with DG_NATIVE_PACKS, on packs). Undefined on Android.
         nativeSql: window.DG_NATIVE_SQL || null,
 
         mapStatic: function (p) {
@@ -205,7 +212,7 @@
     // A build that takes the library in packs (a test build: DG_PACKS_BASE, dg-node app.js PACKS_ON) shows what that download
     // is: the packs picked in Settings, or the first ones - the Mahāsaṅgīti and the interface language's translation (app.js
     // firstPacks). It showed the single library's 245 MB, all languages (f3-ultra, run 661's first-launch.png).
-    function packsOn() { return !!window.DG_PACKS_BASE && !window.DG_NATIVE_SQL && window.DG_OFFLINE_PACKS !== false; }
+    function packsOn() { return !!window.DG_PACKS_BASE && (!window.DG_NATIVE_SQL || !!window.DG_NATIVE_PACKS) && window.DG_OFFLINE_PACKS !== false; }
     function readPacksPlan() {
         return fetch(String(window.DG_PACKS_BASE).replace(/\/$/, '') + '/packs-manifest.json')
             .then(function (r) { return r.ok ? r.json() : null; })

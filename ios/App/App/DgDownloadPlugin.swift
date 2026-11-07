@@ -16,6 +16,11 @@ import Capacitor
 //                    events {loaded, total} while it is being unpacked. sha256 (db-manifest.json's, of
 //                    the unpacked database) is checked before the file replaces the library, as on Android.
 //   existing()    -> {path} or {path: null} if no library is on disk
+//   start({base, files}) -> {path} once every file is in DgLibrary.packsDirectory(): packs (owner 2026-11-07), files =
+//                    JSON [{path, bytes, sha256}] relative to base (dg-node db-worker.js 'packs-plan'; sha256 is the
+//                    archive's). All go to the background session at once, so the system carries them on while the app is
+//                    away; each .db.gz is checked, unpacked into <id>.<build>.db and deleted. "progress" {loaded, total}
+//                    over all of them.
 //   cancel()      -> stops the transfer; the partial file is discarded and a waiting start() is refused
 //                    (the caller can start again)
 //
@@ -64,7 +69,7 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
     @objc func existing(_ call: CAPPluginCall) {
         do {
             try unpackIfNeeded()
-            call.resolve(["path": DgLibrary.isPresent ? DgLibrary.dbURL.path : NSNull()])
+            call.resolve(["path": DgLibrary.singlePresent ? DgLibrary.dbURL.path : NSNull()])
         } catch {
             call.reject("could not unpack the downloaded archive: \(error.localizedDescription)")
         }
@@ -76,6 +81,10 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
     private static var expectedShaURL: URL { DgLibrary.archiveURL.appendingPathExtension("sha256") }
 
     @objc func start(_ call: CAPPluginCall) {
+        if let files = call.getString("files"), let base = call.getString("base") {
+            startPacks(call, base: base, files: files)
+            return
+        }
         guard let raw = call.getString("url"), let url = URL(string: raw) else {
             call.reject("no url")
             return
@@ -112,8 +121,12 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
 
     @objc func cancel(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            let calls = self.waiting
+            let calls = self.waiting + self.packWaiting
             self.waiting = []
+            self.packWaiting = []
+            self.packTasks = [:]
+            self.packError = nil
+            try? FileManager.default.removeItem(at: Self.packPlanURL)
             self.task = nil
             // Every transfer of the session, also one a previous run of the app started.
             self.session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
@@ -130,11 +143,130 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
             calls.forEach { $0.reject("download failed: \(error.localizedDescription)") }
             return
         }
-        guard DgLibrary.isPresent else {
+        guard DgLibrary.singlePresent else {
             calls.forEach { $0.reject("download failed: no library on disk afterwards") }
             return
         }
         calls.forEach { $0.resolve(["path": DgLibrary.dbURL.path]) }
+    }
+
+    // MARK: - Packs
+
+    // One entry per file of the running set, by its URL; kept in a file beside the packs too, because the system may finish
+    // the transfers while the app is not running and relaunch it with only the URLs.
+    struct PackFile: Codable { let url: String; let name: String; let sha256: String; let bytes: Int64 }
+    private var packTasks: [Int: PackFile] = [:]     // main thread: running task id -> its file
+    private var packWritten: [Int: Int64] = [:]      // main thread: bytes so far, per task
+    private var packTotal: Int64 = 0
+    private var packWaiting: [CAPPluginCall] = []
+    private var packError: Error?
+    private static var packPlanURL: URL { DgLibrary.packsDirectory().appendingPathComponent("pending.json") }
+
+    private static func savedPlan() -> [PackFile] {
+        guard let data = try? Data(contentsOf: packPlanURL) else { return [] }
+        return (try? JSONDecoder().decode([PackFile].self, from: data)) ?? []
+    }
+
+    private func startPacks(_ call: CAPPluginCall, base: String, files: String) {
+        guard let data = files.data(using: .utf8),
+              let list = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+            call.reject("bad file list")
+            return
+        }
+        let root = base.hasSuffix("/") ? base : base + "/"
+        var plan: [PackFile] = []
+        for f in list {
+            guard let path = f["path"] as? String, let url = URL(string: path, relativeTo: URL(string: root)) else { continue }
+            // root-ms.<build>.db.gz -> root-ms.<build>.db; the manifest keeps its name
+            let file = (path as NSString).lastPathComponent
+            let name = file.hasSuffix(".gz") ? String(file.dropLast(3)) : file
+            guard DgLibrary.safeName(name) else { continue }
+            plan.append(PackFile(url: url.absoluteString, name: name, sha256: f["sha256"] as? String ?? "",
+                                 bytes: (f["bytes"] as? NSNumber)?.int64Value ?? 0))
+        }
+        let set = plan
+        DispatchQueue.main.async {
+            // A second start while a set is running joins it (a reload, a relaunch: see start()).
+            if !self.packTasks.isEmpty {
+                self.packWaiting.append(call)
+                return
+            }
+            self.packWaiting = [call]
+            self.packError = nil
+            self.packWritten = [:]
+            self.packTotal = set.reduce(0) { $0 + $1.bytes }
+            try? JSONEncoder().encode(set).write(to: Self.packPlanURL, options: .atomic)
+            self.session.getAllTasks { tasks in
+                DispatchQueue.main.async {
+                    let running = tasks.compactMap { $0 as? URLSessionDownloadTask }
+                        .filter { $0.state == .running || $0.state == .suspended }
+                    for entry in set {
+                        if let t = running.first(where: { $0.originalRequest?.url?.absoluteString == entry.url }) {
+                            self.packTasks[t.taskIdentifier] = entry
+                            t.resume()
+                        } else if let url = URL(string: entry.url) {
+                            let t = self.session.downloadTask(with: url)
+                            self.packTasks[t.taskIdentifier] = entry
+                            t.resume()
+                        }
+                    }
+                    if self.packTasks.isEmpty { self.finishPacks() }
+                }
+            }
+        }
+    }
+
+    private func packEntry(for task: URLSessionTask) -> PackFile? {
+        guard let url = task.originalRequest?.url?.absoluteString else { return nil }
+        return Self.savedPlan().first(where: { $0.url == url })
+    }
+
+    // Called on the session's queue from didFinishDownloadingTo: the temporary file is gone once that returns.
+    private func installPack(_ entry: PackFile, from location: URL) throws {
+        let fm = FileManager.default
+        let dir = DgLibrary.packsDirectory()
+        if !entry.sha256.isEmpty {
+            let actual = try Self.sha256(of: location)
+            if actual.lowercased() != entry.sha256.lowercased() { throw DgSqlError("the downloaded pack \(entry.name) is damaged (checksum)") }
+        }
+        if !entry.name.hasSuffix(".db") {   // the manifest
+            let target = dir.appendingPathComponent(entry.name)
+            try? fm.removeItem(at: target)
+            try fm.moveItem(at: location, to: target)
+            return
+        }
+        let tmp = dir.appendingPathComponent(entry.name + ".tmp")
+        try? fm.removeItem(at: tmp)
+        try Self.gunzip(location, to: tmp, progress: { _ in }, output: { _ in })
+        let target = dir.appendingPathComponent(entry.name)
+        try? fm.removeItem(at: target)
+        try fm.moveItem(at: tmp, to: target)
+    }
+
+    private static func sha256(of url: URL) throws -> String {
+        let input = try FileHandle(forReadingFrom: url)
+        defer { try? input.close() }
+        var hasher = SHA256()
+        while true {
+            let chunk = input.readData(ofLength: 1 << 20)
+            if chunk.isEmpty { break }
+            hasher.update(data: chunk)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    // main thread
+    private func finishPacks() {
+        let calls = packWaiting
+        packWaiting = []
+        packTasks = [:]
+        try? FileManager.default.removeItem(at: Self.packPlanURL)
+        if let error = packError {
+            packError = nil
+            calls.forEach { $0.reject("download failed: \(error.localizedDescription)") }
+            return
+        }
+        calls.forEach { $0.resolve(["path": DgLibrary.packsDirectory().path]) }
     }
 
     // MARK: - Unpacking
@@ -264,6 +396,18 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
 
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                            didFinishDownloadingTo location: URL) {
+        // A pack: checked, unpacked and in place before this returns (the temporary file goes then).
+        if let entry = packEntry(for: downloadTask) {
+            do {
+                if let http = downloadTask.response as? HTTPURLResponse, http.statusCode != 200 {
+                    throw DgSqlError("HTTP \(http.statusCode) for \(entry.name)")
+                }
+                try installPack(entry, from: location)
+            } catch {
+                DispatchQueue.main.async { self.packError = self.packError ?? error }
+            }
+            return
+        }
         // Called before didCompleteWithError, and the temporary file is deleted the moment this
         // returns — so the move happens here, synchronously; and so does the unpacking, which the
         // system's background time for a finished transfer covers. If it does not, the archive is
@@ -285,14 +429,29 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                            didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                            totalBytesExpectedToWrite: Int64) {
-        notifyListeners("progress", data: [
-            "loaded": totalBytesWritten,
-            "total": totalBytesExpectedToWrite
-        ])
+        let id = downloadTask.taskIdentifier
+        DispatchQueue.main.async {
+            if self.packTasks[id] != nil {
+                // one bar over the whole set
+                self.packWritten[id] = totalBytesWritten
+                let loaded = self.packWritten.values.reduce(0, +)
+                self.notifyListeners("progress", data: ["loaded": loaded, "total": max(self.packTotal, loaded)])
+                return
+            }
+            self.notifyListeners("progress", data: [
+                "loaded": totalBytesWritten,
+                "total": totalBytesExpectedToWrite
+            ])
+        }
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         DispatchQueue.main.async {
+            if self.packTasks.removeValue(forKey: task.taskIdentifier) != nil {
+                if let error = error { self.packError = self.packError ?? error }
+                if self.packTasks.isEmpty { self.finishPacks() }
+                return
+            }
             // A cancelled transfer reports here after the next one may have started: it must not settle that one.
             if let current = self.task, current.taskIdentifier != task.taskIdentifier { return }
             self.finish(error: error)

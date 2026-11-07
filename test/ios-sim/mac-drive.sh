@@ -6,9 +6,12 @@
 # The .app built for iphoneos is put into a wrapper the way macOS runs iOS apps (Name.app/Wrapper/App.app + WrappedBundle),
 # ad-hoc signed, launched with `open`; its data lives in ~/Library/Containers/<bundle>/Data like any sandboxed Mac app.
 #
-# Usage: test/ios-sim/mac-drive.sh --app path/App.app --out DIR [--library DIR]
+# --catalyst: the app built for Mac Catalyst instead (what the CI check uses: macOS will not launch an ad-hoc signed iPad
+# build). It runs as itself, not sandboxed (no entitlements), so its Documents and Application Support are the user's own.
+#
+# Usage: test/ios-sim/mac-drive.sh --app path/App.app --out DIR [--library DIR] [--catalyst]
 set -euo pipefail
-APP="" OUT=".tmp/mac-ui" LIBRARY=""
+APP="" OUT=".tmp/mac-ui" LIBRARY="" CATALYST=""
 BUNDLE="gift.dhamma.mobile"
 WAIT_SECONDS="${DG_SELFTEST_TIMEOUT:-300}"
 while [ $# -gt 0 ]; do
@@ -16,22 +19,31 @@ while [ $# -gt 0 ]; do
         --app) APP="$2"; shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
         --library) LIBRARY="$2"; shift 2 ;;
+        --catalyst) CATALYST=1; shift ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
 [ -d "$APP" ] || { echo "mac-drive: no .app at $APP" >&2; exit 1; }
 mkdir -p "$OUT"
 
-WRAP="$HOME/Applications/DhammaGiftTest.app"
-rm -rf "$WRAP"
-mkdir -p "$WRAP/Wrapper"
-cp -R "$APP" "$WRAP/Wrapper/App.app"
-ln -s "Wrapper/App.app" "$WRAP/WrappedBundle"
-# ad-hoc: no team on a CI runner; restricted entitlements (App Group, Associated Domains) were left out at build time
-codesign --force --deep --sign - "$WRAP/Wrapper/App.app"
-codesign -dv "$WRAP/Wrapper/App.app" 2>&1 | head -5 || true
+if [ -n "$CATALYST" ]; then
+    WRAP="$HOME/Applications/DhammaGiftTest.app"
+    rm -rf "$WRAP"; mkdir -p "$HOME/Applications"
+    cp -R "$APP" "$WRAP"
+    codesign --force --deep --sign - "$WRAP"
+    DATA="$HOME"
+else
+    WRAP="$HOME/Applications/DhammaGiftTest.app"
+    rm -rf "$WRAP"
+    mkdir -p "$WRAP/Wrapper"
+    cp -R "$APP" "$WRAP/Wrapper/App.app"
+    ln -s "Wrapper/App.app" "$WRAP/WrappedBundle"
+    # ad-hoc: no team on a CI runner; restricted entitlements (App Group, Associated Domains) were left out at build time
+    codesign --force --deep --sign - "$WRAP/Wrapper/App.app"
+    DATA="$HOME/Library/Containers/$BUNDLE/Data"
+fi
+codesign -dv "$WRAP" 2>&1 | head -5 || true
 
-DATA="$HOME/Library/Containers/$BUNDLE/Data"
 if [ -n "$LIBRARY" ]; then
     # where builds 170-215 downloaded to; DgDownloadPlugin migrates it (the simulator run does the same, drive.sh)
     mkdir -p "$DATA/Library/Application Support/dg-library"
@@ -39,7 +51,8 @@ if [ -n "$LIBRARY" ]; then
 fi
 rm -f "$DATA/Documents/selftest.json"
 
-log stream --style compact --predicate "process == \"App\"" > "$OUT/app-console.log" 2>&1 &
+mkdir -p "$DATA/Documents"
+log stream --style compact --predicate 'process == "App"' > "$OUT/app-console.log" 2>&1 &
 LOGPID=$!
 open "$WRAP" || { echo "mac-drive: open refused the app" >&2; kill $LOGPID 2>/dev/null; exit 1; }
 

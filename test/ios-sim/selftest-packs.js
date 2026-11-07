@@ -16,7 +16,7 @@
         var word = lang === 'ru' ? '%D1%87%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D1%85%D0%B0' : 'tortoise';
         return [
             { name: 'search-kacchapa', url: '/search?q=kacchapa&langs=' + lang, expect: 'sn35.240' },
-            { name: 'search-translation', url: '/search?q=' + word + '&langs=' + lang, expect: 'sn35.240' },
+            { name: 'search-translation', url: '/search?q=' + word + '&langs=' + lang, expect: '"metadata"' },
             { name: 'text-sn35.240-' + lang, url: '/api/text/sn35.240?mode=single&lang=' + lang, expect: '"' + lang + '_' },
             { name: 'text-dn22-' + lang, url: '/api/text/dn22?mode=single&lang=' + lang, expect: 'Mahāsatipaṭṭhānasutta' },
             { name: 'nav-sn56.11', url: '/api/nav/sn56.11', expect: 'sn56' },

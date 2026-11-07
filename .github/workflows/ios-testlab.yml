@@ -1,0 +1,119 @@
+# Dhamma.Gift on a real iPhone in Firebase Test Lab (owner 2026-11-07: «айфоны там были, а не тестировали»). This builds the
+# zip Test Lab's XCTest takes: the app (a Build App run's www/ with test/ios-sim/selftest-packs.js, prepare-www.js --packs)
+# and the UI test test/ios-sim/testlab, both for devices, unsigned (Test Lab signs them), with the app named in the
+# xctestrun. The run itself is started from the server that holds the Test Lab key (gcloud firebase test ios run --test
+# dg-ios-testlab.zip); the key is not in this repo or its secrets.
+name: iOS Test Lab zip
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: 'Build App run id whose www/ to use (empty: the newest that has one)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  zip:
+    name: Build the Test Lab zip
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Which Build App run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WANT: ${{ inputs.build_run }}
+        run: |
+          set -euo pipefail
+          if [ -n "$WANT" ]; then ID="$WANT"; else
+            ID=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-app.yml/runs?per_page=20" \
+              --jq '.workflow_runs[] | select(.status=="completed") | .id' | while read -r r; do
+                n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$r" --jq .run_number)
+                if [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$r/artifacts?name=www-$n" --jq .total_count)" != 0 ]; then echo "$r"; break; fi
+              done)
+          fi
+          N=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ID" --jq .run_number)
+          echo "id=$ID" >> "$GITHUB_OUTPUT"; echo "number=$N" >> "$GITHUB_OUTPUT"
+          echo "Build App run $ID (#$N)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: www-${{ steps.run.outputs.number }}
+          path: www
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ github.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - run: npm install --legacy-peer-deps --no-audit
+      - run: tools/select-xcode.sh
+
+      - name: The packs self-test bundle
+        run: node test/ios-sim/prepare-www.js --packs
+
+      - run: npx cap sync ios
+
+      - name: The app, for devices, unsigned
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphoneos \
+            -destination 'generic/platform=iOS' -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee app-build.log | tail -20
+
+      - name: The UI test, built for testing
+        run: |
+          set -o pipefail
+          brew install xcodegen >/dev/null 2>&1 || brew install xcodegen
+          (cd test/ios-sim/testlab && xcodegen generate)
+          xcodebuild -project test/ios-sim/testlab/DgTestLab.xcodeproj -scheme DgTestLab -sdk iphoneos \
+            -destination 'generic/platform=iOS' -derivedDataPath tl CODE_SIGNING_ALLOWED=NO \
+            build-for-testing 2>&1 | tee test-build.log | tail -20
+
+      # Test Lab runs `xcodebuild test-without-building` with this xctestrun: the app goes in beside the runner and is named
+      # as the UI test's target, so it is installed before the test launches it by its bundle id.
+      - name: Zip for Test Lab
+        run: |
+          set -euo pipefail
+          mkdir -p out/Debug-iphoneos
+          cp -R tl/Build/Products/Debug-iphoneos/*.app out/Debug-iphoneos/
+          cp -R ios/DerivedData/Build/Products/Debug-iphoneos/App.app out/Debug-iphoneos/
+          XT=$(ls tl/Build/Products/*.xctestrun | head -1)
+          python3 - "$XT" out/DgTestLab.xctestrun <<'EOF'
+          import plistlib, sys
+          d = plistlib.load(open(sys.argv[1], 'rb'))
+          def patch(t):
+              if isinstance(t, dict) and 'TestBundlePath' in t:
+                  t['UITargetAppPath'] = '__TESTROOT__/Debug-iphoneos/App.app'
+                  t['UITargetAppBundleIdentifier'] = 'gift.dhamma.mobile'
+                  deps = t.setdefault('DependentProductPaths', [])
+                  if '__TESTROOT__/Debug-iphoneos/App.app' not in deps: deps.append('__TESTROOT__/Debug-iphoneos/App.app')
+              elif isinstance(t, dict):
+                  for v in t.values(): patch(v)
+              elif isinstance(t, list):
+                  for v in t: patch(v)
+          patch(d)
+          plistlib.dump(d, open(sys.argv[2], 'wb'))
+          EOF
+          (cd out && zip -qr ../dg-ios-testlab.zip .)
+          ls -la out out/Debug-iphoneos dg-ios-testlab.zip
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: dg-ios-testlab-${{ github.run_number }}
+          path: |
+            dg-ios-testlab.zip
+            app-build.log
+            test-build.log
+          retention-days: 14

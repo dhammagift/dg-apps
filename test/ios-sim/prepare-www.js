@@ -70,6 +70,9 @@ const ONLINE = process.argv.includes('--online');
 // walks real views, the self-test asserts answers, and a bundle meant for pictures should not also
 // run a download-and-import pass.
 const TOUR = process.argv.includes('--tour');
+// --packs: the real-iPhone run (Test Lab, test/ios-sim/testlab): no fixture - the packs come from the site the build talks to
+// (DG_PACKS_BASE stays), everything else that needs the internet goes to the dead origin, and selftest-packs.js runs.
+const PACKS = process.argv.includes('--packs');
 const DEAD_ORIGIN = 'http://127.0.0.1:59999';
 const originLine = /^window\.DG_ONLINE_ORIGIN = .*;$/m;
 
@@ -90,18 +93,18 @@ function fail(message) {
 }
 
 if (!fs.existsSync(path.join(WWW, 'index.html'))) fail(`no built page at ${WWW}/index.html — build www first`);
-if (!ONLINE && !fs.existsSync(FIXTURE)) fail(`no fixture database at ${FIXTURE} — run node test/make-fixture-db.js`);
+if (!ONLINE && !PACKS && !fs.existsSync(FIXTURE)) fail(`no fixture database at ${FIXTURE} — run node test/make-fixture-db.js`);
 
 // 1. The fixture, packaged like the published library. The manifest is built from the database's own
 // `meta` table rather than invented here: public/offline/db-worker.js saves the unpacked file under
 // the manifest's build_id and then refuses it unless the file's own meta.build_id matches — that is
 // how it detects a download that stopped halfway. Two sources for that id would be a test failing
 // for a reason that has nothing to do with iOS.
-const dbBytes = ONLINE ? null : fs.readFileSync(FIXTURE);
-const meta = ONLINE ? null : readMeta(FIXTURE);
-const gzBytes = ONLINE ? null : zlib.gzipSync(dbBytes, { level: 9 });
+const dbBytes = ONLINE || PACKS ? null : fs.readFileSync(FIXTURE);
+const meta = ONLINE || PACKS ? null : readMeta(FIXTURE);
+const gzBytes = ONLINE || PACKS ? null : zlib.gzipSync(dbBytes, { level: 9 });
 const dataDir = LIBRARY_DIR || path.join(WWW, 'mobile-data');
-if (!ONLINE) {
+if (!ONLINE && !PACKS) {
 fs.mkdirSync(dataDir, { recursive: true });
 fs.writeFileSync(path.join(dataDir, 'dg.db.gz'), gzBytes);
 const manifest = {
@@ -120,6 +123,8 @@ const manifest = {
 fs.writeFileSync(path.join(dataDir, 'db-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`fixture: ${(dbBytes.length / 1024).toFixed(0)} kB -> ${(gzBytes.length / 1024).toFixed(0)} kB gz, build_id ${manifest.build_id}`);
 console.log(`library: written to ${dataDir}${LIBRARY_DIR ? ' (the app will import it from its own storage)' : ' (bundled with the app)'}`);
+} else if (PACKS) {
+    console.log('packs: no fixture - the app downloads the real packs from DG_PACKS_BASE');
 } else {
     console.log('online: the real site, no fixture and no dead origin — the tour screenshots show the app as a reader sees it');
 }
@@ -132,11 +137,11 @@ if (page.indexOf(platformTag) === -1) fail('www/index.html has no /offline/platf
 const configTag = [
     '<script>',
     '/* Injected by test/ios-sim/prepare-www.js for a simulator run — never in a shipped build. */',
-    ONLINE ? null : (LIBRARY_DIR ? null : `window.DG_DIST_BASE = ${JSON.stringify('/mobile-data')};`),
+    ONLINE || PACKS ? null : (LIBRARY_DIR ? null : `window.DG_DIST_BASE = ${JSON.stringify('/mobile-data')};`),
     ONLINE ? null : `window.DG_ONLINE_ORIGIN = ${JSON.stringify(DEAD_ORIGIN)};`,
     // The fixture is the single library (what iOS readers from before packs hold): the packs the build points at
     // (DG_PACKS_BASE, the real site) would otherwise be what the app downloads, and the run is about the local answers.
-    ONLINE ? null : 'window.DG_OFFLINE_PACKS = false;',
+    ONLINE || PACKS ? null : 'window.DG_OFFLINE_PACKS = false;',
     // The tour must not start the 216 MB offline library download: every screenshot would be of a
     // progress card. Declining is the same flag the page writes when a reader taps "not now", so the
     // app stays in its online mode — exactly what a released app does until someone opts in.
@@ -162,8 +167,8 @@ if (!ONLINE && !patched) fail('no generated file in www/ carries a DG_ONLINE_ORI
 if (!ONLINE) console.log(`origin: ${patched} generated file(s) now point at ${DEAD_ORIGIN}`);
 
 // 3. The self-test itself, last on the page: it waits for the library rather than racing it.
-const scriptName = TOUR ? 'tour.js' : 'selftest.js';
-const servedName = TOUR ? 'ios-tour.js' : 'ios-selftest.js';
+const scriptName = TOUR ? 'tour.js' : PACKS ? 'selftest-packs.js' : 'selftest.js';
+const servedName = TOUR ? 'ios-tour.js' : PACKS ? 'ios-selftest-packs.js' : 'ios-selftest.js';
 const scriptSrc = path.join(__dirname, scriptName);
 if (!fs.existsSync(scriptSrc)) fail(`test/ios-sim/${scriptName} is missing`);
 fs.copyFileSync(scriptSrc, path.join(WWW, servedName));

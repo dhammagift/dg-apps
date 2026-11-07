@@ -1,0 +1,27 @@
+# Dhamma.Gift's packs self-test on a real iPhone in Firebase Test Lab (owner 2026-11-07: the iPhones there were never used).
+# A UI-test bundle with no host app, driving the installed Dhamma.Gift (gift.dhamma.mobile): it launches the app, answers
+# the system alerts, and waits for test/ios-sim/selftest-packs.js to put its verdict on the screen. Built for devices by
+# .github/workflows/ios-testlab.yml, which adds the app to the xctestrun (UITargetAppPath) and zips both for Test Lab.
+name: DgTestLab
+options:
+  bundleIdPrefix: gift.dhamma.tests
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+targets:
+  DgTestLab:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests]
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: gift.dhamma.tests.testlab
+schemes:
+  DgTestLab:
+    build:
+      targets:
+        DgTestLab: all
+    test:
+      targets: [DgTestLab]

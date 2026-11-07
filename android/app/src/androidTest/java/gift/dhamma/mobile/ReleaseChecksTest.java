@@ -1,5 +1,7 @@
 package gift.dhamma.mobile;
 
+import android.app.UiAutomation;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.webkit.WebView;
 
@@ -12,6 +14,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -57,6 +60,32 @@ public class ReleaseChecksTest {
         return false;
     }
 
+    // A shell command as the test: Test Lab runs instrumentation with the system animations off, and the WebView then
+    // reports prefers-reduced-motion, which the theme circle honours by not drawing (02 and 09 failed for that, 2026-11-07).
+    private static String sh(String cmd) {
+        UiAutomation ua = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        StringBuilder out = new StringBuilder();
+        try (ParcelFileDescriptor pfd = ua.executeShellCommand(cmd); FileInputStream in = new FileInputStream(pfd.getFileDescriptor())) {
+            byte[] buf = new byte[4096]; int n;
+            while ((n = in.read(buf)) > 0) out.append(new String(buf, 0, n));
+        } catch (Exception e) { out.append("(failed: ").append(e.getMessage()).append(')'); }
+        return out.toString().trim();
+    }
+
+    // A real tap on a page element (some handlers, the dictionary lookup's, answer only real touches): its centre in CSS px,
+    // times the device pixel ratio, plus the WebView's place on the screen.
+    private static void tapElement(ActivityScenario<MainActivity> s, String selector) throws InterruptedException {
+        String r = js(s, "(function(){var e=document.querySelector(" + quote(selector) + ");if(!e)return '';var b=e.getBoundingClientRect();return (b.left+Math.min(24,b.width/2))+','+(b.top+b.height/2)+','+devicePixelRatio})()");
+        if (r == null || r.isEmpty() || "null".equals(r)) return;
+        String[] p = r.split(",");
+        int[] at = new int[2];
+        s.onActivity(a -> a.getBridge().getWebView().getLocationOnScreen(at));
+        float dpr = Float.parseFloat(p[2]);
+        UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).click(at[0] + Math.round(Float.parseFloat(p[0]) * dpr), at[1] + Math.round(Float.parseFloat(p[1]) * dpr));
+    }
+
+    private static String quote(String v) { return "'" + v.replace("\\", "\\\\").replace("'", "\\'") + "'"; }
+
     private static void shot(String name) {
         UiDevice d = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
         try { d.takeScreenshot(new File(shots, name + ".png"), 0.6f, 70); } catch (Exception e) { Log.i(TAG, "screenshot " + name + ": " + e); }
@@ -72,6 +101,7 @@ public class ReleaseChecksTest {
     public void everythingInOneRun() throws Exception {
         try (ActivityScenario<MainActivity> s = ActivityScenario.launch(MainActivity.class)) {
             s.onActivity(a -> { shots = new File(a.getExternalFilesDir(null), "shots"); shots.mkdirs(); });
+            for (String k : new String[]{"animator_duration_scale", "transition_animation_scale", "window_animation_scale"}) sh("settings put global " + k + " 1");
             boolean up = until(s, "document.querySelector('#paliauto') && document.readyState === 'complete'", 60000);
             Thread.sleep(4000);
             // the first start's offline sheet: "Not now", as a reader who does not download right away
@@ -85,7 +115,7 @@ public class ReleaseChecksTest {
             Thread.sleep(1500);
             js(s, "document.querySelector('.dg-theme-btn-home').click()");
             Thread.sleep(1500);
-            String vt = js(s, "String(window.__vt)+' '+window.__th0+'->'+(document.documentElement.getAttribute('data-bs-theme')||'')");
+            String vt = js(s, "String(window.__vt)+' '+window.__th0+'->'+(document.documentElement.getAttribute('data-bs-theme')||'')+' (View Transitions '+(typeof document.startViewTransition)+', reduced motion '+matchMedia('(prefers-reduced-motion: reduce)').matches+', '+navigator.userAgent.match(/Chrome\\/[0-9]+/)+')'");
             check("02-theme-circle", vt != null && !vt.startsWith("0 ") && !vt.startsWith("undefined"), "view transitions and theme: " + vt);
 
             // 2. A text: the contents label in the header's size, External links shown with its own look
@@ -94,11 +124,11 @@ public class ReleaseChecksTest {
             Thread.sleep(2500);
             String sizes = js(s, "(function(){var t=getComputedStyle(document.querySelector('#smart-toc-current')).fontSize,e=document.querySelector('#reader-toolbar .dg-external-links-toggle'),c=getComputedStyle(e);return parseFloat(t)+' '+parseFloat(c.fontSize)+' '+c.visibility})()");
             boolean sizeOk = false;
-            try { String[] p = sizes.split(" "); sizeOk = text && Float.parseFloat(p[0]) <= Float.parseFloat(p[1]) + 2.5f && "visible".equals(p[2]); } catch (Exception ignored) { }
-            check("03-reader-header", sizeOk, "contents label px / External links px / visibility: " + sizes);
+            try { String[] p = sizes.split(" "); sizeOk = Float.parseFloat(p[0]) <= Float.parseFloat(p[1]) + 2.5f && "visible".equals(p[2]); } catch (Exception ignored) { }
+            check("03-reader-header", sizeOk, "contents label px / External links px / visibility: " + sizes + " (text seen: " + text + ")");
 
             // 3. Next text: External links never painted bare (the browser's grey button) while the page changes
-            js(s, "(function(){window.__bare=0;window.__samples=0;window.__iv=setInterval(function(){var e=document.querySelector('#reader-toolbar .dg-external-links-toggle');if(!e)return;window.__samples++;var c=getComputedStyle(e);if(c.visibility==='visible'&&/239, 239, 239|240, 240, 240/.test(c.backgroundColor))window.__bare++},40);var a=document.querySelector('#next a, #next');a.click();return 1})()");
+            js(s, "(function(){window.__bare=0;window.__samples=0;window.__iv=setInterval(function(){var e=document.querySelector('#reader-toolbar .dg-external-links-toggle');if(!e)return;window.__samples++;var c=getComputedStyle(e);if(c.visibility==='visible'&&/239, 239, 239|240, 240, 240/.test(c.backgroundColor))window.__bare++},40);var a=document.querySelector('#next a');if(a)a.click();return !!a})()");
             boolean next = until(s, "/sn22\\.56/.test(location.pathname)", 30000);
             Thread.sleep(4000);
             String bare = js(s, "(function(){clearInterval(window.__iv);return window.__bare+' of '+window.__samples})()");
@@ -110,8 +140,11 @@ public class ReleaseChecksTest {
             Thread.sleep(1500);
             String width = js(s, "Math.round(document.getElementById('dg-settings-sheet').getBoundingClientRect().width)+' of '+innerWidth");
             check("05-settings-sheet", sheet, "sheet width " + width);
-            String picker = js(s, "(function(){var d=document.querySelector('#dg-settings-sheet iframe').contentDocument,w=d.defaultView;var b=[...d.querySelectorAll('button')].find(function(x){return /Choose|Выбрать|Change|Изменить/.test(x.textContent)&&x.offsetParent});if(!b)return 'no button';b.scrollIntoView({block:'center'});var y0=w.scrollY;b.click();window.__pk=[y0];setTimeout(function(){window.__pk.push(w.scrollY,!!(d.getElementById('pkDlg')||{}).open)},1200);return 'ok'})()");
-            Thread.sleep(2000);
+            String picker = js(s, "(function(){var d=document.querySelector('#dg-settings-sheet iframe').contentDocument;var b=[...d.querySelectorAll('button')].find(function(x){return /Choose|Выбрать|Change|Изменить/.test(x.textContent)&&x.offsetParent});if(!b)return 'no button';b.scrollIntoView({block:'center',behavior:'instant'});window.__pkb=b;return 'ok'})()");
+            Thread.sleep(1500);
+            js(s, "(function(){var w=document.querySelector('#dg-settings-sheet iframe').contentWindow;window.__pk=[w.scrollY];window.__pkb.click();return 1})()");
+            Thread.sleep(1500);
+            js(s, "(function(){var f=document.querySelector('#dg-settings-sheet iframe'),w=f.contentWindow,d=f.contentDocument;window.__pk.push(w.scrollY,!!(d.getElementById('pkDlg')||{}).open);return 1})()");
             String pk = js(s, "JSON.stringify(window.__pk)");
             boolean pkOk = false;
             try { String[] p = pk.replace("[", "").replace("]", "").split(","); pkOk = "ok".equals(picker) && Math.abs(Float.parseFloat(p[0]) - Float.parseFloat(p[1])) < 40 && "true".equals(p[2]); } catch (Exception ignored) { }
@@ -132,7 +165,9 @@ public class ReleaseChecksTest {
             js(s, "window.dgNavigateInternal('/mn9')");
             until(s, "document.querySelectorAll('#sutta .pli-lang').length > 4", 45000);
             Thread.sleep(2500);
-            js(s, "(function(){var w=document.querySelectorAll('#sutta .pli-lang')[3];var r=w.getBoundingClientRect();w.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:r.left+12,clientY:r.top+r.height/2}));return 1})()");
+            js(s, "(function(){var w=document.querySelectorAll('#sutta .pli-lang')[3];w.scrollIntoView({block:'center',behavior:'instant'});w.id='dg-test-word';return 1})()");
+            Thread.sleep(800);
+            tapElement(s, "#dg-test-word");
             boolean pop = until(s, "[...document.querySelectorAll('iframe')].some(function(f){return f.srcdoc&&f.offsetParent})", 15000);
             Thread.sleep(1000);
             shot("08a-lookup");

@@ -175,6 +175,27 @@ public class ReleaseChecksTest {
             boolean went = until(s, "/^\\/mn10/.test(location.pathname) && window.__mark === 1", 20000);
             check("08-dictionary-dg-link", pop && went, "popup " + pop + ", now at " + js(s, "location.pathname") + " without reload: " + went);
 
+            // 6a. Differences of six editions (owner 2026-11-07, Trello qFyguxVl): the majority letter by letter, a word moved or
+            // missing, joined/apart. mn88 3.4: SR "ānandoti" is the joined minority (its o|t marked), BJT's "nu kho" against
+            // "no" (u and the extra kho), MS and PTS ("Ānando ti" goes with the majority) unmarked. Phone, then a tablet's size.
+            String probe = "(function(){var s=document.getElementById('3.4');if(!s)return 'no 3.4';s.scrollIntoView({block:'center',behavior:'instant'});var o={};s.querySelectorAll('.dg-ed-line').forEach(function(l){o[l.dataset.ed]=[...l.querySelectorAll('mark.dg-ed-diff')].map(function(m){return m.textContent}).join('|')});var ok=o.th==='ot'&&/kho/.test(o.bjt||'')&&o.ms===''&&o.pts==='';return (ok?'ok ':'bad ')+JSON.stringify(o)})()";
+            js(s, "window.dgNavigateInternal('/mn88?editions=ms,bjt,my,th,mso,pts&diff=1')");
+            boolean marks = until(s, "document.querySelectorAll('#sutta mark.dg-ed-diff').length > 20 && document.getElementById('3.4')", 60000);
+            js(s, probe);
+            Thread.sleep(2500);
+            String phone = js(s, probe);
+            check("08b-differences-phone", marks && phone != null && phone.startsWith("ok "), "mn88 3.4 marks per edition: " + phone);
+            sh("wm size 1600x2560");
+            sh("wm density 320");
+            Thread.sleep(4000);
+            js(s, probe);
+            Thread.sleep(2500);
+            String tablet = js(s, probe);
+            check("08c-differences-tablet", tablet != null && tablet.startsWith("ok "), "at " + js(s, "innerWidth+'x'+innerHeight") + ": " + tablet);
+            sh("wm size reset");
+            sh("wm density reset");
+            Thread.sleep(3000);
+
             // 7. The Uposatha page in the DG app animates the theme switch too
             js(s, "location.href='/uposatha-calendar'");
             until(s, "/uposatha/.test(location.pathname) && document.readyState === 'complete'", 30000);

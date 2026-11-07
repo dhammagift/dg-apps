@@ -341,13 +341,19 @@ jobs:
           DG_NUMBER: ${{ steps.num.outputs.dg_number }}
           DICT_NUMBER: ${{ steps.num.outputs.dict_number }}
           UPOSATHA_NUMBER: ${{ steps.num.outputs.uposatha_number }}
+          # Only the apps this run builds take their number (build_numbers.py built_max counts every number written here):
+          # a DG-only run wrote dict 592 and uposatha 595 while their stores were at 568/571 (run 42338199449, Sippa 2026-11-07).
+          BUILD_DG: ${{ steps.what.outputs.build_dg }}
+          BUILD_DICT: ${{ steps.what.outputs.build_dict }}
+          BUILD_UPOSATHA: ${{ steps.what.outputs.build_upo }}
         run: |
           python3 - <<'EOF'
           import json, os
           e = os.environ
           json.dump({'run_number': int(e['GITHUB_RUN_NUMBER']), 'ref': e['GITHUB_REF'], 'sha': e['GITHUB_SHA'],
                      'dg_node': e['DG_NODE_SHA'], 'ddg_ui': e['DDG_UI_SHA'], 'online_origin': e['DG_ONLINE_ORIGIN'],
-                     'build_numbers': {a: int(e[a.upper() + '_NUMBER']) for a in ('dg', 'dict', 'uposatha')}},
+                     'build_numbers': {a: int(e[a.upper() + '_NUMBER']) for a in ('dg', 'dict', 'uposatha')
+                                       if e.get('BUILD_' + a.upper()) == 'true'}},
                     open('build-info.json', 'w'), indent=2)
           EOF
           cat build-info.json

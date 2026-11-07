@@ -1,0 +1,108 @@
+# Dhamma.Gift's iOS app on a Mac (Apple Silicon runs iOS apps "Designed for iPad"; owner 2026-11-07: «вы можете поднимать
+# это на обычных макбуках… по крайней мере вы понимаете, когда там у вас что-то не работает»). The www/ of a Build App run,
+# the simulator self-test's bundle (test/ios-sim/prepare-www.js), built for iOS devices without signing, wrapped and run
+# on the runner's Mac by test/ios-sim/mac-drive.sh, judged by test/ios-sim/assert.js; screenshots of the window.
+# Its own file and its own run, never a gate of build-app.yml: a Mac quirk must not hold a phone build back.
+name: Mac (Designed for iPad) check
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: 'Build App run id whose www/ to test (empty: the newest that has one)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  mac:
+    name: DG on a Mac (Designed for iPad)
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Checkout this repo (the app)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Which Build App run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WANT: ${{ inputs.build_run }}
+        run: |
+          set -euo pipefail
+          if [ -n "$WANT" ]; then ID="$WANT"; else
+            ID=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build-app.yml/runs?per_page=20" \
+              --jq '.workflow_runs[] | select(.status=="completed") | .id' | while read -r r; do
+                n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$r" --jq .run_number)
+                if [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$r/artifacts?name=www-$n" --jq .total_count)" != 0 ]; then echo "$r"; break; fi
+              done)
+          fi
+          N=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ID" --jq .run_number)
+          echo "id=$ID" >> "$GITHUB_OUTPUT"; echo "number=$N" >> "$GITHUB_OUTPUT"
+          echo "Build App run $ID (#$N)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Download that run's web bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: www-${{ steps.run.outputs.number }}
+          path: www
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ github.token }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+
+      - name: Install app dependencies
+        run: npm install --legacy-peer-deps --no-audit
+
+      - name: Select Xcode
+        run: tools/select-xcode.sh
+
+      - name: Build the fixture database
+        run: node test/make-fixture-db.js test/fixture.db
+
+      - name: Turn www/ into a test bundle (the simulator self-test's)
+        run: node test/ios-sim/prepare-www.js --library-dir .tmp/ios-library
+
+      - name: Sync Capacitor into ios/
+        run: npx cap sync ios
+
+      # For iOS devices (arm64), unsigned: a Mac runs that binary; mac-drive.sh signs it ad hoc, without the App Group and
+      # Associated Domains (they need a team's profile; the library falls back to the app's own Application Support).
+      - name: Build for iOS devices
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ios/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee mac-build.log | tail -30
+
+      - name: Run it on this Mac and pull its report out
+        run: |
+          chmod +x test/ios-sim/mac-drive.sh
+          test/ios-sim/mac-drive.sh --app ios/DerivedData/Build/Products/Debug-iphoneos/App.app --out .tmp/mac-ui --library .tmp/ios-library
+
+      - name: Judge the report
+        run: node test/ios-sim/assert.js .tmp/mac-ui/selftest.json
+
+      - name: Upload the report, the screenshots and the logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dg-mac-ipad-${{ github.run_number }}
+          path: |
+            .tmp/mac-ui
+            mac-build.log
+          retention-days: 14

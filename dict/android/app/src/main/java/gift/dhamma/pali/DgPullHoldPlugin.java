@@ -78,14 +78,7 @@ public class DgPullHoldPlugin extends Plugin {
         shot.setVisibility(View.GONE);
         box.addView(shot, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // A new touch forgets the page's answer for the touch before it (setAllowed arrives a moment after ACTION_DOWN; the
-        // last touch's "yes" let a touch elsewhere start a pull - Dhamma.Gift, owner 2026-11-03).
-        swipe = new SwipeRefreshLayout(getContext()) {
-            @Override public boolean onInterceptTouchEvent(android.view.MotionEvent e) {
-                if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) allowed = false;
-                return super.onInterceptTouchEvent(e);
-            }
-        };
+        swipe = new SwipeRefreshLayout(getContext());
         swipe.addView(box, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         parent.addView(swipe, index, lp);
 

@@ -105,6 +105,11 @@ on:
         required: false
         type: boolean
         default: false
+      dict_ios_past_tour:
+        description: 'Dictionary iOS release even when its simulator tour failed - only on the owner''s word, for a tour known to be flaky (owner 2026-11-07, dictionary 2.0.1)'
+        required: false
+        type: boolean
+        default: false
       keep_ipa:
         description: 'Also archive and sign a Dhamma.Gift IPA and keep it as an artifact, so ios-upload.yml can send this very build to TestFlight later (runs the iOS checks too). Off by default; dg-ios, dg-both and a Dhamma.Gift tag always make one.'
         required: false
@@ -2187,7 +2192,8 @@ jobs:
     name: Dictionary app iOS release (TestFlight)
     # waits for the dictionary's own iOS simulator checks: TestFlight gets only a build that passed them (owner 2026-11-07)
     needs: [plan, unit, dict-build, dict-ios-tour]
-    if: needs.plan.outputs.dict_ios == 'true'
+    # dict_ios_past_tour: the owner's word to release past a failed tour (its flaky keyboard cases, Trello card)
+    if: ${{ !cancelled() && needs.plan.outputs.dict_ios == 'true' && needs.unit.result == 'success' && needs.dict-build.result == 'success' && (needs.dict-ios-tour.result == 'success' || inputs.dict_ios_past_tour) }}
     uses: ./.github/workflows/testflight-release.yml
     with:
       app: dict

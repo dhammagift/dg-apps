@@ -2185,7 +2185,8 @@ jobs:
   # (The dictionary has no iOS simulator check of its own yet; its screenshot tour is the only iOS run it gets.)
   dict-ios-release:
     name: Dictionary app iOS release (TestFlight)
-    needs: [plan, unit, dict-build]
+    # waits for the dictionary's own iOS simulator checks: TestFlight gets only a build that passed them (owner 2026-11-07)
+    needs: [plan, unit, dict-build, dict-ios-tour]
     if: needs.plan.outputs.dict_ios == 'true'
     uses: ./.github/workflows/testflight-release.yml
     with:

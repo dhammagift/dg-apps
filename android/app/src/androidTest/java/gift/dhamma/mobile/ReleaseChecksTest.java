@@ -183,6 +183,34 @@ public class ReleaseChecksTest {
             Thread.sleep(1500);
             String vt2 = js(s, "String(window.__vt2)+' at '+location.pathname");
             check("09-uposatha-theme-circle", vt2 != null && !vt2.startsWith("0 ") && !vt2.startsWith("undefined"), "view transitions: " + vt2);
+
+            // 8. A TABLET, editions in columns, a range text (owner 2026-11-07, DG on his tablet, an1.11-20): the page stays
+            // screen-wide (only the text scrolls sideways - it was 2331 px on 800, the header and the status-bar strip slid with
+            // it and the pinch label went off screen), the header stays put while the columns scroll, the status-bar strip is
+            // drawn, and the translation has its column. The emulator is made a tablet for this case (wm size/density).
+            sh("wm size 1600x2560"); sh("wm density 320");
+            Thread.sleep(3000);
+            js(s, "window.dgNavigateInternal('/an1.11-20?editions=ms,bjt,my,th,mso,pts&view=columns&diff=1&mode=single&lang=en')");
+            boolean grid = until(s, "document.querySelector('#sutta.dg-grid .dg-cols-head') && document.querySelectorAll('#sutta .dg-ed-line').length > 20", 45000);
+            Thread.sleep(3000);
+            String tab = js(s, "(function(){var se=document.scrollingElement,box=document.querySelector('#sutta.dg-grid > section.range, #sutta.dg-grid > article'),band=document.getElementById('dg-hero-band');"
+                + "var before=band?Math.round(band.getBoundingClientRect().left):-1;if(box)box.scrollLeft=600;"
+                + "var after=band?Math.round(band.getBoundingClientRect().left):-1;"
+                + "var heads=[...document.querySelectorAll('.dg-cols-head [data-col-cell]')].map(function(c){return c.dataset.colCell});"
+                + "var strip=getComputedStyle(document.body,'::before');"
+                + "return JSON.stringify({w:se.scrollWidth,iw:innerWidth,minSide:Math.min(screen.width,screen.height),boxScrolled:box?box.scrollLeft:0,band:[before,after],tr:heads.some(function(k){return /^tr:/.test(k)}),heads:heads.length,strip:strip.content!=='none'&&strip.height})})()");
+            boolean tabOk = false;
+            try {
+                org.json.JSONObject o = new org.json.JSONObject(tab);
+                tabOk = grid && o.getInt("w") <= o.getInt("iw") + 2 && o.getInt("boxScrolled") > 0
+                    && o.getJSONArray("band").getInt(0) == o.getJSONArray("band").getInt(1) && o.getBoolean("tr");
+            } catch (Exception ignored) { }
+            check("10-tablet-columns-range", tabOk, "grid " + grid + ": " + tab);
+            js(s, "window.scrollTo(0, 1800)");
+            Thread.sleep(1500);
+            shot("10a-tablet-columns-scrolled");
+            sh("wm size reset"); sh("wm density reset");
+            Thread.sleep(2000);
         }
         Log.i(TAG, "DONE " + (failed.isEmpty() ? "all passed" : failed.size() + " failed: " + failed));
         assertTrue("failed: " + failed, failed.isEmpty());

@@ -134,6 +134,9 @@ const configTag = [
     '/* Injected by test/ios-sim/prepare-www.js for a simulator run — never in a shipped build. */',
     ONLINE ? null : (LIBRARY_DIR ? null : `window.DG_DIST_BASE = ${JSON.stringify('/mobile-data')};`),
     ONLINE ? null : `window.DG_ONLINE_ORIGIN = ${JSON.stringify(DEAD_ORIGIN)};`,
+    // The fixture is the single library (what iOS readers from before packs hold): the packs the build points at
+    // (DG_PACKS_BASE, the real site) would otherwise be what the app downloads, and the run is about the local answers.
+    ONLINE ? null : 'window.DG_OFFLINE_PACKS = false;',
     // The tour must not start the 216 MB offline library download: every screenshot would be of a
     // progress card. Declining is the same flag the page writes when a reader taps "not now", so the
     // app stays in its online mode — exactly what a released app does until someone opts in.

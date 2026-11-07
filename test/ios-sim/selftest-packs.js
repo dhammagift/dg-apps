@@ -33,6 +33,8 @@
     }
     function finish(ok) {
         report.ok = ok;
+        report.progress = progress;
+        report.nativeError = window.dgLastPacksError || null;
         report.seconds = Math.round((Date.now() - started) / 1000);
         try { report.diag = window.dgOfflineDiagnostics && window.dgOfflineDiagnostics(); } catch (e) { report.diag = String(e); }
         try { report.state = JSON.parse(localStorage.getItem('dg.offline.state') || 'null'); } catch (e) { report.state = null; }
@@ -48,6 +50,15 @@
             (function poll() { var v = false; try { v = cond(); } catch (e) { v = false; } if (v || Date.now() > end) resolve(!!v); else setTimeout(poll, 1000); })();
         });
     }
+    // the native downloader's progress, first and last, and its error if it gives one
+    var progress = { events: 0, first: null, last: null };
+    window.addEventListener('dg:dl-progress', function (e) {
+        var d = e.detail || {};
+        progress.events++;
+        var at = Math.round((Date.now() - started) / 1000) + 's ' + d.phase + ' ' + d.loaded + '/' + d.total;
+        if (!progress.first) progress.first = at;
+        progress.last = at;
+    });
     function run() {
         step('page up; packs base ' + window.DG_PACKS_BASE + ', native packs ' + !!window.DG_NATIVE_PACKS);
         try { localStorage.setItem('dg.offline.packs', JSON.stringify(['tr-ru'])); } catch (e) { /* none */ }

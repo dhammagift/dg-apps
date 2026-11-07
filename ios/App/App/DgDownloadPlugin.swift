@@ -57,12 +57,20 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
     private var unpackError: Error?
 
     override public func load() {
+        #if targetEnvironment(simulator)
+        // The simulator's background transfer service often never starts a task (no request reached the server in two
+        // runs of the packs self-test, 2026-11-07): an ordinary session there; devices keep the background one.
+        let config = URLSessionConfiguration.default
+        #else
         let config = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
         // Not discretionary: a discretionary transfer waits for a good moment (charging, Wi-Fi) and
         // the reader is standing there watching a progress card.
         config.isDiscretionary = false
         // Relaunch the app when the transfer finishes, so the unpacking can run.
         config.sessionSendsLaunchEvents = true
+        #endif
+        // a transfer that is not finished in 6 hours fails instead of waiting the default 7 days
+        config.timeoutIntervalForResource = 6 * 3600
         session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }
 
@@ -160,6 +168,8 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
     private var packTotal: Int64 = 0
     private var packWaiting: [CAPPluginCall] = []
     private var packError: Error?
+    private var installing = 0                       // main thread: packs being checked and unpacked
+    private static let installQueue = DispatchQueue(label: "gift.dhamma.mobile.packs.install")
     private static var packPlanURL: URL { DgLibrary.packsDirectory().appendingPathComponent("pending.json") }
 
     private static func savedPlan() -> [PackFile] {
@@ -200,6 +210,8 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
                 DispatchQueue.main.async {
                     let running = tasks.compactMap { $0 as? URLSessionDownloadTask }
                         .filter { $0.state == .running || $0.state == .suspended }
+                    // a transfer an earlier run left that this set does not need (another build, the single library)
+                    for t in running where !set.contains(where: { $0.url == t.originalRequest?.url?.absoluteString }) { t.cancel() }
                     for entry in set {
                         if let t = running.first(where: { $0.originalRequest?.url?.absoluteString == entry.url }) {
                             self.packTasks[t.taskIdentifier] = entry
@@ -210,10 +222,27 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
                             t.resume()
                         }
                     }
-                    if self.packTasks.isEmpty { self.finishPacks() }
+                    if self.packTasks.isEmpty { self.finishPacks() } else { self.watch() }
                 }
             }
         }
+    }
+
+    // No byte in 90 s: the transfer is not going to start (a stuck background service, no network). Better a clear
+    // failure the page can retry than a progress card that waits forever.
+    private var watchdog: DispatchWorkItem?
+    private func watch() {
+        watchdog?.cancel()
+        let before = packWritten.values.reduce(0, +)
+        let item = DispatchWorkItem { [weak self] in
+            guard let self = self, !self.packTasks.isEmpty else { return }
+            if self.packWritten.values.reduce(0, +) > before { self.watch(); return }
+            self.packError = self.packError ?? DgSqlError("no data arrived in 90 s")
+            let ids = Set(self.packTasks.keys)
+            self.session.getAllTasks { tasks in tasks.filter { ids.contains($0.taskIdentifier) }.forEach { $0.cancel() } }
+        }
+        watchdog = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 90, execute: item)
     }
 
     private func packEntry(for task: URLSessionTask) -> PackFile? {
@@ -257,6 +286,8 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
 
     // main thread
     private func finishPacks() {
+        watchdog?.cancel()
+        watchdog = nil
         let calls = packWaiting
         packWaiting = []
         packTasks = [:]
@@ -398,13 +429,29 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
                            didFinishDownloadingTo location: URL) {
         // A pack: checked, unpacked and in place before this returns (the temporary file goes then).
         if let entry = packEntry(for: downloadTask) {
+            // Only the move happens here (the temporary file goes when this returns): the checksum of ~110 MB and the
+            // unpacking to ~290 MB run on their own queue, and the set is done when they are (finishPacks waits).
+            let held = DgLibrary.packsDirectory().appendingPathComponent(entry.name + ".download")
             do {
                 if let http = downloadTask.response as? HTTPURLResponse, http.statusCode != 200 {
                     throw DgSqlError("HTTP \(http.statusCode) for \(entry.name)")
                 }
-                try installPack(entry, from: location)
+                try? FileManager.default.removeItem(at: held)
+                try FileManager.default.moveItem(at: location, to: held)
             } catch {
                 DispatchQueue.main.async { self.packError = self.packError ?? error }
+                return
+            }
+            DispatchQueue.main.async { self.installing += 1 }
+            Self.installQueue.async {
+                var failure: Error?
+                do { try self.installPack(entry, from: held) } catch { failure = error }
+                try? FileManager.default.removeItem(at: held)
+                DispatchQueue.main.async {
+                    if let failure = failure { self.packError = self.packError ?? failure }
+                    self.installing -= 1
+                    if self.packTasks.isEmpty && self.installing == 0 { self.finishPacks() }
+                }
             }
             return
         }
@@ -449,7 +496,7 @@ public class DgDownloadPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDe
         DispatchQueue.main.async {
             if self.packTasks.removeValue(forKey: task.taskIdentifier) != nil {
                 if let error = error { self.packError = self.packError ?? error }
-                if self.packTasks.isEmpty { self.finishPacks() }
+                if self.packTasks.isEmpty && self.installing == 0 { self.finishPacks() }
                 return
             }
             // A cancelled transfer reports here after the next one may have started: it must not settle that one.

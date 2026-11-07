@@ -121,7 +121,12 @@
         if (D && typeof D.start === 'function' && !android && window.DG_NATIVE_PACKS) {
             return Promise.resolve(D.start({ base: opts.base, files: JSON.stringify(opts.files || []) })).then(function (r) {
                 return r && r.path ? 'native:' + r.path : null;
-            }).catch(function () { return null; });
+            }).catch(function (e) {
+                // the downloader's own words (HTTP, checksum, "no data arrived"), for the device log and the self-test
+                window.dgLastPacksError = String((e && (e.message || e.errorMessage)) || e);
+                console.log('[dg-offline] native packs download failed: ' + window.dgLastPacksError);
+                return null;
+            });
         }
         // false = not this platform's job (a browser): the page's worker downloads; null below = the transfer failed
         if (!D || typeof D.start !== 'function' || !android) return Promise.resolve(false);

@@ -79,7 +79,7 @@ jobs:
           mkdir -p sim
           # the page's console (Capacitor logs it in a debug build) and the app's own log, to see where a run stops
           xcrun simctl launch --console-pty "$UDID" gift.dhamma.mobile > sim/console.log 2>&1 &
-          xcrun simctl spawn "$UDID" log stream --style compact --predicate 'process == "App"' > sim/app-log.txt 2>&1 &
+          xcrun simctl spawn "$UDID" log stream --style compact --predicate 'process == "App" OR process == "nsurlsessiond"' > sim/app-log.txt 2>&1 &
           DATA=$(xcrun simctl get_app_container "$UDID" gift.dhamma.mobile data)
           for i in $(seq 1 360); do [ -f "$DATA/Documents/selftest.json" ] && break; [ $((i % 60)) -eq 0 ] && xcrun simctl io "$UDID" screenshot "sim/sim-$i.png" >/dev/null 2>&1; sleep 5; done
           grep -E "dg-|DgDownload|dg-sql|packs|error|Error" sim/console.log | tail -60 || true

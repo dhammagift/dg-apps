@@ -80,13 +80,15 @@ jobs:
       - name: Build for the Mac (Catalyst)
         run: |
           set -o pipefail
+          # the project does not offer Catalyst (no SUPPORTS_MACCATALYST): on for this run's copy only, every target
+          sed -i '' 's/TARGETED_DEVICE_FAMILY = "1,2";/TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTS_MACCATALYST = YES;/' ios/App/App.xcodeproj/project.pbxproj
+          grep -c "SUPPORTS_MACCATALYST = YES" ios/App/App.xcodeproj/project.pbxproj
           xcodebuild \
             -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Debug \
             -destination 'platform=macOS,variant=Mac Catalyst' \
             -derivedDataPath ios/DerivedData \
-            SUPPORTS_MACCATALYST=YES \
             CODE_SIGN_IDENTITY=- CODE_SIGN_ENTITLEMENTS= DEVELOPMENT_TEAM= CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER= \
             build 2>&1 | tee mac-build.log | tail -40
 

@@ -10,13 +10,19 @@
     'use strict';
     var DONE_KEY = 'dg.selftest.packs.done';
     var DEADLINE_MS = 30 * 60 * 1000;   // ~160 MB over a test farm's network, then the unpacking
-    var CASES = [
-        { name: 'search-kacchapa', url: '/search?q=kacchapa&langs=ru,en', expect: 'sn35.240' },
-        { name: 'search-russian', url: '/search?q=%D1%87%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D1%85%D0%B0&langs=ru,en', expect: 'sn35.240' },
-        { name: 'text-sn35.240-ru', url: '/api/text/sn35.240?mode=single&lang=ru', expect: 'ru_' },
-        { name: 'text-dn22-ru', url: '/api/text/dn22?mode=single&lang=ru', expect: 'Mahāsatipaṭṭhānasutta' },
-        { name: 'nav-sn56.11', url: '/api/nav/sn56.11', expect: 'sn56' },
-    ];
+    // In the language of the translation that was downloaded: the consent sheet's own choice decides it (English on an English
+    // device, the simulator run of 2026-11-07); a question in another language rightly goes to the server, a dead port here.
+    function cases(lang) {
+        var word = lang === 'ru' ? '%D1%87%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D1%85%D0%B0' : 'tortoise';
+        return [
+            { name: 'search-kacchapa', url: '/search?q=kacchapa&langs=' + lang, expect: 'sn35.240' },
+            { name: 'search-translation', url: '/search?q=' + word + '&langs=' + lang, expect: 'sn35.240' },
+            { name: 'text-sn35.240-' + lang, url: '/api/text/sn35.240?mode=single&lang=' + lang, expect: '"' + lang + '_' },
+            { name: 'text-dn22-' + lang, url: '/api/text/dn22?mode=single&lang=' + lang, expect: 'Mahāsatipaṭṭhānasutta' },
+            { name: 'nav-sn56.11', url: '/api/nav/sn56.11', expect: 'sn56' },
+        ];
+    }
+    var CASES = cases('ru');
     var started = Date.now(), report = { kind: 'packs', startedAt: new Date().toISOString(), steps: [], cases: [] };
     function step(s) { report.steps.push(Math.round((Date.now() - started) / 1000) + 's ' + s); console.log('[dg-selftest] ' + s); show('running: ' + s); }
     function show(text) {
@@ -78,7 +84,9 @@
             return wait(function () { return window.dgOfflineDiagnostics && window.dgOfflineDiagnostics().mode === 'local'; }, DEADLINE_MS);
         }).then(function (local) {
             if (!local) throw new Error('the library never became local');
-            step('library local: ' + JSON.stringify((JSON.parse(localStorage.getItem('dg.offline.state') || '{}')).packs));
+            var packs = (JSON.parse(localStorage.getItem('dg.offline.state') || '{}')).packs || [];
+            step('library local: ' + JSON.stringify(packs));
+            CASES = cases(packs.indexOf('tr-ru') !== -1 ? 'ru' : 'en');
             return CASES.reduce(function (p, c) {
                 return p.then(function () {
                     var t0 = Date.now();

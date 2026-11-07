@@ -702,6 +702,27 @@ function copyNative(name, to) {
 // opens one of them as the page it is; any other /assets page goes to the browser. Before this, such a link was put on the
 // search page's address and the page read the text id in its query: the editor's link opened the sutta in the reader
 // (owner, 2026-10-31).
+// Pinch = text size on EVERY page of the app (owner 2026-11-07: «нет страницы, на которой пинч-ту-зума не должно быть»): the
+// main page loads /assets/js/pinch-size-demo.js itself; every other bundled page (Memorize & Meditate, Settings, sign-in,
+// the tools under assets/) gets it here, before </body>. The script steps the main page's size where it can and zooms a page
+// that has no size control of its own (pinch-size-demo.js, stepper).
+function injectPinchEverywhere() {
+    let n = 0;
+    const walk = (dir) => {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const full = path.join(dir, e.name);
+            if (e.isDirectory()) { if (e.name !== 'node_modules') walk(full); continue; }
+            if (!/\.html?$/.test(e.name)) continue;
+            const html = fs.readFileSync(full, 'utf8');
+            if (html.includes('pinch-size-demo') || !html.includes('</body>')) continue;
+            fs.writeFileSync(full, html.replace(/<\/body>(?![\s\S]*<\/body>)/, '<script src="/assets/js/pinch-size-demo.js" defer></script>\n</body>'), 'utf8');
+            n++;
+        }
+    };
+    walk(WWW);
+    return n;
+}
+
 function bundledPages() {
     const out = [], root = path.join(WWW, 'assets');
     const walk = (dir) => {
@@ -1175,6 +1196,8 @@ function main() {
     injectAppVersionRow();
     injectRateUsRow();
     injectPrivacyRow();
+    const pinched = injectPinchEverywhere();
+    console.log(`  pinch = text size on ${pinched} more page(s)`);
     verifyPageAssets();
     verifyReferencedAssets();
     verifyTocSnapshot();

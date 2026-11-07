@@ -105,6 +105,13 @@ jobs:
           patch(d)
           plistlib.dump(d, open(sys.argv[2], 'wb'))
           EOF
+          # signed ad hoc: Test Lab re-signs the apps with its own profile, but an unsigned one never got installed
+          # ("Infrastructure error" three times on both iPhones, 2026-11-07)
+          for a in out/Debug-iphoneos/*.app; do
+            find "$a" -depth \( -name "*.framework" -o -name "*.appex" -o -name "*.dylib" -o -name "*.xctest" \) -exec codesign --force --sign - {} \;
+            codesign --force --sign - "$a"
+            codesign -dv "$a" 2>&1 | head -3
+          done
           (cd out && zip -qr ../dg-ios-testlab.zip .)
           ls -la out out/Debug-iphoneos dg-ios-testlab.zip
 

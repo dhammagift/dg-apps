@@ -193,12 +193,16 @@ public class ReleaseChecksTest {
             // "no" (u and the extra kho), MS and PTS ("Ānando ti" goes with the majority) unmarked. Phone, then a tablet's size.
             String probe = "(function(){var s=document.getElementById('3.4');if(!s)return 'no 3.4';s.scrollIntoView({block:'center',behavior:'instant'});var o={};s.querySelectorAll('.dg-ed-line').forEach(function(l){o[l.dataset.ed]=[...l.querySelectorAll('mark.dg-ed-diff')].map(function(m){return m.textContent}).join('|')});var ok=o.th==='ot'&&/kho/.test(o.bjt||'')&&o.ms===''&&o.pts==='';return (ok?'ok ':'bad ')+JSON.stringify(o)})()";
             // opened inside the app ?diff=1 is not read (run 699: the switch stayed off, no marks): the switch is tapped, as a reader does
+            // From a known state: Differences off, so the real tap below always happens (the CI run of 2026-11-08 found the switch
+            // saved as on, skipped the tap, and the page drew no marks).
+            js(s, "(function(){window.dgSetEditionsDiff&&window.dgSetEditionsDiff(false);return 1})()");
             js(s, "window.dgNavigateInternal('/mn88?editions=ms,bjt,my,th,mso,pts')");
             boolean btn = until(s, "document.getElementById('3.4') && document.querySelector('#dg-diff-btn:not([hidden])')", 60000);
             Thread.sleep(1500);
             // The button is brought on screen first: a tap at its place while it was scrolled away hit the text, and Differences
             // stayed off (08b/08c in the CI run of DG 600: no marks anywhere on the screenshot).
-            if (!"true".equals(js(s, "String(window.dgEditionsDiff && window.dgEditionsDiff())"))) {
+            Log.i(TAG, "08b before the tap: Differences " + js(s, "String(window.dgEditionsDiff())") + ", marks drawn " + js(s, "String(document.querySelectorAll('#sutta mark.dg-ed-diff').length)"));
+            {
                 js(s, "(function(){document.getElementById('dg-diff-btn').scrollIntoView({block:'center',behavior:'instant'});return 1})()");
                 Thread.sleep(800);
                 shot("08b-before-tap");

@@ -255,12 +255,19 @@ async function run(name, fn) {
   await run('long-press-menu', async () => {
     key('KEYCODE_HOME'); await sleep(2000);
     for (let i = 0; i < 3 && !nativeNode('text', '^Dict\\.Dhamma\\.Gift$'); i++) { adb(`shell input swipe ${W >> 1} ${Math.round(H * 0.85)} ${W >> 1} ${Math.round(H * 0.2)} 300`); await sleep(2000); }
-    if (!(await tapNative('text', '^Dict\\.Dhamma\\.Gift$', 1500))) return false;
-    sh(`adb exec-out screencap -p > ${path.join(OUT, 'long-press.png')}`);
     const label = ((adb(`shell dumpsys shortcut ${PKG}`).match(/id=dg-dict-0[\s\S]*?shortLabel=([^,\n]+)/) || [])[1] || '').trim();
     log('  long-press menu, first word: ' + label);
     const loose = '^' + label.slice(0, 5).replace(/[^a-z]/gi, '.');   // the menu shows the word as the launcher draws it (diacritics)
-    if (!label || !(await tapNative('text', loose))) return false;
+    // The launcher can be busy with its own things when the press lands (run 708: its "App suggestions added to empty space"
+    // bar, and no menu): the press is tried again from a fresh Home Screen before the case fails.
+    let opened = false;
+    for (let i = 0; i < 3 && label && !opened; i++) {
+      if (i) { key('KEYCODE_HOME'); await sleep(2500); }
+      if (!(await tapNative('text', '^Dict\\.Dhamma\\.Gift$', 1000))) continue;
+      opened = !!nativeNode('text', loose);
+    }
+    sh(`adb exec-out screencap -p > ${path.join(OUT, 'long-press.png')}`);
+    if (!opened || !(await tapNative('text', loose))) return false;
     await sleep(4000); conn = null;
     return (await waitFor(`document.body.dataset.screen === 'entry'`, 15)) && !!(await word());
   });
@@ -283,8 +290,13 @@ async function run(name, fn) {
     typeAscii('kacch'); await sleep(1500);
     const c = await ev(`(document.querySelector('.dg-find-count') || {}).textContent`);
     log('  matches: ' + c);
-    key('KEYCODE_BACK'); await sleep(1000);
-    return !/^0\/0$/.test(c || '0/0') && (await waitFor(`(function(){ var p = document.querySelector('.dg-find-panel'); return !p || p.hidden || getComputedStyle(p).display === 'none' || !p.offsetParent; })()`, 4));
+    // Back puts the keyboard away first, then closes the panel. "Closed" is judged by what is on screen: the panel is
+    // position:fixed, so its offsetParent is null even when it is open - that check passed with the panel still up, and the next
+    // case typed its ā into the find field (run 708).
+    const closed = `(function(){ var p = document.querySelector('.dg-find-panel'); if (!p || p.hidden) return true; var cs = getComputedStyle(p), r = p.getBoundingClientRect();
+      return cs.display === 'none' || cs.visibility === 'hidden' || r.width === 0 || r.height === 0 || r.bottom <= 0; })()`;
+    for (let i = 0; i < 2 && !(await ev(closed)); i++) { key('KEYCODE_BACK'); await sleep(1000); }
+    return !/^0\/0$/.test(c || '0/0') && (await waitFor(closed, 4));
   });
   await run('pali-letters-bar', async () => {
     if (!(await tapEl('#search-box'))) return false;

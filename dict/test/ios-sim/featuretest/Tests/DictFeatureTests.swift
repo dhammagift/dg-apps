@@ -34,6 +34,15 @@ final class DictFeatureTests: XCTestCase {
 
     private func value(_ e: XCUIElement) -> String { (e.value as? String) ?? "" }
 
+    // A drag on the page by a share of its height (minus = up, the content scrolls down), held at the end so nothing coasts on.
+    // Not swipeDown: a swipe down that reaches the top is a pull to refresh - the page reloads, the keyboard goes away for a
+    // moment and the box comes back with its text selected (run 708: the row "moved" to 880 and "no caret" were that reload).
+    private func drag(_ share: CGFloat) {
+        let from = page.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+        let to = page.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45 + share))
+        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.3)
+    }
+
     // The keyboard's one-time "slide to type" card (a fresh simulator shows it on the first keyboard) hides the page.
     private func dismissKeyboardTips() {
         let go = app.buttons["Continue"]
@@ -77,10 +86,11 @@ final class DictFeatureTests: XCTestCase {
         let y0 = a.frame.minY
         shot("03-row")
         var ys: [CGFloat] = []
+        // Down and back up by less than down, so the page never reaches the top and pulls.
         for _ in 0..<3 {
-            page.swipeUp(velocity: .slow)
+            drag(-0.2)
             ys.append(a.frame.minY)
-            page.swipeDown(velocity: .slow)
+            drag(0.15)
             ys.append(a.frame.minY)
         }
         // 0 = not on screen (a swipe down can put the keyboard away); where it is on screen it must be exactly where it was.
@@ -126,9 +136,9 @@ final class DictFeatureTests: XCTestCase {
     // inside the box. The box's frame goes along as text; the script finds the blue caret in the screenshots and checks it.
     func test06_CaretAfterScrollingDownAndUp() {
         clearAndFocus()
-        for _ in 0..<3 { page.swipeUp(velocity: .slow) }
+        for _ in 0..<3 { drag(-0.2) }
         sleep(1)
-        for _ in 0..<4 { page.swipeDown(velocity: .slow) }
+        for _ in 0..<4 { drag(0.14) }   // back up, short of the top: a pull there reloads the page (see drag)
         sleep(1)
         box.tap(); sleep(1)   // the place the reader taps to type again; the caret must land inside the box
         let f = box.frame
@@ -150,10 +160,10 @@ final class DictFeatureTests: XCTestCase {
         shot("07-dark-row")
         var ys: [CGFloat] = []
         for i in 0..<3 {
-            page.swipeUp(velocity: .slow)
+            drag(-0.2)
             ys.append(a.frame.minY)
             if i == 1 { shot("07-dark-row-scrolled") }
-            page.swipeDown(velocity: .slow)
+            drag(0.15)
             ys.append(a.frame.minY)
         }
         let drift = ys.filter { $0 > 0 }.map { abs($0 - y0) }.max() ?? 0
@@ -170,11 +180,18 @@ final class DictFeatureTests: XCTestCase {
         var tries = 0
         while !icon.isHittable && tries < 4 { springboard.swipeLeft(); sleep(1); tries += 1 }
         XCTAssertTrue(icon.waitForExistence(timeout: 10), "no app icon on the Home Screen")
-        icon.press(forDuration: 1.6)
-        sleep(1)
-        shot("08-menu")
+        // A press held past the menu puts the Home Screen into edit mode (run 708: icons with minus badges, no menu) - the
+        // runner's springboard is slow to answer, so the menu may come late. Edit mode is left with Done and the press is tried
+        // again, shorter.
         let word = springboard.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "kacchap")).firstMatch
-        if word.waitForExistence(timeout: 5) {
+        for hold in [0.9, 0.7, 1.1] {
+            icon.press(forDuration: hold)
+            if word.waitForExistence(timeout: 5) { break }
+            let done = springboard.buttons["Done"]
+            if done.exists { done.tap(); sleep(1) } else { XCUIDevice.shared.press(.home); sleep(1) }
+        }
+        shot("08-menu")
+        if word.exists {
             word.tap()
             XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10), "the quick action did not open the app")
             sleep(3)

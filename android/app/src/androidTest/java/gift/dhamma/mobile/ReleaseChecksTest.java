@@ -201,7 +201,14 @@ public class ReleaseChecksTest {
             if (!"true".equals(js(s, "String(window.dgEditionsDiff && window.dgEditionsDiff())"))) {
                 js(s, "(function(){document.getElementById('dg-diff-btn').scrollIntoView({block:'center',behavior:'instant'});return 1})()");
                 Thread.sleep(800);
+                shot("08b-before-tap");
+                // What is under the tap point, to tell a tap that missed from a button that does not answer (CI run of 2026-11-08:
+                // brought on screen and tapped, Differences still off).
+                Log.i(TAG, "08b tap target: " + js(s, "(function(){var e=document.getElementById('dg-diff-btn'),b=e.getBoundingClientRect(),x=b.left+Math.min(24,b.width/2),y=b.top+b.height/2,t=document.elementFromPoint(x,y);return JSON.stringify({rect:[b.left,b.top,b.width,b.height].map(Math.round),x:Math.round(x),y:Math.round(y),hit:t?(t.id||t.tagName)+'.'+t.className:null,inside:!!(t&&e.contains(t)),dpr:devicePixelRatio,zoom:getComputedStyle(document.documentElement).zoom,scrollY:Math.round(scrollY)})})()"));
+                js(s, "(function(){window.__diffClicks=0;document.addEventListener('click',function(ev){if(ev.target.closest&&ev.target.closest('#dg-diff-btn'))window.__diffClicks++},true);return 1})()");
                 tapElement(s, "#dg-diff-btn");
+                Thread.sleep(1500);
+                Log.i(TAG, "08b after the tap: clicks on the button " + js(s, "String(window.__diffClicks)") + ", Differences " + js(s, "String(window.dgEditionsDiff())"));
             }
             boolean marks = btn && until(s, "document.querySelectorAll('#sutta mark.dg-ed-diff').length > 20", 60000);
             js(s, probe);

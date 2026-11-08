@@ -106,8 +106,7 @@ class DgBridgeViewController: CAPBridgeViewController {
                 let selector = #selector(getter: UIResponder.inputAccessoryView)
                 if let method = class_getInstanceMethod(UIView.self, selector) {
                     let block: @convention(block) (AnyObject) -> AnyObject? = { content in
-                        guard DgPaliAccessory.enabled else { return nil }
-                        let bar = DgPaliAccessory.shared
+                        guard DgPaliAccessory.enabled, let bar = DgPaliAccessory.shared else { return nil }
                         bar.target = content as? UIView
                         return bar
                     }
@@ -191,11 +190,24 @@ class DgBridgeViewController: CAPBridgeViewController {
 // only when tapped. "…" opens the second row. The same letters as src/pali-bar.js, which draws the row on Android.
 final class DgPaliAccessory: UIInputView {
     static var enabled = true
-    static let shared = DgPaliAccessory()
+    // Made on first use, not by a `static let`: on a Mac (an iPhone app on Apple Silicon) UIInputView's own init asks the keyboard
+    // for the responder's input views, which asks this getter again while the first is still building - a `static let` is a
+    // dispatch_once, and that re-entry killed the app at launch ("BUG IN CLIENT OF LIBDISPATCH: trying to lock recursively",
+    // owner's crash report 2026-11-08, TestFlight 597). The inner call gets no row; the outer one gets it.
+    private static var instance: DgPaliAccessory?
+    private static var building = false
+    static var shared: DgPaliAccessory? {
+        if let bar = instance { return bar }
+        if building { return nil }
+        building = true
+        defer { building = false }
+        instance = DgPaliAccessory()
+        return instance
+    }
     // The page's theme, from src/pali-bar.js: the row is drawn on the page's own background, solid - on iOS 26 the keyboard is
     // glass, and the row's .keyboard background came out see-through, letters on the bare page (owner, TestFlight 563).
     static var dark = false {
-        didSet { if dark != oldValue { shared.paint() } }
+        didSet { if dark != oldValue { instance?.paint() } }
     }
     weak var target: UIView?
 
@@ -332,7 +344,7 @@ final class DgPaliSwitch: NSObject, WKScriptMessageHandler {
         let on = !body.hasPrefix("off")
         if DgPaliAccessory.enabled == on { return }
         DgPaliAccessory.enabled = on
-        DgPaliAccessory.shared.target?.reloadInputViews()
+        DgPaliAccessory.shared?.target?.reloadInputViews()
     }
 }
 

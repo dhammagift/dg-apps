@@ -7,6 +7,7 @@ ASC key from the GitHub secrets; every step prints what it found and what it did
   asc_release.py <bundle id> set-build <number>     attach that processed build to the version
   asc_release.py <bundle id> set-text <json file>   update the version's texts: {"en-US": {"description": ..,
                                                     "promotionalText": .., "keywords": .., "whatsNew": ..}, "ru": {..}}
+  asc_release.py <bundle id> new-version <x.y.z>    start the next version (every one is on sale): the update the stores get next
   asc_release.py <bundle id> set-version <x.y.z>    rename the version (a rejected 0.6.1 goes back as 0.6.2)
   asc_release.py <bundle id> submit                 send the version for review (again, after a rejection)
   asc_release.py <bundle id> screens [dir]          (read only) the version's screenshots per language and display type,
@@ -168,6 +169,16 @@ def set_version(bundle, name):
     print(f"version {v['attributes']['versionString']} renamed to {name}")
 
 
+def new_version(bundle, name):
+    aid = app_id(bundle)
+    for v in call("GET", f"/v1/apps/{aid}/appStoreVersions?filter[platform]={PLATFORM}&limit=10")["data"]:
+        if v["attributes"]["appStoreState"] != "READY_FOR_SALE":
+            sys.exit(f"version {v['attributes']['versionString']} is already being prepared ({v['attributes']['appStoreState']})")
+    v = call("POST", "/v1/appStoreVersions", {"data": {"type": "appStoreVersions", "attributes": {"platform": PLATFORM, "versionString": name},
+                                                       "relationships": {"app": {"data": {"type": "apps", "id": aid}}}}})["data"]
+    print(f"version {name} created ({v['attributes']['appStoreState']})")
+
+
 def submit(bundle):
     aid = app_id(bundle)
     v = editable_version(aid)
@@ -273,7 +284,7 @@ def testflight(bundle):
 if __name__ == "__main__":
     bundle, action, *rest = sys.argv[1:]
     {"status": lambda: status(bundle), "cancel": lambda: cancel(bundle), "set-build": lambda: set_build(bundle, rest[0]),
-     "set-version": lambda: set_version(bundle, rest[0]),
+     "set-version": lambda: set_version(bundle, rest[0]), "new-version": lambda: new_version(bundle, rest[0]),
      "set-text": lambda: set_text(bundle, rest[0]), "delete-locale": lambda: delete_locale(bundle, rest[0]),
      "testflight": lambda: testflight(bundle), "beta": lambda: beta(bundle, rest[0]),
      "submit": lambda: submit(bundle), "testflight": lambda: testflight(bundle),

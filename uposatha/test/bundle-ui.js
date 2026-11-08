@@ -107,8 +107,14 @@ function capacitorStub() {
             const before = await page.evaluate(() => window.__calls.puts.filter((p) => p.path !== '/dg-edgetoedge.json').length);
             check(`${lang}/${theme}: nothing is fetched by itself`, before, 0);
             check(`${lang}/${theme}: the version row has its check button`, await page.evaluate(() => !!document.querySelector('.up-ver .up-check')), true);
-            await page.evaluate(() => document.querySelector('.up-ver .up-check').click());
+            // As a person does it: the menu opened, then a real tap on the version itself (not the button). The drawer closes on a click
+            // in any of its rows, which once hid the spin and the result (owner 2026-11-08).
+            await page.click('#app-gear');   // the app's gear opens the site's drawer (its burger is hidden in the app)
+            await page.waitForTimeout(800);
+            await page.click('.up-ver #up-ver');
             await page.waitForTimeout(6000);
+            check(`${lang}/${theme}: the menu stays open after a tap on the version`, await page.evaluate(() => document.body.classList.contains('dg-drawer-open')), true);
+            await page.screenshot({ path: path.join(SHOTS, `uposatha-version-check-${lang}-${theme}.png`) });
             const puts = await page.evaluate(() => window.__calls.puts.filter((p) => p.path !== '/dg-edgetoedge.json').map((p) => [p.path, atob(p.data).endsWith('\n\n')]));
             check(`${lang}/${theme}: the button hands over exactly the file the site changed`, puts, [[changed, true]]);
             check(`${lang}/${theme}: the row says what happened`, await page.evaluate(() => (document.querySelector('.up-check-note') || {}).textContent.length > 3), true);

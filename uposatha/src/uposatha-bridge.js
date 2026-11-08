@@ -142,7 +142,12 @@
     row.appendChild(btn);
     row.parentNode.insertBefore(note, row.nextSibling);
     var busy = false;
-    btn.addEventListener('click', function () {
+    // The whole row is the button (the owner taps the version itself), and the tap stays in the row: the site's drawer closes on a
+    // click in any .dg-drawer-row (home.js), which hid the spin and the result (owner 2026-11-08). The row's own listeners (seven taps
+    // show the tests) still run.
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', function (e) {
+      e.stopPropagation();
       if (busy) return;
       busy = true;
       var icon = btn.firstChild;

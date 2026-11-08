@@ -99,9 +99,11 @@ public class ReleaseChecksTest {
 
     @Test
     public void everythingInOneRun() throws Exception {
+        // Before the app starts: the WebView reads prefers-reduced-motion when it is made, so animations switched on after the
+        // launch still read as "reduce" and the theme circle is not drawn (02 and 09 in the CI run of DG 600: "reduced motion true").
+        for (String k : new String[]{"animator_duration_scale", "transition_animation_scale", "window_animation_scale"}) sh("settings put global " + k + " 1");
         try (ActivityScenario<MainActivity> s = ActivityScenario.launch(MainActivity.class)) {
             s.onActivity(a -> { shots = new File(a.getExternalFilesDir(null), "shots"); shots.mkdirs(); });
-            for (String k : new String[]{"animator_duration_scale", "transition_animation_scale", "window_animation_scale"}) sh("settings put global " + k + " 1");
             boolean up = until(s, "document.querySelector('#paliauto') && document.readyState === 'complete'", 60000);
             Thread.sleep(4000);
             // the first start's offline sheet: "Not now", as a reader who does not download right away
@@ -128,10 +130,21 @@ public class ReleaseChecksTest {
             check("03-reader-header", sizeOk, "contents label px / External links px / visibility: " + sizes + " (text seen: " + text + ")");
 
             // 3. Next text: External links never painted bare (the browser's grey button) while the page changes
-            js(s, "(function(){window.__bare=0;window.__samples=0;window.__iv=setInterval(function(){var e=document.querySelector('#reader-toolbar .dg-external-links-toggle');if(!e)return;window.__samples++;var c=getComputedStyle(e);if(c.visibility==='visible'&&/239, 239, 239|240, 240, 240/.test(c.backgroundColor))window.__bare++},40);var a=document.querySelector('#next a');if(a)a.click();return !!a})()");
-            boolean next = until(s, "/sn22\\.56/.test(location.pathname)", 30000);
-            Thread.sleep(4000);
-            String bare = js(s, "(function(){clearInterval(window.__iv);return window.__bare+' of '+window.__samples})()");
+            // Sampled from here, not by a timer in the page: the next text is a new page load in the app, which took the page's own
+            // counter with it ("undefined of undefined" in the CI run of DG 600).
+            String looksBare = "(function(){var e=document.querySelector('#reader-toolbar .dg-external-links-toggle');if(!e)return 'none';var c=getComputedStyle(e);return c.visibility==='visible'&&/239, 239, 239|240, 240, 240/.test(c.backgroundColor)?'bare':'ok'})()";
+            js(s, "(function(){var a=document.querySelector('#next a');if(a)a.click();return !!a})()");
+            int bareN = 0, samples = 0;
+            long end = System.currentTimeMillis() + 30000, settled = Long.MAX_VALUE;
+            while (System.currentTimeMillis() < Math.min(end, settled)) {
+                String v = js(s, looksBare);
+                if ("bare".equals(v)) bareN++;
+                if (!"none".equals(v) && v != null) samples++;
+                if (settled == Long.MAX_VALUE && "true".equals(js(s, "String(/sn22\\.56/.test(location.pathname))"))) settled = System.currentTimeMillis() + 4000;
+                Thread.sleep(40);
+            }
+            boolean next = settled != Long.MAX_VALUE;
+            String bare = bareN + " of " + samples;
             check("04-next-no-bare-button", next && bare != null && bare.startsWith("0 "), "bare frames: " + bare + ", at " + js(s, "location.pathname"));
 
             // 4. Settings: the whole width on a phone; the offline picker opens without scrolling the page to the top
@@ -183,12 +196,18 @@ public class ReleaseChecksTest {
             js(s, "window.dgNavigateInternal('/mn88?editions=ms,bjt,my,th,mso,pts')");
             boolean btn = until(s, "document.getElementById('3.4') && document.querySelector('#dg-diff-btn:not([hidden])')", 60000);
             Thread.sleep(1500);
-            if (!"true".equals(js(s, "String(window.dgEditionsDiff && window.dgEditionsDiff())"))) tapElement(s, "#dg-diff-btn");
+            // The button is brought on screen first: a tap at its place while it was scrolled away hit the text, and Differences
+            // stayed off (08b/08c in the CI run of DG 600: no marks anywhere on the screenshot).
+            if (!"true".equals(js(s, "String(window.dgEditionsDiff && window.dgEditionsDiff())"))) {
+                js(s, "(function(){document.getElementById('dg-diff-btn').scrollIntoView({block:'center',behavior:'instant'});return 1})()");
+                Thread.sleep(800);
+                tapElement(s, "#dg-diff-btn");
+            }
             boolean marks = btn && until(s, "document.querySelectorAll('#sutta mark.dg-ed-diff').length > 20", 60000);
             js(s, probe);
             Thread.sleep(2500);
             String phone = js(s, probe);
-            check("08b-differences-phone", marks && phone != null && phone.startsWith("ok "), "mn88 3.4 marks per edition: " + phone);
+            check("08b-differences-phone", marks && phone != null && phone.startsWith("ok "), "mn88 3.4 marks per edition: " + phone + " (Differences on: " + js(s, "String(window.dgEditionsDiff && window.dgEditionsDiff())") + ", marks on the page: " + js(s, "String(document.querySelectorAll('#sutta mark.dg-ed-diff').length)") + ")");
             sh("wm size 1600x2560");
             sh("wm density 320");
             Thread.sleep(4000);

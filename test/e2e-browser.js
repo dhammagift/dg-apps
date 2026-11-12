@@ -241,7 +241,9 @@ const CASES = [
             return { status: r.status, body };
         }, url);
         const { expected, sliced } = normalizeForSlice(expectedRaw, actual);
-        const a = JSON.stringify(unorderedMaps(expected)), b = JSON.stringify(unorderedMaps(actual));
+        // The server puts the text's MP3 links into the line under it (dg-node 0f9bfa4); the app asks for its audio line apart,
+        // after the text (dg-node 0b58aef), so its core gives that line without them (the same in core-parity.mjs).
+        const a = JSON.stringify(unorderedMaps(expected)).replace(/<br><span class=\\"dg-audio-mp3\\">(?:(?!<\/span>).)*<\/span>/g, ''), b = JSON.stringify(unorderedMaps(actual));
         if (a === b) {
             same++;
             console.log('SAME  ' + name + (sliced ? '  (availableLangs narrowed to the ru+en slice)' : ''));

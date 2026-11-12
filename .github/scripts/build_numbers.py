@@ -129,8 +129,13 @@ def compute(floors, read_play, read_asc, must_read, read_built=None):
         if read_built:
             try:
                 built = read_built(app)
-            except Exception as e:  # noqa: BLE001 - without them a number could repeat: stop, do not guess
-                problems.append(f"::error::{app}: the numbers earlier builds got were not read ({str(e)[:160]})")
+            except Exception as e:  # noqa: BLE001 - without them a number could repeat: a store build stops, a test build goes on
+                msg = f"{app}: the numbers earlier builds got were not read ({str(e)[:160]})"
+                if any(t.startswith(token + "_") for t in must_read):
+                    problems.append("::error::" + msg)
+                else:
+                    # a run that uploads nothing (owner 2026-11-12: GitHub's artifact egress limit stopped every check run here)
+                    print("::warning::" + msg + " - a test build, numbered from the stores", file=sys.stderr)
         out[app] = next_number(floors[app], *found, built)
         print(f"{app}: floor {floors[app]}, play {found[0]}, testflight {found[1]}, built {built} -> {out[app]}", file=sys.stderr)
     return out, problems
@@ -186,6 +191,12 @@ def self_test():
     built = {"dg": 568, "dict": 569, "uposatha": 572}
     out, _ = compute(floors, lambda a: stores[a][0], lambda a: stores[a][1], set(), lambda a: built[a])
     assert out == {"dg": 569, "dict": 570, "uposatha": 573}, out
+    # Earlier builds unreadable (GitHub's egress limit, 2026-11-12): a test build goes on from the stores, a store build stops
+    def egress(a): raise RuntimeError("HTTP Error 503: Egress is over the account limit.")
+    out, problems = compute(floors, lambda a: stores[a][0], lambda a: stores[a][1], set(), egress)
+    assert out == {"dg": 568, "dict": 569, "uposatha": 572} and not problems, (out, problems)
+    _, problems = compute(floors, lambda a: stores[a][0], lambda a: stores[a][1], {"dict_ios"}, egress)
+    assert len(problems) == 1 and "dict:" in problems[0], problems
     print("build_numbers: self-test passed")
 
 

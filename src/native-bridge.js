@@ -13,6 +13,20 @@
 // Loaded on both index.html and settings/index.html (the only two pages this app has with links
 // of this kind) — NOT part of app.js, which is the data-shim only (see its own header comment)
 // and isn't loaded on the settings page at all.
+// The app's own words come from the site (owner 2026-11-12 «отвязать от сборок»): /assets/js/app-texts.json, a dg-node file the
+// app bundles and refreshes from the site like its other files. A key it lacks (or no file) = the words built in here.
+(function () {
+    var DG_APP_TEXTS = (function () {
+        try { var x = new XMLHttpRequest(); x.open('GET', '/assets/js/app-texts.json', false); x.send(); return x.status === 200 ? JSON.parse(x.responseText) : {}; }
+        catch (e) { return {}; }
+    })();
+    function dgAppText(key, ru, ruText, enText) {
+        var lang = DG_APP_TEXTS[ru ? 'ru' : 'en'] || {};
+        return typeof lang[key] === 'string' ? lang[key] : (ru ? ruText : enText);
+    }
+    window.dgAppText = dgAppText;
+})();
+
 (function () {
     // iOS zooms the page in when a field with text under 16px gets focus, and leaves it zoomed: the
     // Settings page (15px selects and inputs) then sat wider than the phone and slid sideways (owner,
@@ -761,7 +775,7 @@
                 // Installed: say so instead of just making the notification vanish.
                 if (typeof plugin.finish === 'function') {
                     active = false;
-                    Promise.resolve(plugin.finish({ title: 'Dhamma.gift', text: isRu() ? 'Библиотека готова. Читайте без сети.' : 'The library is ready. Read offline.' })).catch(function () {});
+                    Promise.resolve(plugin.finish({ title: 'Dhamma.gift', text: window.dgAppText('the-library-is-ready-read-offline', isRu(), 'Библиотека готова. Читайте без сети.', 'The library is ready. Read offline.') })).catch(function () {});
                 } else clear();
                 return;
             }
@@ -778,7 +792,7 @@
             if (detail.phase === 'apply' && percent >= 0) {   // the packs on the device, one bar over all of them (db-worker.js applyPacks)
                 text = isRu() ? 'Распаковка и применение — ' + percent + '%' : 'Unpacking and applying — ' + percent + '%';
             } else if (detail.phase === 'import' || detail.phase === 'apply') {
-                text = isRu() ? 'Распаковка и применение…' : 'Unpacking and applying…';
+                text = window.dgAppText('unpacking-and-applying', isRu(), 'Распаковка и применение…', 'Unpacking and applying…');
             } else if (percent >= 0) {
                 text = isRu()
                     ? 'Загрузка офлайн-библиотеки — ' + percent + '% (' + mb(detail.loaded) + ' из ' + mb(detail.total) + ')'
@@ -845,21 +859,17 @@
             // site applies the mode itself there.
             url = readerUrlFor(url);
             var what = detail.reason === 'script'
-                ? (ru ? 'Конвертация системы письма выполняется на сервере'
-                      : 'Script conversion is done on the server')
-                : (ru ? 'Этот язык не входит в офлайн-библиотеку'
-                      : 'This language is not part of the offline library');
-            var message = what + '. ' + (ru
-                ? 'Нужен интернет. Открыть этот текст в браузере?'
-                : 'It needs an internet connection. Open this text in the browser?');
+                ? (window.dgAppText('script-conversion-is-done-on-the-server', ru, 'Конвертация системы письма выполняется на сервере', 'Script conversion is done on the server'))
+                : (window.dgAppText('this-language-is-not-part-of-the-offline', ru, 'Этот язык не входит в офлайн-библиотеку', 'This language is not part of the offline library'));
+            var message = what + '. ' + (window.dgAppText('it-needs-an-internet-connection-open-thi', ru, 'Нужен интернет. Открыть этот текст в браузере?', 'It needs an internet connection. Open this text in the browser?'));
             // No Dialog plugin (plain browser, or an older build): fall back to opening it — the
             // reader asked for a mode that only the site can serve.
             if (!Dialog || typeof Dialog.confirm !== 'function') { openExternal(url); return; }
             Dialog.confirm({
-                title: ru ? 'Нужен интернет' : 'Internet required',
+                title: window.dgAppText('internet-required', ru, 'Нужен интернет', 'Internet required'),
                 message: message,
-                okButtonTitle: ru ? 'Открыть в браузере' : 'Open in browser',
-                cancelButtonTitle: ru ? 'Остаться' : 'Stay here',
+                okButtonTitle: window.dgAppText('open-in-browser', ru, 'Открыть в браузере', 'Open in browser'),
+                cancelButtonTitle: window.dgAppText('stay-here', ru, 'Остаться', 'Stay here'),
             }).then(function (res) {
                 if (res && res.value) openExternal(url);
             }).catch(function () { /* dismissed */ });
@@ -1397,7 +1407,7 @@
             btn.className = 'btn';
             btn.id = 'dgAppVersionCheck';
             btn.innerHTML = '<svg viewBox="0 0 512 512" width="12" height="12" aria-hidden="true" style="flex:none;margin-right:6px"><path fill="currentColor" d="M65.9 228.5c13.3-93 93.4-164.5 190.1-164.5 53 0 101 21.5 135.8 56.2 .2 .2 .4 .4 .6 .6l7.6 7.2-47.9 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l128 0c17.7 0 32-14.3 32-32l0-128c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 53.4-11.3-10.7C390.5 28.6 326.5 0 256 0 127 0 20.3 95.4 2.6 219.5 .1 237 12.2 253.2 29.7 255.7s33.7-9.7 36.2-27.1zm443.5 64c2.5-17.5-9.7-33.7-27.1-36.2s-33.7 9.7-36.2 27.1c-13.3 93-93.4 164.5-190.1 164.5-53 0-101-21.5-135.8-56.2-.2-.2-.4-.4-.6-.6l-7.6-7.2 47.9 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 320c-8.5 0-16.7 3.4-22.7 9.5S-.1 343.7 0 352.3l1 127c.1 17.7 14.6 31.9 32.3 31.7S65.2 496.4 65 478.7l-.4-51.5 10.7 10.1c46.3 46.1 110.2 74.7 180.7 74.7 129 0 235.7-95.4 253.4-219.5z"/></svg>';
-            btn.appendChild(document.createTextNode(ru ? 'проверить' : 'check'));
+            btn.appendChild(document.createTextNode(window.dgAppText('check', ru, 'проверить', 'check')));
             btn.style.cssText = 'display:inline-flex;align-items:center';
             var ctl = document.createElement('div');
             ctl.className = 'row-control';
@@ -1450,7 +1460,7 @@
         }
         var ru = isRu();
         var n = SHORTCUTS_MAX;
-        document.getElementById('dgDynShortcutsTitle').textContent = ru ? 'Недавние тексты в ярлыках' : 'Recent texts in app shortcuts';
+        document.getElementById('dgDynShortcutsTitle').textContent = window.dgAppText('recent-texts-in-app-shortcuts', ru, 'Недавние тексты в ярлыках', 'Recent texts in app shortcuts');
         document.getElementById('dgDynShortcutsDesc').textContent = ru
             ? 'До ' + n + (n === 1 ? ' текста' : ' текстов') + ' в меню долгого нажатия на значок приложения.'
             : 'Up to ' + n + (n === 1 ? ' text' : ' texts') + ' in the long-press menu of the app icon.';
@@ -1530,17 +1540,15 @@
     function ratePromptCopy(ru) {
         var name = rateAppName();
         return {
-            eyebrow: ru ? 'Оценить приложение' : 'Rate this app',
-            title: name ? (ru ? 'Как вам ' + name + '?' : 'How is ' + name + ' for you?') : (ru ? 'Как вам приложение?' : 'How do you like the app?'),
-            body: ru
-                ? 'Нам важно ваше мнение: по обратной связи мы понимаем, что вам нравится, а что улучшить. Рейтинг и комментарии помогают приложению.'
-                : 'Your opinion matters to us: feedback tells us what you like and what to improve. Ratings and comments help the app.',
+            eyebrow: window.dgAppText('rate-this-app', ru, 'Оценить приложение', 'Rate this app'),
+            title: name ? (ru ? 'Как вам ' + name + '?' : 'How is ' + name + ' for you?') : (window.dgAppText('how-do-you-like-the-app', ru, 'Как вам приложение?', 'How do you like the app?')),
+            body: window.dgAppText('your-opinion-matters-to-us-feedback-tell', ru, 'Нам важно ваше мнение: по обратной связи мы понимаем, что вам нравится, а что улучшить. Рейтинг и комментарии помогают приложению.', 'Your opinion matters to us: feedback tells us what you like and what to improve. Ratings and comments help the app.'),
             figs: ru
                 ? [['Займёт', '30 сек – 2 мин'], ['Где', ratePromptStore()], ['Что оставить', 'звёзды и комментарий']]
                 : [['Takes', '30 sec – 2 min'], ['Where', ratePromptStore()], ['What to leave', 'stars and a comment']],
-            later: ru ? 'Позже' : 'Later',
+            later: window.dgAppText('later', ru, 'Позже', 'Later'),
             laterLast: ru ? 'Не спрашивать' : "Don't ask",
-            go: ru ? 'Оценить' : 'Rate',
+            go: window.dgAppText('rate', ru, 'Оценить', 'Rate'),
         };
     }
 
@@ -1685,10 +1693,8 @@
         var row = document.getElementById('dgRateUsRow');
         if (!row) return;
         var ru = isRu();
-        document.getElementById('dgRateUsTitle').textContent = ru ? 'Оценить приложение' : 'Rate Us';
-        document.getElementById('dgRateUsDesc').textContent = ru
-            ? 'Открыть страницу в магазине и оставить отзыв.'
-            : 'Open the store page and leave a review.';
+        document.getElementById('dgRateUsTitle').textContent = window.dgAppText('rate-us', ru, 'Оценить приложение', 'Rate Us');
+        document.getElementById('dgRateUsDesc').textContent = window.dgAppText('open-the-store-page-and-leave-a-review', ru, 'Открыть страницу в магазине и оставить отзыв.', 'Open the store page and leave a review.');
         var btn = document.getElementById('dgRateUsBtn');
         if (!btn) return;
         // Set from here rather than left to the injected markup: the label is the same three emoji
@@ -1732,7 +1738,7 @@
         var row = document.getElementById('dgPrivacyRow');
         if (!row) return;
         var ru = isRu();
-        document.getElementById('dgPrivacyTitle').textContent = ru ? 'Политика конфиденциальности' : 'Privacy Policy';
+        document.getElementById('dgPrivacyTitle').textContent = window.dgAppText('privacy-policy', ru, 'Политика конфиденциальности', 'Privacy Policy');
         row.addEventListener('click', function () {
             openExternal((window.DG_ONLINE_ORIGIN || 'https://dhamma.gift') + (isRu() ? '/ru' : '') + '/docs/policies');
         });
@@ -1914,9 +1920,9 @@
     document.addEventListener('dhamma:languagechange', function () {
         var ru = document.documentElement.lang === 'ru';
         var btn = document.getElementById('dgAppVersionCheck');
-        if (btn && btn.lastChild && btn.lastChild.nodeType === 3) btn.lastChild.textContent = ru ? 'проверить' : 'check';
+        if (btn && btn.lastChild && btn.lastChild.nodeType === 3) btn.lastChild.textContent = window.dgAppText('check', ru, 'проверить', 'check');
         var st = document.getElementById('dgDynShortcutsTitle');
-        if (st) st.textContent = ru ? 'Недавние тексты в ярлыках' : 'Recent texts in app shortcuts';
+        if (st) st.textContent = window.dgAppText('recent-texts-in-app-shortcuts', ru, 'Недавние тексты в ярлыках', 'Recent texts in app shortcuts');
         var sd = document.getElementById('dgDynShortcutsDesc'), n = window.DG_SHORTCUTS_MAX;   // the first part's SHORTCUTS_MAX (another function scope)
         if (sd) sd.textContent = ru
             ? 'До ' + n + (n === 1 ? ' текста' : ' текстов') + ' в меню долгого нажатия на значок приложения.'

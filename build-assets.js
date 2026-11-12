@@ -69,6 +69,8 @@ function parseArgs() {
 const ASSETS = [
     // ---- head, eager ----
     { url: '/assets/js/dhamma-i18n.js', sources: [f('public/overrides/js/dhamma-i18n.js')] },
+    // the app's own words (native-bridge.js dgAppText), taken from the site like the scripts
+    { url: '/assets/js/app-texts.json', sources: [f('public/overrides/js/app-texts.json')] },
     { url: '/assets/js/mirror-link.js', sources: [f('public/overrides/js/mirror-link.js')] },
     { url: '/assets/js/ai-search.js', sources: [f('public/overrides/js/ai-search.js')] },
     { url: '/assets/js/dict-mode-shared.js', sources: [f('public/overrides/js/dict-mode-shared.js')] },

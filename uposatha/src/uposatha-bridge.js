@@ -109,6 +109,7 @@
     // Everything the page loads, except the page itself (the site's html carries cache-busters and is not the app's markup).
     updatable: function (path) { return !/\.html$/.test(path) && path !== '/site-manifest.json'; },
     manual: true,
+    checkEvery: 30 * 24 * 3600 * 1000,   // and by itself once a month (owner 2026-11-12: nobody knows to press "check")
     // The site's scripts were written against the site's page: if it has an element the bundled page lacks, they could reach for it.
     gate: function (manifest) {
       if (!manifest.ids) return false;

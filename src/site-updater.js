@@ -4,7 +4,8 @@
 //
 //   SITE_CONFIG = { site: 'https://dict.dhamma.gift', urlFor: function (path) { return path; }, updatable: optional (path) => bool,
 //                   gate: optional (manifest) => Promise<bool> (false: this check applies nothing), silent: optional bool (no "new version" bar),
-//                   manual: optional bool (nothing is fetched unless a person asks: the version row's button; no checks at start or on return to the app) }
+//                   manual: optional bool (nothing is fetched unless a person asks: the version row's button; no checks at start or on return to the app),
+//                   checkEvery: optional ms (a check by itself once this much time has passed, manual or not) }
 //
 // Uses the bridge's Cap (window.Capacitor) and store() (localStorage read).
   // ---- keeping the bundled page up to date --------------------------------------------------
@@ -302,12 +303,16 @@
     var DS = Cap.Plugins && Cap.Plugins.DgSite;
     var res = { state: 'current' };
     if (!DS || !window.crypto || !crypto.subtle) return Promise.resolve({ state: 'failed' });
-    if (SITE_CONFIG.manual && !force) return Promise.resolve(res);   // no network unless a person asks
+    // no network unless a person asks - or, with checkEvery, once that much time has passed since the last good check
+    // (owner 2026-11-12, Uposatha: nobody knows to press "check", let alone when)
+    var every = SITE_CONFIG.checkEvery || SITE_CHECK_EVERY, last = parseInt(store('dgSiteCheckedAt'), 10) || 0;
+    if (SITE_CONFIG.manual && !force && SITE_CONFIG.checkEvery && !last) { stamp(); return Promise.resolve(res); }   // the month counts from the first start
+    if (SITE_CONFIG.manual && !force && !(SITE_CONFIG.checkEvery && Date.now() - last >= every)) return Promise.resolve(res);
     if (checking) return checking;
     if (staged) return Promise.resolve({ state: 'new' });
     if (navigator.onLine === false) return Promise.resolve({ state: 'offline' });
     // A first start has no time stamp and always checks; after that, not sooner than SITE_CHECK_EVERY.
-    if (!force && Date.now() - (parseInt(store('dgSiteCheckedAt'), 10) || 0) < SITE_CHECK_EVERY) return Promise.resolve(res);
+    if (!force && Date.now() - last < every) return Promise.resolve(res);
     var hashes = {};
     try { hashes = JSON.parse(store('dgSiteHashes')) || {}; } catch (e) { hashes = {}; }
     var chain = Promise.all([

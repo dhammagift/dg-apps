@@ -305,6 +305,17 @@ public class ReleaseChecksTest {
             try { String[] z = zoom.split(" "); zoomOk = Integer.parseInt(z[0]) < 100 && Float.parseFloat(z[1]) < 0.99f && z[2].equals(z[0] + "%"); } catch (Exception ignored) { }
             check("13-settings-pinch", sheetOpen && zoomOk, "uiScale / sheet zoom / figure: " + zoom);
             js(s, "(function(){localStorage.setItem('uiScale','100');DgHome.closeSettingsSheet&&DgHome.closeSettingsSheet();return 1})()");
+
+            // 14. A recording plays (owner 2026-11-12: the bhikkhunī Pātimokkha's players sat at 0:00 in the app): the
+            // Pātimokkha the contents show, as the page fetches it, put on the page; its first player must load from the site
+            js(s, "(function(){window.__pm=null;fetch('/api/patimokkha-fragment/bi').then(function(r){return r.text()}).then(function(t){var d=document.createElement('div');d.id='dg-test-pm';d.innerHTML=t;document.body.appendChild(d);window.__pm='in'}).catch(function(e){window.__pm='err '+e});return 1})()");
+            boolean pmIn = until(s, "window.__pm === 'in'", 30000);
+            Thread.sleep(1000);
+            js(s, "(function(){var a=document.querySelector('#dg-test-pm audio');window.__au=a?'':'no player';if(!a)return 0;a.onloadedmetadata=function(){window.__au='ok '+Math.round(a.duration)+'s from '+a.currentSrc};a.onerror=function(){window.__au='error '+(a.error&&a.error.code)+' at '+a.currentSrc};a.load();return 1})()");
+            until(s, "window.__au !== ''", 30000);
+            String au = js(s, "String(window.__au)");
+            check("14-patimokkha-audio", pmIn && au != null && au.startsWith("ok ") && !au.startsWith("ok 0s"), "first player: " + au + " (fragment: " + js(s, "String(window.__pm)") + ")");
+            js(s, "(function(){var d=document.getElementById('dg-test-pm');if(d)d.remove();return 1})()");
         }
         Log.i(TAG, "DONE " + (failed.isEmpty() ? "all passed" : failed.size() + " failed: " + failed));
         assertTrue("failed: " + failed, failed.isEmpty());

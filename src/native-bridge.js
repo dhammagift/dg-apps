@@ -1028,6 +1028,25 @@
     // 404 comments).
     // Shared/copied links (toSiteUrls) stay on dhamma.gift; only the app's own trips follow a test origin.
     var ONLINE_ORIGIN = window.DG_ONLINE_ORIGIN || 'https://dhamma.gift';
+    // Recordings (/assets/audio/..., the Pātimokkha recitations and others) are the site's, never bundled - half a gigabyte
+    // in the legacy tree. Here a site-relative src asked the app's own origin, got index.html back and the player sat at
+    // 0:00 (owner 2026-11-12, bhikkhunī Pātimokkha). Every audio/source pointing there is sent to the site instead.
+    function siteAudio(root) {
+        if (!root.querySelectorAll) return;
+        root.querySelectorAll('audio[src^="/assets/audio/"], source[src^="/assets/audio/"]').forEach(function (el) {
+            el.setAttribute('src', ONLINE_ORIGIN + el.getAttribute('src'));
+            var player = el.tagName === 'SOURCE' ? el.parentNode : el;
+            if (player && player.load && player.networkState !== 0) player.load();   // a player that already tried the old address
+        });
+    }
+    (function watchAudio() {
+        if (!document.body) { document.addEventListener('DOMContentLoaded', watchAudio); return; }
+        siteAudio(document);
+        // one query per batch of changes: the selector matches only the site-relative recordings, so it stays cheap
+        new MutationObserver(function () { siteAudio(document); }).observe(document.body, { childList: true, subtree: true });
+    })();
+    window.dgSiteAudio = siteAudio;   // a test hook: the rule, not a copy of it
+
     // A bundled directory (/memo/) is a folder with an index.html; Capacitor answers the folder URL
     // itself with the app's root index.html, so the reader got a search for "memo" instead.
     var BUNDLED_DIRS = ['/memo/', '/assets/diff/', '/login/'];

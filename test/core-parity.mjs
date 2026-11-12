@@ -116,7 +116,9 @@ const main = async () => {
         let actual;
         try { actual = await searchLikeTheRoute(core, query, params); }
         catch (e) { actual = { __error: e.message }; }
-        const a = JSON.stringify(expected), b = JSON.stringify(actual);
+        // The server puts the text's MP3 links into the line under it (dg-node 0f9bfa4, principlesLineHtml with the audio); the app
+        // asks for its audio line apart, after the text (dg-node 0b58aef: the text opens at once), so the core gives that line without it.
+        const a = JSON.stringify(expected).replace(/<br><span class=\\"dg-audio-mp3\\">(?:(?!<\/span>).)*<\/span>/g, ''), b = JSON.stringify(actual);
         if (a === b) { same++; console.log('SAME  ' + name); }
         else {
             differing.push(name);

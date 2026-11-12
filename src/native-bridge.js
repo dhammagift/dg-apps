@@ -1047,6 +1047,19 @@
     })();
     window.dgSiteAudio = siteAudio;   // a test hook: the rule, not a copy of it
 
+    // The place for the next start, on EVERY page of the app (the site's own scripts keep it only where they are loaded: the main
+    // page, Memo, the tools; owner 2026-11-12: «открывать с последнего места, где бы человек ни остался»). The return itself is
+    // the site's (smoothScroll.js resumeLastPlace, with Settings' «При запуске открывать»). Home when left on home.
+    (function keepPlace() {
+        function save() {
+            if (!/^https?:$/.test(location.protocol) || /^\/(ru\/)?(login|settings)\//.test(location.pathname)) return;
+            var home = /^\/(ru\/?)?$/.test(location.pathname) && !/[?&]q=/.test(location.search) && !location.hash;
+            try { localStorage.setItem('dgLastRoute', JSON.stringify({ route: home ? '' : location.pathname + location.search + location.hash, at: Date.now() })); } catch (e) { /* private mode */ }
+        }
+        document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') save(); });
+        window.addEventListener('pagehide', save);
+    })();
+
     // A bundled directory (/memo/) is a folder with an index.html; Capacitor answers the folder URL
     // itself with the app's root index.html, so the reader got a search for "memo" instead.
     var BUNDLED_DIRS = ['/memo/', '/assets/diff/', '/login/'];

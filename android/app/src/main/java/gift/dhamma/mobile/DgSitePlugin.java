@@ -239,7 +239,15 @@ public class DgSitePlugin extends Plugin {
         Uri uri = request.getUrl();
         if (!"localhost".equals(uri.getHost())) return null;
         String path = uri.getPath();
-        if (path == null || path.endsWith("/") || path.startsWith("/_capacitor")) return null;
+        if (path == null || path.startsWith("/_capacitor")) return null;
+        // A page itself (the site's html, taken and made into the app's page by site-updater.js): a directory is its index.html,
+        // and a route of the app's single page (/mn10, /ru/kacchapa) is the main page, as Capacitor answers it from the bundle.
+        if (request.isForMainFrame()) {
+            String last = path.substring(path.lastIndexOf('/') + 1);
+            if (path.endsWith("/")) path = path + "index.html";
+            else if (last.indexOf('.') < 0) path = "/index.html";
+        }
+        if (path.endsWith("/")) return null;
         try {
             File downloaded = resolve(context, path);
             if (downloaded == null || !downloaded.isFile()) return null;

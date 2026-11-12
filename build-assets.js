@@ -694,7 +694,8 @@ function copyNative(name, to) {
         `window.DG_SITE_PREFIXES = ${JSON.stringify(SITE_PREFIXES)};\n` +
         `window.DG_BUNDLED_PAGES = ${JSON.stringify(bundledPages())};\n`;
     const body = fs.readFileSync(path.join(SRC, name), 'utf8')
-        .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(SRC, 'site-updater.js'), 'utf8'));
+        // page-transforms.js first: SITE_CONFIG.pages makes the site's page the app's with the very edits build-page.js makes
+        .replace(/^.*\/\/ @site-updater .*\n/m, () => fs.readFileSync(path.join(SRC, 'page-transforms.js'), 'utf8') + fs.readFileSync(path.join(SRC, 'site-updater.js'), 'utf8'));
     fs.writeFileSync(to, head + `window.__DG_APP_VERSION__ = ${JSON.stringify(appStamp())};\n` + body);
 }
 
@@ -1145,7 +1146,9 @@ function writeSiteManifest() {
             const abs = path.join(dir, e.name);
             if (e.isDirectory()) { walk(abs); continue; }
             const rel = '/' + path.relative(WWW, abs).split(path.sep).join('/');
-            if (!/^\/(read|reader|assets)\//.test(rel) || !/\.(js|css|svg|png|webp|woff2?)$/.test(rel)) continue;
+            // json too (menus, links, lists: the site's data, owner 2026-11-12 «отвязать от сборок») and /nodejs/res (the search page's
+            // own scripts, styles and data); only byte-for-byte copies count, so generated files stay out by the hash check below
+            if (!/^\/(read|reader|assets|nodejs\/res)\//.test(rel) || !/\.(js|css|svg|png|webp|woff2?|json)$/.test(rel)) continue;
             const sha = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
             if (copiedHash.get(abs) !== sha || bundled.has(rel)) continue;
             files.push(rel); hashes[rel] = sha;

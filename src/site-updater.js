@@ -375,7 +375,30 @@
           return DS.clear().then(forgetDownloads);
         }).catch(function () { /* an incomplete round is never served: the next start drops it */ });
       }
-      return next().then(function () {
+      // The pages (SITE_CONFIG.pages: [{path, source, make}]): the site's page source, exactly as the signed list names it, made into
+      // the app's page by make() (page-transforms.js, the same edits the build makes). An edit that cannot be made keeps the app's page.
+      function pages() {
+        var list = (SITE_CONFIG.pages || []).slice();
+        function one() {
+          var pg = list.shift();
+          if (!pg) return Promise.resolve();
+          var url = urlOf(pg.source), want = listed(url), key = 'page:' + pg.path;
+          if (!want || want === hashes[key]) return one();
+          fetched++;
+          return fetch(url, { cache: 'no-cache' }).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url);
+            return r.arrayBuffer();
+          }).then(function (buf) {
+            return crypto.subtle.digest('SHA-256', buf).then(function (digest) {
+              if (hex(digest) !== want) throw new Error(pg.source + ' does not match the signed list');
+              var page = pg.make(new TextDecoder().decode(buf));
+              changes.push({ path: pg.path, data: bytesToBase64(new TextEncoder().encode(page)), sha: want, key: key, known: true });
+            });
+          }).catch(function (e) { console.log('[dg-site] ' + pg.path + ' kept as it is: ' + ((e && e.message) || e)); }).then(one);
+        }
+        return one();
+      }
+      return next().then(pages).then(function () {
         // All or nothing: a half-fetched update would leave a page next to the old files it was written against, and a
         // check that could not finish is not a check (it used to be stamped as done, and nothing was tried again for 12 hours).
         if (failed || !changes.length) return null;
@@ -383,7 +406,7 @@
         return store1().then(function () {
           return nativeSite('commit').then(function () { staged = true; }, function (e) { if (!unimplemented(e)) throw e; });
         }).then(function () {
-          written.forEach(function (c) { hashes[c.path] = c.sha; if (c.known) shown++; });
+          written.forEach(function (c) { hashes[c.key || c.path] = c.sha; if (c.known) shown++; });
           try {
             localStorage.setItem('dgSiteHashes', JSON.stringify(hashes));
             localStorage.setItem('dgSiteFresh', 'pending');

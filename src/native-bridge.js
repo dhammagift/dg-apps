@@ -1876,6 +1876,10 @@
     var SITE_CONFIG = {
         site: window.DG_ONLINE_ORIGIN || 'https://dhamma.gift',
         urlFor: function (path) { return path; },
+        // The main page from the site too, not only its files (owner 2026-11-12, «отвязать от сборок»): its source as it is on disk
+        // (the signed list's raw copy of dg-node search/index.html), made the app's page by page-transforms.js; the native side
+        // (DgSitePlugin serve/answer) hands it out for the app's own address and its routes.
+        pages: [{ path: '/index.html', source: '/app-src/search/index.html', make: function (html) { return window.dgMakeAppPage(html); } }],
         // The site's scripts were written against the site's page. If its home page has an element the bundled page does not,
         // a new script may reach for it: leave the bundled files until a new build.
         gate: function (manifest) {

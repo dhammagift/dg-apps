@@ -53,14 +53,19 @@ enum DgSiteStore {
     private static let types = [
         "js": "application/javascript; charset=utf-8", "mjs": "application/javascript; charset=utf-8", "css": "text/css; charset=utf-8",
         "json": "application/json; charset=utf-8", "svg": "image/svg+xml", "woff2": "font/woff2", "woff": "font/woff",
-        "png": "image/png", "webp": "image/webp"
+        "png": "image/png", "webp": "image/webp", "html": "text/html; charset=utf-8"
     ]
 
     /// A downloaded file for a request to the app's own origin, answered; false = not ours, let Capacitor serve it.
     static func answer(_ task: WKURLSchemeTask) -> Bool {
-        guard let url = task.request.url, task.request.httpMethod == "GET", url.host == "localhost",
-              !url.path.hasSuffix("/"), !url.path.hasPrefix("/_capacitor"),
-              let file = file(for: url.path), FileManager.default.fileExists(atPath: file.path),
+        guard let url = task.request.url, task.request.httpMethod == "GET", url.host == "localhost", !url.path.hasPrefix("/_capacitor") else { return false }
+        // A page itself (the site's html made into the app's page by site-updater.js): a directory is its index.html, and a route
+        // of the app's single page (/mn10, /ru/kacchapa) is the main page, as Capacitor answers it from the bundle.
+        var path = url.path.isEmpty ? "/" : url.path
+        if task.request.mainDocumentURL == url {
+            if path.hasSuffix("/") { path += "index.html" } else if !(path.split(separator: "/").last ?? "").contains(".") { path = "/index.html" }
+        }
+        guard !path.hasSuffix("/"), let file = file(for: path), FileManager.default.fileExists(atPath: file.path),
               let data = try? Data(contentsOf: file) else { return false }
         let type = types[file.pathExtension.lowercased()] ?? "application/octet-stream"
         let headers = ["Content-Type": type, "Content-Length": String(data.count), "Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"]

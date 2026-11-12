@@ -43,7 +43,7 @@ function dgPlugin(log, { failPut = 0 } = {}) {
     };
 }
 
-async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1000, gateOpen = true, failPath, plugin, manual, force = true, twice = false, ls = { dgAppVersion: '1.0.1' } }) {
+async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1000, gateOpen = true, failPath, plugin, manual, force = true, twice = false, ls = { dgAppVersion: '1.0.1' }, pages }) {
     const log = [];
     const bundleFiles = { '/read/js/voice.js': 'old voice', '/read/css/voice.css': 'same css' };
     const site = siteFiles || { '/read/js/voice.js': 'new voice', '/read/css/voice.css': 'same css' };
@@ -61,7 +61,7 @@ async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1
         const served = (failPath === 'tamper:' + p) ? 'tampered' : site[p];
         return { ok: true, status: 200, arrayBuffer: async () => new Uint8Array(Buffer.from(served)).buffer };
     };
-    const pg = page({ ls, plugin: plugin ? plugin(log) : dgPlugin(log), fetchFn, config: { manual, gate: async () => gateOpen } });
+    const pg = page({ ls, plugin: plugin ? plugin(log) : dgPlugin(log), fetchFn, config: { manual, gate: async () => gateOpen, pages } });
     const [res, res2] = await Promise.all([pg.update(force), twice ? pg.update(true) : null]);
     return { res, res2, log, ls: pg.ls };
 }
@@ -146,5 +146,18 @@ async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1
     assert.notStrictEqual(r.res2.state, 'busy');
     assert.strictEqual(r.log.filter((l) => l === 'commit').length, 1, 'and the round runs once');
 
+    // The main page from the site (SITE_CONFIG.pages): its source as the list names it, made the app's page by make(); a make()
+    // that cannot do its edits keeps the app's page and takes the round's files all the same; an unchanged source is not fetched again
+    {
+        const withPage = { '/read/js/voice.js': 'new voice', '/read/css/voice.css': 'same css', '/app-src/search/index.html': '<html>site page</html>' };
+        const pages = [{ path: '/index.html', source: '/app-src/search/index.html', make: (h) => h.replace('site page', 'app page') }];
+        r = await check({ siteFiles: withPage, pages });
+        assert.ok(r.log.includes('put /index.html') && r.log.includes('put /read/js/voice.js'), 'page and files stored: ' + r.log);
+        assert.strictEqual(JSON.parse(r.ls.dgSiteHashes)['page:/index.html'], sha('<html>site page</html>'), 'the source hash is kept');
+        r = await check({ siteFiles: withPage, pages: [{ ...pages[0], make: () => { throw new Error('viewport meta not found'); } }] });
+        assert.ok(!r.log.includes('put /index.html') && r.log.includes('put /read/js/voice.js'), 'a page that cannot be made is kept: ' + r.log);
+        r = await check({ siteFiles: withPage, pages, ls: { dgAppVersion: '1.0.1', dgSiteHashes: JSON.stringify({ 'page:/index.html': sha('<html>site page</html>') }) } });
+        assert.ok(!r.log.some((l) => l.includes('/app-src/')), 'an unchanged page source is not fetched: ' + r.log);
+    }
     console.log('site-updater: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

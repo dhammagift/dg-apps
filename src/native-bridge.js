@@ -1887,7 +1887,8 @@
             { path: '/assets/js/settings-bundle.js', sources: ['/assets/js/settings.js', '/assets/js/dg-text-router.js'],
               make: function (t) { return window.dgMakeBundle('/assets/js/settings-bundle.js', [{ name: 'public/overrides/js/settings.js', text: t[0] }, { name: 'public/overrides/js/dg-text-router.js', text: t[1] }]); } }
         ],
-        ready: function () { return typeof window.dgNavigateInternal === 'function'; },
+        // up = the page's router and one global of each bundle (the router is an inline script, there even when a bundle throws)
+        ready: function () { return typeof window.dgNavigateInternal === 'function' && !!window.DgHome && typeof window.removeAllHighlights === 'function'; },
         // The site's scripts were written against the site's page. If its home page has an element the bundled page does not,
         // a new script may reach for it: leave the bundled files until a new build.
         gate: function (manifest) {

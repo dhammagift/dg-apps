@@ -159,5 +159,25 @@ async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1
         r = await check({ siteFiles: withPage, pages, ls: { dgAppVersion: '1.0.1', dgSiteHashes: JSON.stringify({ 'page:/index.html': sha('<html>site page</html>') }) } });
         assert.ok(!r.log.some((l) => l.includes('/app-src/')), 'an unchanged page source is not fetched: ' + r.log);
     }
+    // A page that does not come up (SITE_CONFIG.ready stays false) with files not yet proven: the bundle's copy goes back in the same
+    // run (ultra's review 2026-11-12); one that comes up is marked good
+    for (const up of [false, true]) {
+        const log = [];
+        const plugin = { put: async () => {}, clear: async () => { log.push('clear'); }, list: async () => ({ paths: [] }) };
+        const pg = page({ ls: { dgSiteFresh: '1', dgSiteBoots: '0', dgAppVersion: '1.0.1' }, ss: { dgSiteRun: '1' }, plugin, fetchFn: async () => ({ ok: false }), config: { ready: () => up } });
+        for (let i = 0; i < 30 && pg.timers.length; i++) { const f = pg.timers.shift(); f(); await new Promise((r) => setImmediate(r)); }
+        if (up) assert.ok(!log.includes('clear') && pg.ls.dgSiteFresh === '0', 'a page that came up is marked good: ' + log + ' ' + pg.ls.dgSiteFresh);
+        else assert.ok(log.includes('clear') && pg.ls.dgSiteBroke === '1', 'a page that never came up is taken back: ' + log);
+    }
+    // The page and its bundles are one piece: a bundle that cannot be made keeps the page too
+    {
+        const files = { '/read/js/voice.js': 'new voice', '/read/css/voice.css': 'same css', '/app-src/search/index.html': 'page', '/a.js': 'A', '/b.js': 'B' };
+        const pages = [{ path: '/index.html', source: '/app-src/search/index.html', make: (h) => h },
+            { path: '/assets/js/home-bundle.js', sources: ['/a.js', '/b.js'], make: (t) => t.join(';') }];
+        r = await check({ siteFiles: files, pages });
+        assert.ok(r.log.includes('put /index.html') && r.log.includes('put /assets/js/home-bundle.js'), 'page and bundle together: ' + r.log);
+        r = await check({ siteFiles: files, pages: [pages[0], { ...pages[1], make: () => { throw new Error('no'); } }] });
+        assert.ok(!r.log.includes('put /index.html') && !r.log.includes('put /assets/js/home-bundle.js') && r.log.includes('put /read/js/voice.js'), 'neither without the other: ' + r.log);
+    }
     console.log('site-updater: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

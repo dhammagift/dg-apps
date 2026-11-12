@@ -130,6 +130,20 @@ function resolveDirectoryLinks(html) {
     return out;
 }
 
+// The two script bundles the main page loads, made as the build makes them (buildScriptBundles): the sources one after the other,
+// each under its name. The app makes them from the site's sources together with the page, so page and bundles always match
+// (ultra's review 2026-11-12: a newer page over the app's older bundles could call what they lack).
+function makeBundle(out, parts) {
+    var content = parts.map(function (p) { return '// ---- ' + p.name + ' ----\n' + p.text; }).join('\n;\n');
+    if (/settings-bundle\.js$/.test(out)) {
+        // the local dev server probe: dead under Capacitor's localhost anyway, neutered as defense in depth (a minified source may not match)
+        content = content.replace(
+            "if (window.location.hostname !== '127.0.0.1' && window.location.hostname !== 'localhost') {",
+            "if (false) { // ponytail: neutered for offline app build (mobile/build-assets.js) — no local dev server to redirect to"
+        );
+    }
+    return content;
+}
 function makeAppPage(html) {
     html = dropSiteOfflineTags(html);
     html = injectAppScripts(html);
@@ -139,6 +153,6 @@ function makeAppPage(html) {
     verify(html);
     return html;
 }
-if (typeof module !== 'undefined' && module.exports) module.exports = { makeAppPage: makeAppPage };
-else root.dgMakeAppPage = makeAppPage;
+if (typeof module !== 'undefined' && module.exports) module.exports = { makeAppPage: makeAppPage, makeBundle: makeBundle };
+else { root.dgMakeAppPage = makeAppPage; root.dgMakeBundle = makeBundle; }
 })(typeof window !== "undefined" ? window : this);

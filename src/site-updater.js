@@ -237,15 +237,30 @@
       }
     }
     if (store('dgSiteFresh') !== '1') return;
-    // This page ran for a few seconds, or the person left it: the files it started with are good.
-    var done = false;
+    // This page ran and came up (SITE_CONFIG.ready: Dhamma.Gift's router is there), or the person left it after it came up: the
+    // files it started with are good. Not up 15 s after load with files not yet proven (a taken page whose script throws - ultra's
+    // review 2026-11-12): the bundle's own copy goes back at once and the page loads again, not three starts later.
+    var done = false, ready = SITE_CONFIG.ready || function () { return true; };
     function settled() {
-      if (done || store('dgSiteFresh') !== '1') return;
+      if (done || store('dgSiteFresh') !== '1' || !ready()) return;
       done = true;
       try { localStorage.setItem('dgSiteBoots', '0'); localStorage.setItem('dgSiteFresh', '0'); } catch (e) { /* no storage */ }
     }
-    function later() { setTimeout(settled, 4000); }
-    if (document.readyState === 'complete') later(); else window.addEventListener('load', later, { once: true });
+    function watch(waited) {
+      setTimeout(function () {
+        if (done) return;
+        if (ready()) { settled(); return; }
+        if (waited < 15000) { watch(waited + 1000); return; }
+        if (!DS || typeof DS.clear !== 'function') return;
+        DS.clear().then(function () {
+          forgetDownloads();
+          try { localStorage.setItem('dgSiteBroke', '1'); } catch (e) { /* ignore */ }
+          console.log('[dg-site] the page did not come up with the downloaded files: back to the bundled copy');
+          if (window.location && window.location.reload) window.location.reload();
+        }, function () { /* the start count above still applies */ });
+      }, waited === 0 ? 4000 : 1000);
+    }
+    if (document.readyState === 'complete') watch(0); else window.addEventListener('load', function () { watch(0); }, { once: true });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') settled(); });
   })();
 
@@ -378,25 +393,39 @@
       // The pages (SITE_CONFIG.pages: [{path, source, make}]): the site's page source, exactly as the signed list names it, made into
       // the app's page by make() (page-transforms.js, the same edits the build makes). An edit that cannot be made keeps the app's page.
       function pages() {
-        var list = (SITE_CONFIG.pages || []).slice();
+        var list = (SITE_CONFIG.pages || []).slice(), made = [], broken = false, due = false;
+        // Taken together or not at all: the page and the bundles it calls are one piece (any of them changed = all are made again)
+        list.forEach(function (pg) {
+          (pg.sources || [pg.source]).forEach(function (src) { var w = listed(urlOf(src)); if (!w) broken = true; });
+        });
+        if (broken) return Promise.resolve();   // the site does not vouch for a source: the app's own copies stay
+        function keyOf(pg) { return (pg.sources || [pg.source]).map(function (src) { return listed(urlOf(src)); }).join(','); }
+        list.forEach(function (pg) { if (keyOf(pg) !== hashes['page:' + pg.path]) due = true; });
+        if (!due) return Promise.resolve();
         function one() {
           var pg = list.shift();
           if (!pg) return Promise.resolve();
-          var url = urlOf(pg.source), want = listed(url), key = 'page:' + pg.path;
-          if (!want || want === hashes[key]) return one();
-          fetched++;
-          return fetch(url, { cache: 'no-cache' }).then(function (r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url);
-            return r.arrayBuffer();
-          }).then(function (buf) {
-            return crypto.subtle.digest('SHA-256', buf).then(function (digest) {
-              if (hex(digest) !== want) throw new Error(pg.source + ' does not match the signed list');
-              var page = pg.make(new TextDecoder().decode(buf));
-              changes.push({ path: pg.path, data: bytesToBase64(new TextEncoder().encode(page)), sha: want, key: key, known: true });
+          var srcs = pg.sources || [pg.source];
+          return Promise.all(srcs.map(function (src) {
+            var url = urlOf(src), want = listed(url);
+            fetched++;
+            return fetch(url, { cache: 'no-cache' }).then(function (r) {
+              if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url);
+              return r.arrayBuffer();
+            }).then(function (buf) {
+              return crypto.subtle.digest('SHA-256', buf).then(function (digest) {
+                if (hex(digest) !== want) throw new Error(src + ' does not match the signed list');
+                return new TextDecoder().decode(buf);
+              });
             });
-          }).catch(function (e) { console.log('[dg-site] ' + pg.path + ' kept as it is: ' + ((e && e.message) || e)); }).then(one);
+          })).then(function (texts) {
+            var out = pg.make(pg.sources ? texts : texts[0]);
+            made.push({ path: pg.path, data: bytesToBase64(new TextEncoder().encode(out)), sha: keyOf(pg), key: 'page:' + pg.path, known: true });
+            return one();
+          });
         }
-        return one();
+        return one().then(function () { Array.prototype.push.apply(changes, made); },
+          function (e) { console.log('[dg-site] the page and its bundles are kept as they are: ' + ((e && e.message) || e)); });
       }
       return next().then(pages).then(function () {
         // All or nothing: a half-fetched update would leave a page next to the old files it was written against, and a

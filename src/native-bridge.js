@@ -1879,7 +1879,15 @@
         // The main page from the site too, not only its files (owner 2026-11-12, «отвязать от сборок»): its source as it is on disk
         // (the signed list's raw copy of dg-node search/index.html), made the app's page by page-transforms.js; the native side
         // (DgSitePlugin serve/answer) hands it out for the app's own address and its routes.
-        pages: [{ path: '/index.html', source: '/app-src/search/index.html', make: function (html) { return window.dgMakeAppPage(html); } }],
+        // The two bundles it calls are made from the site's sources with it, in one piece (ultra's review 2026-11-12).
+        pages: [
+            { path: '/index.html', source: '/app-src/search/index.html', make: function (html) { return window.dgMakeAppPage(html); } },
+            { path: '/assets/js/home-bundle.js', sources: ['/assets/js/randPlaceholder.js', '/nodejs/res/js/home.js'],
+              make: function (t) { return window.dgMakeBundle('/assets/js/home-bundle.js', [{ name: 'public/overrides/js/randPlaceholder.js', text: t[0] }, { name: 'search/js/home.js', text: t[1] }]); } },
+            { path: '/assets/js/settings-bundle.js', sources: ['/assets/js/settings.js', '/assets/js/dg-text-router.js'],
+              make: function (t) { return window.dgMakeBundle('/assets/js/settings-bundle.js', [{ name: 'public/overrides/js/settings.js', text: t[0] }, { name: 'public/overrides/js/dg-text-router.js', text: t[1] }]); } }
+        ],
+        ready: function () { return typeof window.dgNavigateInternal === 'function'; },
         // The site's scripts were written against the site's page. If its home page has an element the bundled page does not,
         // a new script may reach for it: leave the bundled files until a new build.
         gate: function (manifest) {

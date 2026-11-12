@@ -250,17 +250,8 @@ function buildScriptBundles() {
         ] },
     ];
     for (const { out, sources } of pairs) {
-        const parts = sources.map(src => `// ---- ${path.relative(NODEJS_ROOT, src)} ----\n${fs.readFileSync(src, 'utf8')}`);
-        let content = parts.join('\n;\n');
-        if (out.endsWith('settings-bundle.js')) {
-            // ponytail: the probe is already dead code under Capacitor's default `localhost`
-            // hostname (its own guard skips it there) — this is defense-in-depth, not a fix for
-            // an active bug. Upgrade path if that ever changes: make the probe itself Capacitor-aware.
-            content = content.replace(
-                "if (window.location.hostname !== '127.0.0.1' && window.location.hostname !== 'localhost') {",
-                "if (false) { // ponytail: neutered for offline app build (mobile/build-assets.js) — no local dev server to redirect to"
-            );
-        }
+        // the same function the app uses to make them from the site's sources (src/page-transforms.js)
+        const content = require('./src/page-transforms').makeBundle(out, sources.map(src => ({ name: path.relative(NODEJS_ROOT, src), text: fs.readFileSync(src, 'utf8') })));
         const dest = path.join(WWW, out);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.writeFileSync(dest, content, 'utf8');

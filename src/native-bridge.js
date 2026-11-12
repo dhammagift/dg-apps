@@ -1472,6 +1472,8 @@
     }
 
     // @rate-prompt-begin (shared with dict/src/dict-bridge.js: dict/build.js inlines it there)
+    // the site's words when the app has them (DG: window.dgAppText); this block is pasted into the dictionary's bridge too, which does not
+    var dgText = window.dgAppText || function (key, ru, ruText, enText) { return ru ? ruText : enText; };
     // ---------------------------------------------------------------------------------------
     // The rating invitation (owner, 2026-09-25 — mockups agreed first: docs/rate-prompt/)
     // ---------------------------------------------------------------------------------------
@@ -1540,15 +1542,15 @@
     function ratePromptCopy(ru) {
         var name = rateAppName();
         return {
-            eyebrow: window.dgAppText('rate-this-app', ru, 'Оценить приложение', 'Rate this app'),
-            title: name ? (ru ? 'Как вам ' + name + '?' : 'How is ' + name + ' for you?') : (window.dgAppText('how-do-you-like-the-app', ru, 'Как вам приложение?', 'How do you like the app?')),
-            body: window.dgAppText('your-opinion-matters-to-us-feedback-tell', ru, 'Нам важно ваше мнение: по обратной связи мы понимаем, что вам нравится, а что улучшить. Рейтинг и комментарии помогают приложению.', 'Your opinion matters to us: feedback tells us what you like and what to improve. Ratings and comments help the app.'),
+            eyebrow: dgText('rate-this-app', ru, 'Оценить приложение', 'Rate this app'),
+            title: name ? (ru ? 'Как вам ' + name + '?' : 'How is ' + name + ' for you?') : (dgText('how-do-you-like-the-app', ru, 'Как вам приложение?', 'How do you like the app?')),
+            body: dgText('your-opinion-matters-to-us-feedback-tell', ru, 'Нам важно ваше мнение: по обратной связи мы понимаем, что вам нравится, а что улучшить. Рейтинг и комментарии помогают приложению.', 'Your opinion matters to us: feedback tells us what you like and what to improve. Ratings and comments help the app.'),
             figs: ru
                 ? [['Займёт', '30 сек – 2 мин'], ['Где', ratePromptStore()], ['Что оставить', 'звёзды и комментарий']]
                 : [['Takes', '30 sec – 2 min'], ['Where', ratePromptStore()], ['What to leave', 'stars and a comment']],
-            later: window.dgAppText('later', ru, 'Позже', 'Later'),
+            later: dgText('later', ru, 'Позже', 'Later'),
             laterLast: ru ? 'Не спрашивать' : "Don't ask",
-            go: window.dgAppText('rate', ru, 'Оценить', 'Rate'),
+            go: dgText('rate', ru, 'Оценить', 'Rate'),
         };
     }
 

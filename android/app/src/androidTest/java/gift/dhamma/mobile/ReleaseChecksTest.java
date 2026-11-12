@@ -316,6 +316,18 @@ public class ReleaseChecksTest {
             String au = js(s, "String(window.__au)");
             check("14-patimokkha-audio", pmIn && au != null && au.startsWith("ok ") && !au.startsWith("ok 0s"), "first player: " + au + " (fragment: " + js(s, "String(window.__pm)") + ")");
             js(s, "(function(){var d=document.getElementById('dg-test-pm');if(d)d.remove();return 1})()");
+
+            // 15 (first half). The reader leaves the app in a text: Home sends it to the background, where the place is kept
+            js(s, "window.dgNavigateInternal('/mn10')");
+            until(s, "/^\\/mn10/.test(location.pathname)", 30000);
+            UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressHome();
+            Thread.sleep(2000);
+        }
+        // 15. The next start opens that text, not the home page (owner 2026-11-12: «открывается с главной, и приходится
+        // проделывать весь путь заново»)
+        try (ActivityScenario<MainActivity> s2 = ActivityScenario.launch(MainActivity.class)) {
+            boolean back = until(s2, "/^\\/mn10/.test(location.pathname)", 40000);
+            check("15-opens-where-left", back, "the start opened " + js(s2, "location.pathname"));
         }
         Log.i(TAG, "DONE " + (failed.isEmpty() ? "all passed" : failed.size() + " failed: " + failed));
         assertTrue("failed: " + failed, failed.isEmpty());

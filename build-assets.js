@@ -714,6 +714,9 @@ function verifyPageAssets() {
 // index.html (the reader sees the search page), so an exception here must be a decision, not a
 // convenience.
 const REFERENCE_EXCEPTIONS = [
+    // The sources the app makes its two script bundles from when it takes the main page from the site (native-bridge.js
+    // SITE_CONFIG.pages): fetched from the site by the updater, never asked for by a page - the bundles themselves are in www/.
+    /^\/assets\/js\/(randPlaceholder|dg-text-router)\.js$/, /^\/nodejs\/res\/js\/home\.js$/,
     // The Pali dictionary data (DPD, ~24MB) is deliberately not bundled: it is updated regularly, so the
     // app fetches it from the site and keeps it in the Cache API for offline use (native-bridge.js
     // dictionaryFromSite; paliLookup.js/ai-search.js load it through window.dgDictScript).

@@ -144,6 +144,169 @@ function makeBundle(out, parts) {
     }
     return content;
 }
+
+// Sub-pages (Settings, Memo): the build's edits of every bundled page, one file at a time (build-assets.js calls these too).
+function linkDirs(html) {
+    var out = html;
+    ['memo', 'settings', 'login'].forEach(function (d) { out = out.split('href="/' + d + '/"').join('href="/' + d + '/index.html"'); });
+    return out;
+}
+function bridgeTags(html) {
+    if (html.includes('/read/js/voice.js') && !html.includes('/tts.js')) {
+        html = html.replace(/<script[^>]*src="\/read\/js\/voice\.js"/, function (m) { return '<script src="/tts.js"></script>\n' + m; });
+    }
+    if (!/<script[^>]*src="\/native-bridge\.js"/.test(html) && html.includes('</body>')) html = html.replace('</body>', '<script src="/native-bridge.js"></script>\n</body>');
+    return html;
+}
+function coverSubViewport(html) {
+    var META = /<meta\s+name=["']viewport["']\s+content=["']([^"']*)["']\s*\/?>/i;
+    var COVER = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">';
+    var STYLE = '<style id="dg-edge">html{position:relative;margin-top:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px))}</style>';
+    if (!/<(html|body|head)[\s>]/i.test(html)) return html;     // a fragment (inserted with innerHTML), not a page
+    var m = META.exec(html);
+    if (m && /viewport-fit\s*=\s*cover/.test(m[1])) return html; // already done
+    if (m) html = html.replace(META, '<meta name="viewport" content="' + m[1].replace(/\s*,?\s*$/, '') + ', viewport-fit=cover">');
+    else html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (h) { return h + '\n' + COVER; }) : COVER + '\n' + html;
+    return /<\/head>/i.test(html) ? html.replace(/<\/head>/i, STYLE + '\n</head>') : html.replace(/<body[^>]*>/i, function (b) { return STYLE + '\n' + b; });
+}
+function pinchTag(html) {
+    if (html.includes('pinch-size-demo') || !html.includes('</body>')) return html;
+    return html.replace(/<\/body>(?![\s\S]*<\/body>)/, '<script src="/assets/js/pinch-size-demo.js" defer></script>\n</body>');
+}
+function pullRefreshTag(html) {
+    return html.includes('/pull-refresh.js') ? html : html.replace('</body>', '<script src="/pull-refresh.js"></script>\n</body>');
+}
+function injectNativeBridge(html) {
+    const tag = '<script src="/native-bridge.js"></script>\n';
+    if (!html.includes(tag)) html = html.replace('<head>', `<head>\n${tag}`);
+    return html;
+}
+
+function injectOfflineLibraryRow(html) {
+    const marker = '<div class="rows">\n      <div class="row">\n        <div><p class="row-title" id="t-clearHist">';
+    const rows = `<div class="rows">
+      <div class="row" id="dgOfflineLibRow">
+        <div><p class="row-title" id="dgOfflineLibTitle">Offline library</p><p class="row-desc" id="dgOfflineLibDesc">&nbsp;</p></div>
+        <div class="row-control"><button class="btn" type="button" id="dgOfflineLibBtn">Download now</button></div>
+      </div>
+      <div class="row">
+        <div><p class="row-title" id="dgOfflineDocsTitle">Offline docs<span class="badge">soon</span></p><p class="row-desc" id="dgOfflineDocsDesc">&nbsp;</p></div>
+        <div class="row-control"><button class="btn" type="button" disabled>Download</button></div>
+      </div>
+      <div class="row">
+        <div><p class="row-title" id="t-clearHist">`;
+    if (!html.includes('id="dgOfflineLibRow"')) {
+        // A warning used to be enough here. It is not: this row is the ONLY way a reader can see
+        // whether the library downloaded, retry a failed download, or take an update, so a build
+        // that quietly skips it ships an app with no route to any of that — and the warning
+        // scrolls past in a CI log nobody reads on a green run.
+        if (!html.includes(marker)) {
+            throw new Error(
+                'injectOfflineLibraryRow: anchor not found in settings/index.html.\n' +
+                'The Data section markup changed upstream in dg-node. Update `marker` to match it — ' +
+                'without this row there is no way to download, retry, or update the offline library.'
+            );
+        }
+        html = html.replace(marker, rows);
+    }
+    // dg-node's own settings page now ships this row AND its script tag
+    // (/offline/offline-library-settings.js, copied with the offline layer below). The legacy
+    // root-path tag is still recognised so an older dg-node checkout keeps working, but it must
+    // not be added twice: /offline-library-settings.js no longer exists in www/.
+    // Matched on src=, not on the whole tag: the site's own tag carries `defer`, and comparing a
+    // whole tag string without it appended a second copy (two scripts, two status renders).
+    const tag = '<script src="/offline/offline-library-settings.js"';
+    const legacyTag = '<script src="/offline-library-settings.js"';
+    const hasScript = html.includes(tag) || html.includes(legacyTag);
+    if (!hasScript) {
+        html = html.replace('</body>', `${tag}></script>\n</body>`);
+    }
+    if (!html.includes('id="dgOfflineLibBtn"') || !(html.includes(tag) || html.includes(legacyTag))) {
+        throw new Error('injectOfflineLibraryRow: the row or its script is not in the output page');
+    }
+    return html;
+}
+
+function injectAppVersionRow(html) {
+    const marker = `<div class="row-control"><button class="btn btn-danger" type="button" id="resetAllBtn">Сбросить</button></div>
+      </div>
+    </div>
+  </section>`;
+    const withRow = `<div class="row-control"><button class="btn btn-danger" type="button" id="resetAllBtn">Сбросить</button></div>
+      </div>
+      <div class="row" id="dgDynShortcutsRow">
+        <div><p class="row-title" id="dgDynShortcutsTitle">Recent texts in app shortcuts</p><p class="row-desc" id="dgDynShortcutsDesc">Long-press the app icon.</p></div>
+        <div class="row-control"><span class="switch"><input type="checkbox" id="dgDynShortcuts" checked><span class="track"></span><span class="thumb"></span></span></div>
+      </div>
+      <div class="row" id="dgAppVersionRow" style="cursor:pointer">
+        <div><p class="row-title" id="dgAppVersionTitle">App version</p><p class="row-desc" id="dgAppVersionDesc">&nbsp;</p></div>
+      </div>
+    </div>
+  </section>`;
+    if (!html.includes('id="dgAppVersionRow"')) {
+        if (!html.includes(marker)) {
+            throw new Error(
+                'injectAppVersionRow: anchor not found in settings/index.html.\n' +
+                'The Data section markup changed upstream in dg-node. Update `marker` to match it.'
+            );
+        }
+        html = html.replace(marker, withRow);
+    }
+    return html;
+}
+
+function injectRateUsRow(html) {
+    const anchor = `      <div class="row" id="dgAppVersionRow" style="cursor:pointer">
+        <div><p class="row-title" id="dgAppVersionTitle">App version</p><p class="row-desc" id="dgAppVersionDesc">&nbsp;</p></div>
+      </div>
+`;
+    // A real link (target="_top"), not a button wired to the Browser plugin: the row navigates the
+    // top frame to the store, which is what Capacitor turns into "hand this to Play" — the plugin
+    // call did nothing on the device (owner, 2026-09-25: "не работает кнопка rate us... не
+    // открывается store"). native-bridge.js swaps the href for the platform's own store URL, so
+    // the one written here is only the Android default.
+    const row = `      <div class="row" id="dgRateUsRow">
+        <div><p class="row-title" id="dgRateUsTitle">Rate Us</p><p class="row-desc" id="dgRateUsDesc">Open the store page and leave a review.</p></div>
+        <div class="row-control"><a class="btn" id="dgRateUsBtn" href="https://play.google.com/store/apps/details?id=gift.dhamma.twa" target="_top" rel="noopener">5️⃣⭐️🙏</a></div>
+      </div>
+`;
+    if (!html.includes('id="dgRateUsRow"')) {
+        if (!html.includes(anchor)) {
+            throw new Error(
+                'injectRateUsRow: the app-version row is not in settings/index.html.\n' +
+                'injectAppVersionRow() must run first; if its markup changed, update `anchor` here too.'
+            );
+        }
+        html = html.replace(anchor, row + anchor);
+    }
+    return html;
+}
+
+function injectPrivacyRow(html) {
+    const anchor = `      <div class="row" id="dgAppVersionRow" style="cursor:pointer">`;
+    const row = `      <div class="row" id="dgPrivacyRow" style="cursor:pointer">
+        <div><p class="row-title" id="dgPrivacyTitle">Privacy Policy</p></div>
+      </div>
+`;
+    if (!html.includes('id="dgPrivacyRow"')) {
+        if (!html.includes(anchor)) throw new Error('injectPrivacyRow: the app-version row is not in settings/index.html (injectAppVersionRow must run first).');
+        html = html.replace(anchor, row + anchor);
+    }
+    return html;
+}
+
+// One sub-page as the build makes it, in the build's order: Memo (copyMemoApp's pull-to-refresh) or Settings (its rows), then the
+// edits every page gets. A row whose anchor moved on the site throws: the app keeps its page.
+function makeSubPage(path, html) {
+    var memo = /^\/(ru\/)?memo\/index\.html$/.test(path), settings = path === '/settings/index.html';
+    if (!memo && !settings) throw new Error('makeSubPage: no recipe for ' + path);
+    if (memo) html = pullRefreshTag(html);
+    html = bridgeTags(linkDirs(html));
+    if (memo) html = coverSubViewport(html);
+    if (settings) html = injectPrivacyRow(injectRateUsRow(injectAppVersionRow(injectOfflineLibraryRow(injectNativeBridge(html)))));
+    return pinchTag(html);
+}
+
 function makeAppPage(html) {
     html = dropSiteOfflineTags(html);
     html = injectAppScripts(html);
@@ -153,6 +316,6 @@ function makeAppPage(html) {
     verify(html);
     return html;
 }
-if (typeof module !== 'undefined' && module.exports) module.exports = { makeAppPage: makeAppPage, makeBundle: makeBundle };
-else { root.dgMakeAppPage = makeAppPage; root.dgMakeBundle = makeBundle; }
+if (typeof module !== 'undefined' && module.exports) module.exports = { makeAppPage: makeAppPage, makeBundle: makeBundle, makeSubPage: makeSubPage, linkDirs: linkDirs, bridgeTags: bridgeTags, coverSubViewport: coverSubViewport, pinchTag: pinchTag, pullRefreshTag: pullRefreshTag, injectNativeBridge: injectNativeBridge, injectOfflineLibraryRow: injectOfflineLibraryRow, injectAppVersionRow: injectAppVersionRow, injectRateUsRow: injectRateUsRow, injectPrivacyRow: injectPrivacyRow };
+else { root.dgMakeAppPage = makeAppPage; root.dgMakeBundle = makeBundle; root.dgMakeSubPage = makeSubPage; }
 })(typeof window !== "undefined" ? window : this);

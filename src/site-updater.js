@@ -392,8 +392,14 @@
       }
       // The pages (SITE_CONFIG.pages: [{path, source, make}]): the site's page source, exactly as the signed list names it, made into
       // the app's page by make() (page-transforms.js, the same edits the build makes). An edit that cannot be made keeps the app's page.
+      // Pages come in groups (pg.group, default 'main'): each group is one piece, and one group that cannot be made keeps only itself.
       function pages() {
-        var list = (SITE_CONFIG.pages || []).slice(), made = [], broken = false, due = false;
+        var groups = {}, order = [];
+        (SITE_CONFIG.pages || []).forEach(function (pg) { var g = pg.group || 'main'; if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(pg); });
+        return order.reduce(function (p, g) { return p.then(function () { return group(groups[g].slice()); }); }, Promise.resolve());
+      }
+      function group(list) {
+        var made = [], broken = false, due = false;
         // Taken together or not at all: the page and the bundles it calls are one piece (any of them changed = all are made again)
         list.forEach(function (pg) {
           (pg.sources || [pg.source]).forEach(function (src) { var w = listed(urlOf(src)); if (!w) broken = true; });

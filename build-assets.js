@@ -323,12 +323,9 @@ function copyReaderImages() {
 // copy afterward, same one-liner every time, so a re-run after a site update doesn't silently
 // drop it. Gives the "Log in" button (native-bridge.js) a real browser to run Google/Firebase
 // auth in — see that file's header for why the WebView itself can't do it.
-function injectNativeBridge() {
+function injectNativeBridge() {   // src/page-transforms.js: the same edit the app makes when it takes the page from the site
     const dest = path.join(WWW, 'settings', 'index.html');
-    let html = fs.readFileSync(dest, 'utf8');
-    const tag = '<script src="/native-bridge.js"></script>\n';
-    if (!html.includes(tag)) html = html.replace('<head>', `<head>\n${tag}`);
-    fs.writeFileSync(dest, html, 'utf8');
+    fs.writeFileSync(dest, require('./src/page-transforms').injectNativeBridge(fs.readFileSync(dest, 'utf8')), 'utf8');
 }
 
 // Same patch-the-copy pattern as injectNativeBridge() above, applied to the same file — adds
@@ -336,85 +333,18 @@ function injectNativeBridge() {
 // build-assets.js's copyDocs-removal comment) to the live settings page's own "Данные"/"Data"
 // section. Markup only; offline-library-settings.js (separate file) does the actual status
 // check + bilingual text, so this stays a dumb structural patch, safe to re-run every build.
-function injectOfflineLibraryRow() {
+function injectOfflineLibraryRow() {   // src/page-transforms.js: the same edit the app makes when it takes the page from the site
     const dest = path.join(WWW, 'settings', 'index.html');
-    let html = fs.readFileSync(dest, 'utf8');
-    const marker = '<div class="rows">\n      <div class="row">\n        <div><p class="row-title" id="t-clearHist">';
-    const rows = `<div class="rows">
-      <div class="row" id="dgOfflineLibRow">
-        <div><p class="row-title" id="dgOfflineLibTitle">Offline library</p><p class="row-desc" id="dgOfflineLibDesc">&nbsp;</p></div>
-        <div class="row-control"><button class="btn" type="button" id="dgOfflineLibBtn">Download now</button></div>
-      </div>
-      <div class="row">
-        <div><p class="row-title" id="dgOfflineDocsTitle">Offline docs<span class="badge">soon</span></p><p class="row-desc" id="dgOfflineDocsDesc">&nbsp;</p></div>
-        <div class="row-control"><button class="btn" type="button" disabled>Download</button></div>
-      </div>
-      <div class="row">
-        <div><p class="row-title" id="t-clearHist">`;
-    if (!html.includes('id="dgOfflineLibRow"')) {
-        // A warning used to be enough here. It is not: this row is the ONLY way a reader can see
-        // whether the library downloaded, retry a failed download, or take an update, so a build
-        // that quietly skips it ships an app with no route to any of that — and the warning
-        // scrolls past in a CI log nobody reads on a green run.
-        if (!html.includes(marker)) {
-            throw new Error(
-                'injectOfflineLibraryRow: anchor not found in settings/index.html.\n' +
-                'The Data section markup changed upstream in dg-node. Update `marker` to match it — ' +
-                'without this row there is no way to download, retry, or update the offline library.'
-            );
-        }
-        html = html.replace(marker, rows);
-    }
-    // dg-node's own settings page now ships this row AND its script tag
-    // (/offline/offline-library-settings.js, copied with the offline layer below). The legacy
-    // root-path tag is still recognised so an older dg-node checkout keeps working, but it must
-    // not be added twice: /offline-library-settings.js no longer exists in www/.
-    // Matched on src=, not on the whole tag: the site's own tag carries `defer`, and comparing a
-    // whole tag string without it appended a second copy (two scripts, two status renders).
-    const tag = '<script src="/offline/offline-library-settings.js"';
-    const legacyTag = '<script src="/offline-library-settings.js"';
-    const hasScript = html.includes(tag) || html.includes(legacyTag);
-    if (!hasScript) {
-        html = html.replace('</body>', `${tag}></script>\n</body>`);
-    }
-    if (!html.includes('id="dgOfflineLibBtn"') || !(html.includes(tag) || html.includes(legacyTag))) {
-        throw new Error('injectOfflineLibraryRow: the row or its script is not in the output page');
-    }
-    fs.writeFileSync(dest, html, 'utf8');
+    fs.writeFileSync(dest, require('./src/page-transforms').injectOfflineLibraryRow(fs.readFileSync(dest, 'utf8')), 'utf8');
 }
 
 // Same patch-the-copy pattern as injectOfflineLibraryRow() above, one more row in the same
 // "Данные"/"Data" section. No row-control/button (native-bridge.js makes the whole row itself
 // the control: tapping it copies the version string) — matches this app's other injected rows'
 // convention of a plain hardcoded English title, no site i18n hook.
-function injectAppVersionRow() {
+function injectAppVersionRow() {   // src/page-transforms.js: the same edit the app makes when it takes the page from the site
     const dest = path.join(WWW, 'settings', 'index.html');
-    let html = fs.readFileSync(dest, 'utf8');
-    const marker = `<div class="row-control"><button class="btn btn-danger" type="button" id="resetAllBtn">Сбросить</button></div>
-      </div>
-    </div>
-  </section>`;
-    const withRow = `<div class="row-control"><button class="btn btn-danger" type="button" id="resetAllBtn">Сбросить</button></div>
-      </div>
-      <div class="row" id="dgDynShortcutsRow">
-        <div><p class="row-title" id="dgDynShortcutsTitle">Recent texts in app shortcuts</p><p class="row-desc" id="dgDynShortcutsDesc">Long-press the app icon.</p></div>
-        <div class="row-control"><span class="switch"><input type="checkbox" id="dgDynShortcuts" checked><span class="track"></span><span class="thumb"></span></span></div>
-      </div>
-      <div class="row" id="dgAppVersionRow" style="cursor:pointer">
-        <div><p class="row-title" id="dgAppVersionTitle">App version</p><p class="row-desc" id="dgAppVersionDesc">&nbsp;</p></div>
-      </div>
-    </div>
-  </section>`;
-    if (!html.includes('id="dgAppVersionRow"')) {
-        if (!html.includes(marker)) {
-            throw new Error(
-                'injectAppVersionRow: anchor not found in settings/index.html.\n' +
-                'The Data section markup changed upstream in dg-node. Update `marker` to match it.'
-            );
-        }
-        html = html.replace(marker, withRow);
-    }
-    fs.writeFileSync(dest, html, 'utf8');
+    fs.writeFileSync(dest, require('./src/page-transforms').injectAppVersionRow(fs.readFileSync(dest, 'utf8')), 'utf8');
 }
 
 // One more patched row in the same "Данные"/"Data" section, ABOVE the version: the app's only way to
@@ -427,51 +357,17 @@ function injectAppVersionRow() {
 // должен быть", the same rule the dictionary app already follows). The first cut inserted this row
 // after the version, which put Rate Us last instead.
 // Anchored on the row injectAppVersionRow() writes, so that function has to run first.
-function injectRateUsRow() {
+function injectRateUsRow() {   // src/page-transforms.js: the same edit the app makes when it takes the page from the site
     const dest = path.join(WWW, 'settings', 'index.html');
-    let html = fs.readFileSync(dest, 'utf8');
-    const anchor = `      <div class="row" id="dgAppVersionRow" style="cursor:pointer">
-        <div><p class="row-title" id="dgAppVersionTitle">App version</p><p class="row-desc" id="dgAppVersionDesc">&nbsp;</p></div>
-      </div>
-`;
-    // A real link (target="_top"), not a button wired to the Browser plugin: the row navigates the
-    // top frame to the store, which is what Capacitor turns into "hand this to Play" — the plugin
-    // call did nothing on the device (owner, 2026-09-25: "не работает кнопка rate us... не
-    // открывается store"). native-bridge.js swaps the href for the platform's own store URL, so
-    // the one written here is only the Android default.
-    const row = `      <div class="row" id="dgRateUsRow">
-        <div><p class="row-title" id="dgRateUsTitle">Rate Us</p><p class="row-desc" id="dgRateUsDesc">Open the store page and leave a review.</p></div>
-        <div class="row-control"><a class="btn" id="dgRateUsBtn" href="https://play.google.com/store/apps/details?id=gift.dhamma.twa" target="_top" rel="noopener">5️⃣⭐️🙏</a></div>
-      </div>
-`;
-    if (!html.includes('id="dgRateUsRow"')) {
-        if (!html.includes(anchor)) {
-            throw new Error(
-                'injectRateUsRow: the app-version row is not in settings/index.html.\n' +
-                'injectAppVersionRow() must run first; if its markup changed, update `anchor` here too.'
-            );
-        }
-        html = html.replace(anchor, row + anchor);
-    }
-    fs.writeFileSync(dest, html, 'utf8');
+    fs.writeFileSync(dest, require('./src/page-transforms').injectRateUsRow(fs.readFileSync(dest, 'utf8')), 'utf8');
 }
 
 // Privacy policy, between Rate Us and the version (owner, 2026-09-28: in every app's settings; the
 // stores want it reachable in-app, and the site footer that carried it is hidden in the app).
 // native-bridge.js retitles it for Russian and opens the site's /docs/policies in the in-app browser.
-function injectPrivacyRow() {
+function injectPrivacyRow() {   // src/page-transforms.js: the same edit the app makes when it takes the page from the site
     const dest = path.join(WWW, 'settings', 'index.html');
-    let html = fs.readFileSync(dest, 'utf8');
-    const anchor = `      <div class="row" id="dgAppVersionRow" style="cursor:pointer">`;
-    const row = `      <div class="row" id="dgPrivacyRow" style="cursor:pointer">
-        <div><p class="row-title" id="dgPrivacyTitle">Privacy Policy</p></div>
-      </div>
-`;
-    if (!html.includes('id="dgPrivacyRow"')) {
-        if (!html.includes(anchor)) throw new Error('injectPrivacyRow: the app-version row is not in settings/index.html (injectAppVersionRow must run first).');
-        html = html.replace(anchor, row + anchor);
-    }
-    fs.writeFileSync(dest, html, 'utf8');
+    fs.writeFileSync(dest, require('./src/page-transforms').injectPrivacyRow(fs.readFileSync(dest, 'utf8')), 'utf8');
 }
 
 // dg-docs (Help/Docs portal): deliberately NOT bundled. First cut baked the ~23MB Docusaurus
@@ -713,6 +609,16 @@ function injectPinchEverywhere() {
     };
     walk(WWW);
     return n;
+}
+
+// The app makes Settings and Memo from the site's sources itself (site-updater.js pages, src/page-transforms.js makeSubPage); the
+// pages this build wrote must be exactly what that makes, or the app and the build drift apart. A difference stops the build.
+function verifySubPagesAsTheAppMakesThem() {
+    const { makeSubPage } = require('./src/page-transforms');
+    for (const [page, src] of [['/settings/index.html', 'settings/index.html'], ['/memo/index.html', 'siteroot/memo/index.html'], ['/ru/memo/index.html', 'siteroot/memo/index.html']]) {
+        const built = fs.readFileSync(path.join(WWW, page), 'utf8');
+        if (makeSubPage(page, fs.readFileSync(f(src), 'utf8')) !== built) throw new Error(`build-assets.js: ${page} differs from what the app makes of the site's page (src/page-transforms.js makeSubPage) - bring the two together`);
+    }
 }
 
 function bundledPages() {
@@ -1192,6 +1098,7 @@ function main() {
     injectPrivacyRow();
     const pinched = injectPinchEverywhere();
     console.log(`  pinch = text size on ${pinched} more page(s)`);
+    verifySubPagesAsTheAppMakesThem();
     verifyPageAssets();
     verifyReferencedAssets();
     verifyTocSnapshot();

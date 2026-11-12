@@ -1885,7 +1885,11 @@
             { path: '/assets/js/home-bundle.js', sources: ['/assets/js/randPlaceholder.js', '/nodejs/res/js/home.js'],
               make: function (t) { return window.dgMakeBundle('/assets/js/home-bundle.js', [{ name: 'public/overrides/js/randPlaceholder.js', text: t[0] }, { name: 'search/js/home.js', text: t[1] }]); } },
             { path: '/assets/js/settings-bundle.js', sources: ['/assets/js/settings.js', '/assets/js/dg-text-router.js'],
-              make: function (t) { return window.dgMakeBundle('/assets/js/settings-bundle.js', [{ name: 'public/overrides/js/settings.js', text: t[0] }, { name: 'public/overrides/js/dg-text-router.js', text: t[1] }]); } }
+              make: function (t) { return window.dgMakeBundle('/assets/js/settings-bundle.js', [{ name: 'public/overrides/js/settings.js', text: t[0] }, { name: 'public/overrides/js/dg-text-router.js', text: t[1] }]); } },
+            // Settings and Memo, each a piece of its own: the same edits the build makes (makeSubPage, checked against the build)
+            { group: 'settings', path: '/settings/index.html', source: '/app-src/settings/index.html', make: function (h) { return window.dgMakeSubPage('/settings/index.html', h); } },
+            { group: 'memo', path: '/memo/index.html', source: '/app-src/memo/index.html', make: function (h) { return window.dgMakeSubPage('/memo/index.html', h); } },
+            { group: 'memo', path: '/ru/memo/index.html', source: '/app-src/memo/index.html', make: function (h) { return window.dgMakeSubPage('/ru/memo/index.html', h); } }
         ],
         // up = the page's router and one global of each bundle (the router is an inline script, there even when a bundle throws)
         ready: function () { return typeof window.dgNavigateInternal === 'function' && !!window.DgHome && typeof window.removeAllHighlights === 'function'; },

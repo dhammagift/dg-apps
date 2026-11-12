@@ -1045,8 +1045,12 @@
         if (!root.querySelectorAll) return;
         root.querySelectorAll('audio[src^="/assets/audio/"], source[src^="/assets/audio/"]').forEach(function (el) {
             el.setAttribute('src', ONLINE_ORIGIN + el.getAttribute('src'));
+            // the Pātimokkha's sources say audio/mp4 for mp3 files: the type is a hint the player may trust over the bytes
+            if (el.tagName === 'SOURCE' && /\.mp3(\?|$)/i.test(el.getAttribute('src'))) el.setAttribute('type', 'audio/mpeg');
             var player = el.tagName === 'SOURCE' ? el.parentNode : el;
-            if (player && player.load && player.networkState !== 0) player.load();   // a player that already tried the old address
+            // the player picks its address as soon as it is on the page - before this rewrite - and keeps it: pick again
+            // (preload="none" stays: load() downloads nothing until play)
+            if (player && player.load) player.load();
         });
     }
     (function watchAudio() {

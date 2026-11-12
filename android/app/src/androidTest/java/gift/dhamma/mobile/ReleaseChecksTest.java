@@ -311,7 +311,8 @@ public class ReleaseChecksTest {
             js(s, "(function(){window.__pm=null;fetch('/api/patimokkha-fragment/bi').then(function(r){return r.text()}).then(function(t){var d=document.createElement('div');d.id='dg-test-pm';d.innerHTML=t;document.body.appendChild(d);window.__pm='in'}).catch(function(e){window.__pm='err '+e});return 1})()");
             boolean pmIn = until(s, "window.__pm === 'in'", 30000);
             Thread.sleep(1000);
-            js(s, "(function(){var a=document.querySelector('#dg-test-pm audio');window.__au=a?'':'no player';if(!a)return 0;a.onloadedmetadata=function(){window.__au='ok '+Math.round(a.duration)+'s from '+a.currentSrc};a.onerror=function(){window.__au='error '+(a.error&&a.error.code)+' at '+a.currentSrc};a.load();return 1})()");
+            // As the reader does it: no load() of ours, play() on the player as the page made it (owner 2026-11-12, DG 612: still silent)
+            js(s, "(function(){var a=document.querySelector('#dg-test-pm audio');window.__au=a?'':'no player';if(!a)return 0;a.muted=true;window.__auSrc=a.currentSrc;a.play().then(function(){setTimeout(function(){window.__au=(a.currentTime>0.5&&!a.error?'ok ':'stalled ')+a.currentTime.toFixed(1)+'s from '+a.currentSrc},4000)},function(e){window.__au='error '+e.name+' '+(a.error&&a.error.code)+' at '+a.currentSrc});return 1})()");
             until(s, "window.__au !== ''", 30000);
             String au = js(s, "String(window.__au)");
             check("14-patimokkha-audio", pmIn && au != null && au.startsWith("ok ") && !au.startsWith("ok 0s"), "first player: " + au + " (fragment: " + js(s, "String(window.__pm)") + ")");

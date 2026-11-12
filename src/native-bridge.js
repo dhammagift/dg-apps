@@ -426,35 +426,6 @@
         try { sessionStorage.removeItem(HANDLED_KEY); } catch (e) { /* private mode */ }
     })();
 
-    // The app opens where the reader left it, as a browser tab does (owner 2026-11-12: «открывается с главной, и приходится
-    // проделывать весь путь заново»): the route is kept whenever the app goes to the background, and a start of the app on the
-    // bare home page (no shortcut, no link - those bring their own route) goes back to it. In the text the site's own
-    // smoothScroll.js then returns to the line or offers "Continue reading". Back on the home page when leaving = home next time.
-    (function resumeLastPlace() {
-        var KEY = 'dgLastRoute', RUN = 'dgResumeRun', MAX_AGE = 30 * 24 * 3600 * 1000;
-        function here() { return location.pathname + location.search + location.hash; }
-        function isHome() { return /^\/(ru\/?)?$/.test(location.pathname) && !/[?&]q=/.test(location.search) && !location.hash; }
-        function save() {
-            if (!/^https?:$/.test(location.protocol) || /^\/(assets|settings|memo|login)\//.test(location.pathname)) return;   // a page of its own, not the reader's place
-            try { localStorage.setItem(KEY, JSON.stringify({ route: isHome() ? '' : here(), at: Date.now() })); } catch (e) { /* private mode */ }
-        }
-        document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') save(); });
-        window.addEventListener('pagehide', save);
-        try {
-            if (sessionStorage.getItem(RUN)) return;   // only the first page of a run of the app
-            sessionStorage.setItem(RUN, '1');
-        } catch (e) { return; }
-        var last = null;
-        try { last = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { /* none */ }
-        if (!last || !last.route || Date.now() - last.at > MAX_AGE || !isHome()) return;
-        var tries = 0;
-        (function go() {
-            if (!isHome()) return;   // a link or a shortcut got there first
-            if (typeof window.dgNavigateInternal === 'function') { window.dgNavigateInternal(last.route); return; }
-            if (++tries < 50) setTimeout(go, 100);
-        })();
-    })();
-
     // ---------------------------------------------------------------------------------------
     // dhammagift:// — the app's own URL scheme (docs/DEEP_LINKS.md)
     // ---------------------------------------------------------------------------------------

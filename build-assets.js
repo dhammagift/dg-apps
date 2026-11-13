@@ -1051,7 +1051,7 @@ function writeSiteManifest() {
             // json too (menus, links, lists: the site's data, owner 2026-11-12 «отвязать от сборок») and /nodejs/res (the search page's
             // own scripts, styles and data); only byte-for-byte copies count, so generated files stay out by the hash check below
             // /offline too: the offline layer's scripts as dg-node has them (the app's own platform.js is not a copy, so it stays out)
-            if (!/^\/(read|reader|assets|nodejs\/res|offline)\//.test(rel) || !/\.(js|css|svg|png|webp|woff2?|json|html)$/.test(rel)) continue;   // html: only files the build left as they are (the Pātimokkha fragments...), the hash check below
+            if (!/^\/(read|reader|assets|nodejs\/res|offline|spa)\//.test(rel) || !/\.(js|css|svg|png|webp|woff2?|json|html)$/.test(rel)) continue;   // html: only files the build left as they are (the Pātimokkha fragments...), the hash check below
             const sha = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
             if (copiedHash.get(abs) !== sha || bundled.has(rel)) continue;
             files.push(rel); hashes[rel] = sha;

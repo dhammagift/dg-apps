@@ -69,6 +69,7 @@ async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1
 (async () => {
     let r = await check({ gateOpen: false });
     assert.ok(!r.log.some((l) => l.startsWith('put')), 'gate closed: nothing applied');
+    assert.strictEqual(r.res.state, 'needsApp', 'gate closed: said as a refused update, not «Актуально»');
 
     r = await check({});
     assert.deepStrictEqual(r.log.filter((l) => /^(put|commit|fetch \/read)/.test(l)), ['fetch /read/js/voice.js', 'put /read/js/voice.js', 'commit'],

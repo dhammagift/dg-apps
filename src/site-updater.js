@@ -143,9 +143,9 @@
   // ---- what the person is told ---------------------------------------------------------------
   function siteRu() { return typeof isRu === 'function' ? isRu() : /^ru/i.test(document.documentElement.lang || ''); }
   var ST = {
-    ru: { busy: 'Проверяю…', current: 'Актуально', new: 'Есть обновление - нажмите «Обновить» внизу', offline: 'Нет соединения', failed: 'Не удалось проверить, попробуйте позже',
+    ru: { busy: 'Проверяю…', current: 'Актуально', new: 'Обновление получено - нажмите «Обновить» внизу, приложение перезапустится', needsApp: 'На сайте есть обновление, но для него нужна новая версия приложения', offline: 'Нет соединения', failed: 'Не удалось проверить, попробуйте позже',
           done: 'Обновление установлено', restart: 'Перезапустить', broke: 'Обновление не заработало', brokeSub: 'Включена встроенная версия. Если что-то не работает, переустановите приложение из магазина' },
-    en: { busy: 'Checking…', current: 'Up to date', new: 'Update found - use the Update button below', offline: 'No connection', failed: 'Could not check, try again later',
+    en: { busy: 'Checking…', current: 'Up to date', new: 'Update received - tap Update below, the app restarts', needsApp: 'The site has an update that needs a newer app version', offline: 'No connection', failed: 'Could not check, try again later',
           done: 'Update installed', restart: 'Restart', broke: 'The update did not work', brokeSub: 'The built-in version is back. If something is broken, reinstall the app from the store' }
   };
   function st() { return ST[siteRu() ? 'ru' : 'en']; }
@@ -341,7 +341,9 @@
         return null;
       }
       // The app may refuse an update that its own pages cannot take (Dhamma.Gift: the site's page has elements the bundled page lacks).
-      if (SITE_CONFIG.gate) return Promise.resolve(SITE_CONFIG.gate(bundle)).then(function (open) { return open ? run(bundle, site) : null; });
+      // A refusal is said as such, not as «Актуально»: the site is newer and the app did not take it (owner 2026-11-13: «Актуально.
+      // Оно не актуально» - every update had been refused for an id only the server's page had).
+      if (SITE_CONFIG.gate) return Promise.resolve(SITE_CONFIG.gate(bundle)).then(function (open) { if (open) return run(bundle, site); res.state = 'needsApp'; return null; });
       return run(bundle, site);
     });
     function run(bundle, site) {

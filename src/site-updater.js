@@ -113,12 +113,7 @@
       text.firstChild.textContent = t.busy;
       text.lastChild.textContent = '';
       go.remove(); x.remove();
-      try { localStorage.setItem('dgSiteApplied', '1'); } catch (e) { /* no storage: no confirmation after the reload */ }
-      // The kept-apart files take over now (Dhamma.Gift's DgSite.apply), and the reload counts as a start for the boot guard.
-      nativeSite('apply').catch(function () { /* older DgSite: the files are live already */ }).then(function () {
-        try { sessionStorage.removeItem(RUN_KEY); } catch (e) { /* no storage */ }
-        setTimeout(function () { location.reload(); }, 250);
-      });
+      applyUpdate();
     });
     var x = document.createElement('button');
     x.type = 'button';
@@ -143,16 +138,27 @@
   // ---- what the person is told ---------------------------------------------------------------
   function siteRu() { return typeof isRu === 'function' ? isRu() : /^ru/i.test(document.documentElement.lang || ''); }
   var ST = {
-    ru: { busy: 'Проверяю…', current: 'Актуально', new: 'Обновление получено - нажмите «Обновить» внизу, приложение перезапустится', needsApp: 'На сайте есть обновление, но для него нужна новая версия приложения', offline: 'Нет соединения', failed: 'Не удалось проверить, попробуйте позже',
+    // one or two words after the version (owner 2026-11-13: «супер коротко»); the row's button says what to do next
+    ru: { busy: 'Проверяю…', current: 'Актуально', new: 'Есть обновление', needsApp: 'Нужна новая версия', offline: 'Нет сети', failed: 'Не удалось',
           done: 'Обновление установлено', restart: 'Перезапустить', broke: 'Обновление не заработало', brokeSub: 'Включена встроенная версия. Если что-то не работает, переустановите приложение из магазина' },
-    en: { busy: 'Checking…', current: 'Up to date', new: 'Update received - tap Update below, the app restarts', needsApp: 'The site has an update that needs a newer app version', offline: 'No connection', failed: 'Could not check, try again later',
+    en: { busy: 'Checking…', current: 'Up to date', new: 'Update available', needsApp: 'Needs new version', offline: 'Offline', failed: 'Failed',
           done: 'Update installed', restart: 'Restart', broke: 'The update did not work', brokeSub: 'The built-in version is back. If something is broken, reinstall the app from the store' }
   };
   function st() { return ST[siteRu() ? 'ru' : 'en']; }
+  // The staged files take over (Dhamma.Gift's DgSite.apply) and the page reloads, which counts as a start for the boot guard:
+  // the update bar's button and the version row's «Обновить».
+  function applyUpdate() {
+    try { localStorage.setItem('dgSiteApplied', '1'); } catch (e) { /* no storage: no confirmation after the reload */ }
+    nativeSite('apply').catch(function () { /* older DgSite: the files are live already */ }).then(function () {
+      try { sessionStorage.removeItem(RUN_KEY); } catch (e) { /* no storage */ }
+      setTimeout(function () { location.reload(); }, 250);
+    });
+  }
+  window.__dgSiteApply = applyUpdate;
   // Checks now (the version row's button) and says the result through say(text); resolves when done.
   window.__dgSiteCheckSay = function (say) {
     say(st().busy);
-    return updateSite(true).then(function (r) { say(st()[r.state] || st().failed); }, function () { say(st().failed); });
+    return updateSite(true).then(function (r) { say(st()[r.state] || st().failed, r.state); }, function () { say(st().failed, 'failed'); });
   };
   // A short message over the page: "applied" after the reload an update asked for, "did not work" after the safety net fired.
   // "Applied" carries a Restart button: swiping the app away only sends it to the background, so "close and reopen" could not

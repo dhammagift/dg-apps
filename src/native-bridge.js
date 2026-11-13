@@ -1417,14 +1417,37 @@
             ctl.className = 'row-control';
             ctl.appendChild(btn);
             row.appendChild(ctl);
-            var busy = false;
+            var busy = false, next = 'check';
+            // The result in one or two words after the version, and the button says what to do next (owner 2026-11-13, mockup):
+            // Актуально -> Проверить, Есть обновление (green) -> Обновить, Не удалось / Нет сети (orange) -> Повторить,
+            // Нужна новая версия (orange: information, not an error) -> В магазин.
+            var label = btn.lastChild, icon = btn.firstChild;
+            function said(m, state) {
+                if (!desc) return;
+                desc.textContent = text + ' · ';
+                var w = document.createElement('span');
+                w.textContent = m;
+                if (state === 'new') w.style.color = '#2fae7f';
+                else if (state === 'failed' || state === 'offline' || state === 'needsApp') w.style.color = '#e8962e';
+                desc.appendChild(w);
+                next = state === 'new' ? 'apply' : state === 'needsApp' ? 'store' : 'check';
+                label.textContent = next === 'apply' ? window.dgAppText('update', ru, 'Обновить', 'Update')
+                    : next === 'store' ? window.dgAppText('to-store', ru, 'В магазин', 'Store')
+                    : (state === 'failed' || state === 'offline') ? window.dgAppText('retry', ru, 'Повторить', 'Retry')
+                    : window.dgAppText('check', ru, 'проверить', 'check');
+                icon.style.display = next === 'check' ? '' : 'none';
+                btn.style.background = next === 'apply' ? '#139b7b' : '';
+                btn.style.color = next === 'apply' ? '#fff' : '';
+                btn.style.borderColor = next === 'apply' ? '#139b7b' : '';
+            }
             btn.addEventListener('click', function (e) {
                 e.stopPropagation();   // the row itself copies the version
                 if (busy) return;
+                if (next === 'apply' && top.__dgSiteApply) { busy = true; top.__dgSiteApply(); return; }
+                if (next === 'store') { top.location.href = rateUsUrl().replace(/\?action=write-review$/, ''); return; }
                 busy = true;
-                var icon = btn.firstChild;
                 var spin = icon.animate ? icon.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: 800, iterations: Infinity }) : null;
-                check(function (m) { if (desc) desc.textContent = text + ' · ' + m; }).then(function () { busy = false; if (spin) spin.cancel(); });
+                check(said).then(function () { busy = false; if (spin) spin.cancel(); });
             });
         }
 

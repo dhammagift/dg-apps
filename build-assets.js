@@ -134,6 +134,8 @@ const ASSETS = [
     { url: '/assets/js/dg-page-find-ui.js', sources: [f('public/overrides/js/dg-page-find-ui.js')] },
     // The two-finger Text size demo: index.html loads it only after ?pinch=1 (sessionStorage dgPinchDemo), but names it.
     { url: '/assets/js/pinch-size-demo.js', sources: [f('public/overrides/js/pinch-size-demo.js')] },
+    // the system's media player for a recording played on the page (dg-node 2d917cd, search/index.html)
+    { url: '/assets/js/dg-media-tray.js', sources: [f('public/overrides/js/dg-media-tray.js')] },
     { url: '/assets/img/buttons/chrome-cta.png', sources: [l('img/buttons/chrome-cta.png')] },
     { url: '/assets/img/buttons/firefox-cta.png', sources: [l('img/buttons/firefox-cta.png')] },
     { url: '/assets/img/buttons/edge-cta.png', sources: [l('img/buttons/edge-cta.png')] },

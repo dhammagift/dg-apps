@@ -402,21 +402,21 @@ jobs:
         run: node test/deep-link.test.js
 
       # The per-app build number rule (plan's "Build numbers" step) against fake store answers.
+      - name: Google is Google, Apple is Apple (no store upload waits for the other store or another app)
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || pip3 install --quiet pyyaml
+          python3 test/platform-split.test.py
+
       - name: Check the build-number rule
         run: python3 .github/scripts/build_numbers.py --self-test
 
-      # One version per app (version.properties), read by gradle and passed to xcodebuild. The Xcode project still carries
-      # MARKETING_VERSION for a build from Xcode on a Mac; it must say the same, or a local build and CI would disagree.
-      - name: Check the iOS projects carry the version in version.properties
+      # The iOS projects' MARKETING_VERSION is checked in each app's first iOS job (.github/scripts/check-ios-version.sh), not
+      # here: this job gates Play too, and an iOS-only mismatch kept Dhamma.Gift 1.21 out of Play (owner 2026-11-16). Here only
+      # a warning, so a run that builds no iOS still says so.
+      - name: The iOS projects' version (warning only - the iOS jobs enforce it)
         run: |
-          set -euo pipefail
           for app in . dict uposatha; do
-            v=$(sed -n 's/^ios=//p' "$app/version.properties")
-            [ -n "$v" ] || v=$(sed -n 's/^version=//p' "$app/version.properties")
-            [ -n "$v" ] || { echo "::error::$app/version.properties has no version="; exit 1; }
-            bad=$(grep -oE 'MARKETING_VERSION = [^;]+' "$app/ios/App/App.xcodeproj/project.pbxproj" | sort -u | grep -vxF "MARKETING_VERSION = $v" || true)
-            [ -z "$bad" ] || { echo "::error::$app: the Xcode project says '$bad', version.properties says $v"; exit 1; }
-            echo "$app: android $(sed -n 's/^version=//p' "$app/version.properties"), ios $v"
+            .github/scripts/check-ios-version.sh "$app" || echo "::warning::$app: fix the Xcode project's version before an iOS release"
           done
 
   build:
@@ -433,6 +433,12 @@ jobs:
     outputs:
       app_version: ${{ steps.appver.outputs.name }}
       cert: ${{ steps.sig.outputs.cert }}
+      # Google is Google, Apple is Apple (owner 2026-11-16: «нажал выкладка в Store, и выкладка пошла»): this job builds what
+      # both apps share (the web bundle and its checks) - a failure there stops both. The Android-only steps (Capacitor sync,
+      # gradle) and the Apple-only checks (the association file, WebKit deep links) do not fail the job: each marks its own
+      # platform, and only that platform's tests and store upload wait for it.
+      android_ok: ${{ steps.cap_sync.outcome == 'success' && steps.gradle_debug.outcome == 'success' && steps.keystore.outcome != 'failure' && steps.sig.outcome != 'failure' && steps.gradle_aab.outcome != 'failure' && steps.play_apk.outcome != 'failure' }}
+      ios_web_ok: ${{ steps.aasa.outcome == 'success' && steps.webkit.outcome == 'success' }}
 
     steps:
       - name: Checkout this repo (the app)
@@ -611,6 +617,7 @@ jobs:
           cache: 'gradle'
 
       - name: Set up Android SDK
+        continue-on-error: true   # Android only: without it gradle fails and android_ok says so; iOS goes on
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         with:
           # The action's default package list includes the legacy "tools" package, which Google has
@@ -718,6 +725,7 @@ jobs:
       # Uploaded here, immediately after the build, so a later failing check still leaves the
       # artifact for an ios-build run that is deliberately allowed to run on its result.
       - name: Upload the built web bundle (for the iOS job)
+        continue-on-error: true   # for the iOS jobs only: without it they stop, Play does not
         uses: actions/upload-artifact@v4
         with:
           name: www-${{ github.run_number }}
@@ -825,6 +833,8 @@ jobs:
       # generic static mount would produce. The Android counterpart (assetlinks.json) has its own
       # route; this checks the iOS one while the server is still up.
       - name: Check the Apple association file is served
+        id: aasa
+        continue-on-error: true   # one platform's step: marks android_ok / ios_web_ok, not the job
         run: |
           set -o pipefail
           CT=$(curl -sS -o /tmp/aasa.json -w '%{content_type}' "http://localhost:${{ env.DG_SERVER_PORT }}/.well-known/apple-app-site-association")
@@ -966,6 +976,8 @@ jobs:
       # (iOS proves its own in the simulator job). The point is to catch engine-only breakage in the
       # handoff on a runner that costs seconds, not minutes.
       - name: Check the deep links in WebKit
+        id: webkit
+        continue-on-error: true   # one platform's step: marks android_ok / ios_web_ok, not the job
         env:
           DG_PLAYWRIGHT: ${{ github.workspace }}/node_modules/playwright-core
           DG_BROWSER: webkit
@@ -999,9 +1011,13 @@ jobs:
         run: node -e "const f='capacitor.config.json',c=JSON.parse(require('fs').readFileSync(f));c.loggingBehavior='production';require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
 
       - name: Sync Capacitor
+        id: cap_sync
+        continue-on-error: true   # one platform's step: marks android_ok / ios_web_ok, not the job
         run: npx cap sync android
 
       - name: Grant gradlew permissions
+        id: gradlew_x
+        continue-on-error: true   # one platform's step: marks android_ok / ios_web_ok, not the job
         run: chmod +x android/gradlew
 
       # assembleDebug is auto-signed with the Android debug keystore (no secrets needed) — quick
@@ -1009,6 +1025,8 @@ jobs:
       # (see AndroidManifest.xml's autoVerify comment), so deep links on it always fall back to
       # the disambiguation chooser at best.
       - name: Build Android Debug APK
+        id: gradle_debug
+        continue-on-error: true   # one platform's step: marks android_ok / ios_web_ok, not the job
         working-directory: android
         run: ./gradlew assembleDebug --stacktrace
 
@@ -1020,6 +1038,7 @@ jobs:
         run: ./gradlew assembleDebugAndroidTest --stacktrace
 
       - name: Upload the instrumentation tests APK
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         uses: actions/upload-artifact@v4
         with:
           name: dg-app-androidtest-apk-${{ github.run_number }}
@@ -1028,6 +1047,7 @@ jobs:
           retention-days: 14
 
       - name: List build outputs
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         run: ls -lah android/app/build/outputs/apk/debug/ || echo "Debug APK directory not found"
 
       # Every run publishes the APK as a build artifact, so a workflow_dispatch build is
@@ -1038,6 +1058,7 @@ jobs:
       # the APK/AAB/IPA files are kept 14 days (long enough to test a build and send it on with
       # play-upload.yml / ios-upload.yml), not 30.
       - name: Upload APK artifact
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -1054,6 +1075,8 @@ jobs:
       # own debug-keystore auto-signing above, which needs none of this.
       # Secret names: this repo's ANDROID_* or dg-twa's KEYSTORE_* — whichever set exists.
       - name: Decode release keystore
+        id: keystore
+        continue-on-error: true   # one platform's step: marks android_ok / ios_web_ok, not the job
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 || secrets.KEYSTORE_BASE64 }}
         run: |
@@ -1066,6 +1089,8 @@ jobs:
           fi
 
       - name: Build Android Release APK
+        id: sig
+        continue-on-error: true   # one platform's step: marks android_ok / ios_web_ok, not the job
         if: env.skip != 'true'
         working-directory: android
         env:
@@ -1073,7 +1098,6 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEYSTORE_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
         # The signing certificate's SHA-256 is public: it is what assetlinks.json must list for gift.dhamma.mobile.
-        id: sig
         run: |
           ./gradlew assembleRelease -PdgVersionCode=${{ needs.plan.outputs.dg_number }} --stacktrace
           digest=$("$ANDROID_HOME"/build-tools/36.0.0/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -m1 'SHA-256' | sed -E 's/.*: *//')
@@ -1081,6 +1105,7 @@ jobs:
           echo "cert=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Upload release APK artifact
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -1095,6 +1120,8 @@ jobs:
       # release variant and only changes the output packaging, so the AAB and the APK are the same
       # code signed by the same key.
       - name: Build Android Release AAB (Google Play)
+        id: gradle_aab
+        continue-on-error: true   # one platform's step: marks android_ok / ios_web_ok, not the job
         if: env.skip != 'true'
         working-directory: android
         env:
@@ -1110,6 +1137,7 @@ jobs:
           ./gradlew bundleRelease -PdgAppId=gift.dhamma.twa -PdgVersionCode=${{ needs.plan.outputs.dg_number }} --stacktrace
 
       - name: Upload release AAB artifact
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -1123,6 +1151,8 @@ jobs:
       # anywhere before it did. bundletool makes the universal APK Play itself would serve from this very
       # AAB, signed with the same key, and android-tests runs its launcher-shortcut suite on that.
       - name: The Play bundle as an installable APK (for the emulator tests)
+        id: play_apk
+        continue-on-error: true   # one platform's step: marks android_ok / ios_web_ok, not the job
         if: env.skip != 'true'
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
@@ -1145,6 +1175,7 @@ jobs:
           [ "$pkg" = gift.dhamma.twa ] || { echo "::error::the universal APK of the Play bundle is $pkg, not gift.dhamma.twa"; exit 1; }
 
       - name: Upload the Play bundle's APK
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -1156,6 +1187,12 @@ jobs:
       # 214 MB per run, and phones download the site's own copy, not this one: kept two days, for a
       # look at what this run tested against (and for the GitHub release of a tag, which takes it
       # from here within the same run).
+      - name: Platform verdict (what this build gives each store)
+        if: always()
+        run: |
+          [ "${{ steps.cap_sync.outcome == 'success' && steps.gradle_debug.outcome == 'success' && steps.keystore.outcome != 'failure' && steps.sig.outcome != 'failure' && steps.gradle_aab.outcome != 'failure' && steps.play_apk.outcome != 'failure' }}" = true ] && echo "Android: built" || echo "::error::Android build failed - no Play upload from this run; iOS goes on"
+          [ "${{ steps.aasa.outcome == 'success' && steps.webkit.outcome == 'success' }}" = true ] && echo "Apple checks: passed" || echo "::error::Apple association file or WebKit deep links failed - no TestFlight from this run; Android goes on"
+
       - name: Upload offline database
         if: success()
         uses: actions/upload-artifact@v4
@@ -1261,7 +1298,7 @@ jobs:
     # An iOS-only release has nothing to do with the Android half. Without this gate the emulator
     # suite ran on every dg-ios build, and a flaky launcher check failed the whole run AFTER the
     # IPA had already been uploaded to TestFlight (owner, 2026-10-01).
-    if: needs.plan.outputs.dg_android_tests == 'true'
+    if: needs.plan.outputs.dg_android_tests == 'true' && needs.build.outputs.android_ok == 'true'
     timeout-minutes: 60   # the offline-library download (~12 min) and the daily-text reminder (~12 min) scenarios
     steps:
       - uses: actions/checkout@v4
@@ -1307,18 +1344,18 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
-            bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.twa shortcuts || touch emu-failed
+            bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.twa shortcuts || { echo "::warning::shortcuts: failed once, one more try"; adb shell am force-stop gift.dhamma.twa; bash tools/emu-screens.sh "$(ls apk/*.apk | head -1)" shots gift.dhamma.twa shortcuts; } || touch emu-failed
             adb shell am force-stop gift.dhamma.twa
-            TRAY_ENGINE=audio bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-audio gift.dhamma.mobile tray || touch emu-failed
-            TRAY_ENGINE=native bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-native gift.dhamma.mobile tray || touch emu-failed
+            TRAY_ENGINE=audio bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-audio gift.dhamma.mobile tray || { echo "::warning::tray: failed once, one more try"; adb shell am force-stop gift.dhamma.mobile; TRAY_ENGINE=audio bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-audio gift.dhamma.mobile tray; } || touch emu-failed
+            TRAY_ENGINE=native bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-native gift.dhamma.mobile tray || { echo "::warning::tray: failed once, one more try"; adb shell am force-stop gift.dhamma.mobile; TRAY_ENGINE=native bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-tray-native gift.dhamma.mobile tray; } || touch emu-failed
             # The offline library on every build (owner 2026-10-30: basic function, not a one-off check): a fresh app (the
             # player scenarios answered its consent sheet with "Not now"), Download, the app sent to the background, the native
             # download to the end, the library installed, then search and a text with the network off.
             adb shell pm clear gift.dhamma.mobile > /dev/null
-            bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-download gift.dhamma.mobile download || touch emu-failed
+            bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-download gift.dhamma.mobile download || { echo "::warning::download: failed once, one more try"; adb shell am force-stop gift.dhamma.mobile; bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-download gift.dhamma.mobile download; } || touch emu-failed
             # "A text a day" reminders must reach the shade (2026-10-31: none was ever set on Android 12+, dg-node 5ad8fc2)
             adb shell pm clear gift.dhamma.mobile > /dev/null
-            bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-subs gift.dhamma.mobile subs || touch emu-failed
+            bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-subs gift.dhamma.mobile subs || { echo "::warning::subs: failed once, one more try"; adb shell am force-stop gift.dhamma.mobile; bash tools/emu-screens.sh "$(ls apk-debug/*.apk | head -1)" shots-subs gift.dhamma.mobile subs; } || touch emu-failed
             test ! -f emu-failed
       - name: Verdict, notification player
         if: always()
@@ -1390,7 +1427,7 @@ jobs:
   android-release:
     name: Android release (Play closed testing, alpha)
     needs: [plan, unit, build, android-tests]
-    if: needs.plan.outputs.dg_play == 'true'
+    if: needs.plan.outputs.dg_play == 'true' && needs.build.outputs.android_ok == 'true'
     uses: ./.github/workflows/play-release.yml
     with:
       app: Dhamma.Gift
@@ -1430,6 +1467,9 @@ jobs:
     # Artifacts only — nothing here creates or edits a GitHub release.
     permissions:
       contents: read
+    # Google is Google, Apple is Apple (owner 2026-11-16): a failed Android step marks android_ok and stops only Play
+    outputs:
+      android_ok: ${{ steps.cap_sync.outcome == 'success' && steps.gradle_debug.outcome == 'success' && steps.keystore.outcome != 'failure' && steps.gradle_apk.outcome != 'failure' && steps.gradle_aab.outcome != 'failure' }}
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -1444,6 +1484,7 @@ jobs:
           cache: 'gradle'
 
       - name: Set up Android SDK
+        continue-on-error: true   # Android only: without it gradle fails and android_ok says so; iOS goes on
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
@@ -1485,6 +1526,8 @@ jobs:
       # puts dict-bridge.js where MainActivity reads it from. It also RUNS build.js (npm run build), which is
       # what produces dict/www/ in the first place — the upload below must come after this, not before.
       - name: Sync Capacitor
+        id: cap_sync
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         working-directory: dict
         run: npm run sync-android
 
@@ -1534,13 +1577,18 @@ jobs:
           DG_DICT_URL=http://127.0.0.1:8191/ node test/bridge-ui.js
 
       - name: Grant gradlew permissions
+        id: gradlew_x
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         run: chmod +x dict/android/gradlew
 
       - name: Build Debug APK
+        id: gradle_debug
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         working-directory: dict/android
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload debug APK artifact
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -1554,6 +1602,8 @@ jobs:
       # present the release build is skipped rather than failing: a fork must still be able to run
       # this workflow.
       - name: Decode release keystore
+        id: keystore
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 || secrets.KEYSTORE_BASE64 }}
         run: |
@@ -1566,6 +1616,8 @@ jobs:
           fi
 
       - name: Build Release APK
+        id: gradle_apk
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         if: env.skip != 'true'
         working-directory: dict/android
         env:
@@ -1575,6 +1627,7 @@ jobs:
         run: ./gradlew assembleRelease -PdgVersionCode=${{ needs.plan.outputs.dict_number }} --stacktrace
 
       - name: Upload release APK artifact
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -1584,6 +1637,8 @@ jobs:
           retention-days: 14
 
       - name: Build Release AAB (Google Play)
+        id: gradle_aab
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         if: env.skip != 'true'
         working-directory: dict/android
         env:
@@ -1595,6 +1650,7 @@ jobs:
         run: ./gradlew bundleRelease -PdgVersionCode=${{ needs.plan.outputs.dict_number }} --stacktrace
 
       - name: Upload release AAB artifact
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -1603,14 +1659,21 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Platform verdict (what this build gives each store)
+        if: always()
+        run: |
+          [ "${{ steps.cap_sync.outcome == 'success' && steps.gradle_debug.outcome == 'success' && steps.keystore.outcome != 'failure' && steps.gradle_apk.outcome != 'failure' && steps.gradle_aab.outcome != 'failure' }}" = true ] && echo "Android: built" || echo "::error::Android build failed - no Play upload from this run; iOS goes on"
+
   # The signed release APKs of the dictionary and Uposatha on an emulator, before their Play uploads:
   # installed, opened from the launcher, the page painted, the process alive, no crash in the log
   # (tools/emu-launch.sh). Also on the test runs of that app (dict_only / uposatha), so the check is
   # known to work before a release depends on it.
+
+
   dict-launch:
     name: Dictionary app launch check (emulator)
     needs: [plan, dict-build]
-    if: needs.plan.outputs.dict_launch == 'true'
+    if: (needs.plan.outputs.dict_launch == 'true') && needs.dict-build.outputs.android_ok == 'true'
     uses: ./.github/workflows/launch-check.yml
     with:
       apk_artifact: dg-dict-apk-release-${{ needs.plan.outputs.dict_number }}
@@ -1624,7 +1687,7 @@ jobs:
   dict-tour:
     name: Dictionary app feature tour (emulator)
     needs: [plan, dict-build]
-    if: needs.plan.outputs.build_dict == 'true' && needs.plan.outputs.dict_play != 'true' && !startsWith(github.ref, 'refs/tags/')
+    if: (needs.plan.outputs.build_dict == 'true' && needs.plan.outputs.dict_play != 'true' && !startsWith(github.ref, 'refs/tags/')) && needs.dict-build.outputs.android_ok == 'true'
     runs-on: ubuntu-24.04   # pinned: ubuntu-latest became 26.04, where playwright --with-deps finds no libicu74/libvpx9 (2026-11-12)
     timeout-minutes: 45
     steps:
@@ -1679,6 +1742,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: The Xcode project carries the version in version.properties
+        run: .github/scripts/check-ios-version.sh dict
       - uses: actions/download-artifact@v4
         with:
           name: dict-www-${{ github.run_number }}
@@ -1768,6 +1834,9 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: read
+    # Google is Google, Apple is Apple (owner 2026-11-16): a failed Android step marks android_ok and stops only Play
+    outputs:
+      android_ok: ${{ steps.cap_sync.outcome == 'success' && steps.gradle_debug.outcome == 'success' && steps.keystore.outcome != 'failure' && steps.gradle_apk.outcome != 'failure' && steps.gradle_aab.outcome != 'failure' }}
     steps:
       - name: Checkout this repo (the app)
         uses: actions/checkout@v4
@@ -1782,6 +1851,7 @@ jobs:
           cache: 'gradle'
 
       - name: Set up Android SDK
+        continue-on-error: true   # Android only: without it gradle fails and android_ok says so; iOS goes on
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
@@ -1846,6 +1916,8 @@ jobs:
       # src/ -> www/ -> android/app/src/main/assets/public: the bundled page, uposatha-bridge.js and
       # the offline page where MainActivity and Capacitor read them from.
       - name: Sync Capacitor
+        id: cap_sync
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         working-directory: uposatha
         run: npm run sync-android
 
@@ -1878,13 +1950,18 @@ jobs:
           DG_SITE=http://127.0.0.1:8192 node uposatha/test/bridge-ui.js
 
       - name: Grant gradlew permissions
+        id: gradlew_x
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         run: chmod +x uposatha/android/gradlew
 
       - name: Build Debug APK
+        id: gradle_debug
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         working-directory: uposatha/android
         run: ./gradlew assembleDebug -PdgVersionCode=${{ needs.plan.outputs.uposatha_number }} --stacktrace
 
       - name: Upload debug APK artifact
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -1904,6 +1981,8 @@ jobs:
           retention-days: 14
 
       - name: Decode release keystore
+        id: keystore
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 || secrets.KEYSTORE_BASE64 }}
         run: |
@@ -1916,6 +1995,8 @@ jobs:
           fi
 
       - name: Build Release APK
+        id: gradle_apk
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         if: env.skip != 'true'
         working-directory: uposatha/android
         env:
@@ -1925,6 +2006,7 @@ jobs:
         run: ./gradlew assembleRelease -PdgVersionCode=${{ needs.plan.outputs.uposatha_number }} --stacktrace
 
       - name: Upload release APK artifact
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -1934,6 +2016,8 @@ jobs:
           retention-days: 14
 
       - name: Build Release AAB (Google Play)
+        id: gradle_aab
+        continue-on-error: true   # Android only: marks android_ok, the iOS jobs still get the web bundle
         if: env.skip != 'true'
         working-directory: uposatha/android
         env:
@@ -1943,6 +2027,7 @@ jobs:
         run: ./gradlew bundleRelease -PdgVersionCode=${{ needs.plan.outputs.uposatha_number }} --stacktrace
 
       - name: Upload release AAB artifact
+        continue-on-error: true   # an Android file: missing when gradle failed, which android_ok already says
         if: success() && env.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -1951,10 +2036,16 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Platform verdict (what this build gives each store)
+        if: always()
+        run: |
+          [ "${{ steps.cap_sync.outcome == 'success' && steps.gradle_debug.outcome == 'success' && steps.keystore.outcome != 'failure' && steps.gradle_apk.outcome != 'failure' && steps.gradle_aab.outcome != 'failure' }}" = true ] && echo "Android: built" || echo "::error::Android build failed - no Play upload from this run; iOS goes on"
+
+
   uposatha-launch:
     name: Uposatha app launch check (emulator)
     needs: [plan, uposatha-build]
-    if: needs.plan.outputs.upo_launch == 'true'
+    if: (needs.plan.outputs.upo_launch == 'true') && needs.uposatha-build.outputs.android_ok == 'true'
     uses: ./.github/workflows/launch-check.yml
     with:
       apk_artifact: dg-uposatha-apk-release-${{ needs.plan.outputs.uposatha_number }}
@@ -1967,7 +2058,7 @@ jobs:
   uposatha-reminders:
     name: Uposatha reminders and widgets (emulator)
     needs: [plan, uposatha-build]
-    if: needs.plan.outputs.upo_launch == 'true'
+    if: (needs.plan.outputs.upo_launch == 'true') && needs.uposatha-build.outputs.android_ok == 'true'
     runs-on: ubuntu-24.04   # pinned: ubuntu-latest became 26.04, where playwright --with-deps finds no libicu74/libvpx9 (2026-11-12)
     timeout-minutes: 30
     steps:
@@ -2020,7 +2111,7 @@ jobs:
   uposatha-release:
     name: Uposatha app release (Play closed testing, alpha)
     needs: [plan, unit, uposatha-build, uposatha-launch, uposatha-reminders]
-    if: needs.plan.outputs.upo_play == 'true'
+    if: (needs.plan.outputs.upo_play == 'true') && needs.uposatha-build.outputs.android_ok == 'true'
     uses: ./.github/workflows/play-release.yml
     with:
       app: Uposatha
@@ -2044,6 +2135,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: The Xcode project carries the version in version.properties
+        run: .github/scripts/check-ios-version.sh uposatha
 
       - name: Download the web bundle
         uses: actions/download-artifact@v4
@@ -2481,7 +2575,7 @@ jobs:
   dict-release:
     name: Dictionary app release (Play closed testing, alpha)
     needs: [plan, unit, dict-build, dict-launch]
-    if: needs.plan.outputs.dict_play == 'true'
+    if: (needs.plan.outputs.dict_play == 'true') && needs.dict-build.outputs.android_ok == 'true'
     uses: ./.github/workflows/play-release.yml
     with:
       app: Dictionary
@@ -2522,6 +2616,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: The Xcode project carries the version in version.properties
+        run: .github/scripts/check-ios-version.sh .
 
       - name: Download the built web bundle
         uses: actions/download-artifact@v4
@@ -2940,7 +3037,7 @@ jobs:
   ios-release:
     name: iOS archive (IPA; TestFlight on release)
     needs: [plan, unit, build, ios-build, ios-ui]
-    if: needs.plan.outputs.dg_ios_archive == 'true'
+    if: needs.plan.outputs.dg_ios_archive == 'true' && needs.build.outputs.ios_web_ok == 'true'
     uses: ./.github/workflows/testflight-release.yml
     with:
       app: dg

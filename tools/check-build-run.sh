@@ -25,8 +25,16 @@ if [ "$conclusion" != success ]; then
     ios)     other='Android|emulator|Play closed|APK|AAB' ;;
     *) fail "unknown platform $PLATFORM" ;;
   esac
+  # per app: another app's jobs are left out too - a failed Dictionary tour never held Dhamma.Gift's upload (owner 2026-11-16:
+  # «сделай это глобально»). Shared: Plan and Unit checks.
+  case "$APP" in
+    dg)       mine='^(?!Dictionary|Uposatha)' ;;
+    dict)     mine='^(Dictionary|Plan|Unit)' ;;
+    uposatha) mine='^(Uposatha|Plan|Unit)' ;;
+    *) fail "unknown app $APP" ;;
+  esac
   bad=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
-    --jq ".jobs[] | select(.conclusion != \"success\" and .conclusion != \"skipped\" and .conclusion != \"neutral\") | select(.name | test(\"$other\") | not) | .name + \" (\" + (.conclusion // .status) + \")\"")
+    --jq ".jobs[] | select(.conclusion != \"success\" and .conclusion != \"skipped\" and .conclusion != \"neutral\") | select(.name | test(\"$other\") | not) | select(.name | test(\"$mine\")) | .name + \" (\" + (.conclusion // .status) + \")\"")
   [ -z "$bad" ] || fail "did not succeed ($conclusion), and these $PLATFORM or shared jobs did not pass: $(echo "$bad" | paste -sd ';' -)"
   echo "run $RUN_ID: $conclusion, but every $PLATFORM and shared job passed; only the other platform's failed"
 fi

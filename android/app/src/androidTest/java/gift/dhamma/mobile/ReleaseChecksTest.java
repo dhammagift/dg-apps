@@ -84,6 +84,19 @@ public class ReleaseChecksTest {
         UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).click(at[0] + Math.round(Float.parseFloat(p[0]) * dpr), at[1] + Math.round(Float.parseFloat(p[1]) * dpr));
     }
 
+    private static String readText(File f) {
+        if (!f.isFile()) return "";
+        try (FileInputStream in = new FileInputStream(f)) {
+            byte[] b = new byte[(int) f.length()];
+            int n = in.read(b);
+            return n > 0 ? new String(b, 0, n, "UTF-8") : "";
+        } catch (Exception e) { return ""; }
+    }
+
+    private static void writeText(File f, String text) throws Exception {
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) { out.write(text.getBytes("UTF-8")); }
+    }
+
     private static String quote(String v) { return "'" + v.replace("\\", "\\\\").replace("'", "\\'") + "'"; }
 
     private static void shot(String name) {
@@ -329,6 +342,45 @@ public class ReleaseChecksTest {
         try (ActivityScenario<MainActivity> s2 = ActivityScenario.launch(MainActivity.class)) {
             boolean back = until(s2, "/^\\/mn10/.test(location.pathname)", 40000);
             check("15-opens-where-left", back, "the start opened " + js(s2, "location.pathname"));
+        }
+        // 16. A new version of the app starts on its own bundle (owner 2026-11-17: the first start after an update ran on the older
+        // version's downloads - crooked quick settings, «Запомнить» without text - until a restart): DgSitePlugin drops them before
+        // the first page. The control first, so the check can fail: with the same version the downloaded file is served.
+        android.content.Context ctx = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        File probe = new File(DgSitePlugin.root(ctx), "assets/js/dg-version-probe.js");
+        File mark = new File(ctx.getFilesDir(), "site-app-version");
+        String current = readText(mark);
+        String[] served = new String[2];
+        for (int round = 0; round < 2; round++) {
+            probe.getParentFile().mkdirs();
+            writeText(probe, "window.__probe='older download';");
+            if (round == 1) writeText(mark, "0.0.older");
+            DgSitePlugin.versionChecked = false;   // a new start of the app, in the test's own process
+            try (ActivityScenario<MainActivity> s3 = ActivityScenario.launch(MainActivity.class)) {
+                until(s3, "document.readyState === 'complete'", 40000);
+                js(s3, "(function(){window.__pr='';fetch('/assets/js/dg-version-probe.js',{cache:'no-store'}).then(function(r){return r.text().then(function(t){return r.status+' '+t.slice(0,60)})}).then(function(t){window.__pr=t},function(e){window.__pr='err '+e});return 1})()");
+                until(s3, "window.__pr !== ''", 20000);
+                served[round] = js(s3, "(function(){return String(window.__pr)})()");
+            }
+        }
+        String markNow = readText(mark);
+        boolean control = served[0] != null && served[0].contains("older download");
+        boolean dropped = served[1] != null && !served[1].contains("older download") && !probe.exists() && markNow.equals(current) && !current.isEmpty();
+        check("16-new-version-drops-old-downloads", control && dropped, "same version served: " + served[0] + " | after a version change: " + served[1]
+                + " | file left: " + probe.exists() + " | mark " + markNow + " (version " + current + ")");
+        probe.delete();
+
+        // 17. An update whose page brings new element ids is taken (owner 2026-11-17: the online layer updates without builds): the app
+        // makes its page from the site's source, so the id gate is not asked. The bundle's list is shown to the updater as older and as
+        // lacking the site's ids - with the gate asked first (the old way) this round was refused as 'needsApp'.
+        try (ActivityScenario<MainActivity> s4 = ActivityScenario.launch(MainActivity.class)) {
+            until(s4, "document.readyState === 'complete' && typeof window.__dgCheckSiteUpdate === 'function'", 40000);
+            js(s4, "(function(){var of=window.fetch;window.fetch=function(u,o){if(u==='/site-manifest.json')return of(u,o).then(function(r){return r.json()}).then(function(m){m.ids=['dg-only-this-id'];delete m.commit;m.built='2000-01-01T00:00:00Z';return new Response(JSON.stringify(m),{headers:{'Content-Type':'application/json'}})});return of(u,o)};window.__up='';window.__dgCheckSiteUpdate().then(function(r){window.__up=r.state},function(e){window.__up='err '+e});return 1})()");
+            until(s4, "window.__up !== ''", 120000);
+            String up = js(s4, "String(window.__up)");
+            check("17-update-with-new-ids-taken", "new".equals(up), "the round said " + up + " (needsApp = the gate refused it)");
+            js(s4, "(function(){var d=window.Capacitor&&Capacitor.Plugins.DgSite;if(d)d.clear();return 1})()");
+            Thread.sleep(1500);
         }
         Log.i(TAG, "DONE " + (failed.isEmpty() ? "all passed" : failed.size() + " failed: " + failed));
         assertTrue("failed: " + failed, failed.isEmpty());

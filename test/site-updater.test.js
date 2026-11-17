@@ -160,6 +160,22 @@ async function check({ siteFiles, list, env, bundleCommit = 'b0', bundleTime = 1
         r = await check({ siteFiles: withPage, pages, ls: { dgAppVersion: '1.0.1', dgSiteHashes: JSON.stringify({ 'page:/index.html': sha('<html>site page</html>') }) } });
         assert.ok(!r.log.some((l) => l.includes('/app-src/')), 'an unchanged page source is not fetched: ' + r.log);
     }
+    // The gate with pages (Dhamma.Gift, owner 2026-11-17): a page made from the site's source carries the site's new ids, so the gate
+    // is not asked; asked (and its no refuses the whole round) only when the page could not be made; without pages (Uposatha) as before
+    {
+        const withPage = { '/read/js/voice.js': 'new voice', '/read/css/voice.css': 'same css', '/app-src/search/index.html': '<html>site page</html>' };
+        const pages = [{ path: '/index.html', source: '/app-src/search/index.html', make: (h) => h }];
+        r = await check({ siteFiles: withPage, pages, gateOpen: false });
+        assert.ok(r.log.includes('put /index.html') && r.log.includes('put /read/js/voice.js') && r.res.state === 'new', 'page made: the gate is not asked: ' + r.log);
+        const broken = [{ ...pages[0], make: () => { throw new Error('viewport meta not found'); } }];
+        r = await check({ siteFiles: withPage, pages: broken, gateOpen: false });
+        assert.ok(!r.log.some((l) => l.startsWith('put')) && r.res.state === 'needsApp', 'page not made + gate closed: nothing taken, needsApp: ' + r.log + ' ' + r.res.state);
+        assert.ok(!r.ls.dgSiteCheckedAt, 'a refused round is not stamped: asked again next time');
+        r = await check({ siteFiles: withPage, pages: broken, gateOpen: true });
+        assert.ok(r.log.includes('put /read/js/voice.js') && !r.log.includes('put /index.html'), 'page not made + gate open: the files, the app keeps its page: ' + r.log);
+        r = await check({ siteFiles: { '/read/js/voice.js': 'new voice', '/read/css/voice.css': 'same css' }, pages, gateOpen: false });
+        assert.ok(!r.log.some((l) => l.startsWith('put')) && r.res.state === 'needsApp', 'the site does not vouch for the page source + gate closed: refused: ' + r.log);
+    }
     // A page that does not come up (SITE_CONFIG.ready stays false) with files not yet proven: the bundle's copy goes back in the same
     // run (ultra's review 2026-11-12); one that comes up is marked good
     for (const up of [false, true]) {

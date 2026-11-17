@@ -2,6 +2,8 @@ package gift.dhamma.mobile;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.os.Build;
 import android.net.Uri;
 import android.util.Base64;
 import android.webkit.MimeTypeMap;
@@ -18,6 +20,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -59,7 +62,46 @@ public class DgSitePlugin extends Plugin {
 
     @Override
     public void load() {
+        dropOlderVersions(getContext());
         promote(getContext());
+    }
+
+    private static final String VERSION_MARK = "site-app-version";
+    static volatile boolean versionChecked;   // package-private: ReleaseChecksTest 16 starts the app again in the same process
+
+    /**
+     * A new version of the app brings a new bundle: what an older version downloaded (both rounds) goes here, before the first page
+     * is served. The page's own versionGuard (site-updater.js) dropped it only after that first page had loaded on the old files:
+     * crooked quick settings and «Запомнить» without text until a restart (owner 2026-11-17). The mark is the app's
+     * versionName.versionCode, the same stamp the page's guard compares (build-assets.js appStamp), so the two agree.
+     */
+    static synchronized void dropOlderVersions(Context context) {
+        if (versionChecked) return;
+        versionChecked = true;
+        String now;
+        try {
+            PackageInfo p = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+            long code = Build.VERSION.SDK_INT >= 28 ? p.getLongVersionCode() : p.versionCode;
+            now = p.versionName + "." + code;
+        } catch (Exception e) {
+            return;
+        }
+        File mark = new File(context.getFilesDir(), VERSION_MARK);
+        String was = null;
+        if (mark.isFile()) {
+            try (FileInputStream in = new FileInputStream(mark)) {
+                byte[] b = new byte[(int) Math.min(mark.length(), 256)];
+                int n = in.read(b);
+                was = n > 0 ? new String(b, 0, n, StandardCharsets.UTF_8) : "";
+            } catch (Exception e) { /* unreadable: treated as another version */ }
+        }
+        if (now.equals(was)) return;
+        if (root(context).exists() || next(context).exists()) android.util.Log.i("DgSite", "app " + was + " -> " + now + ": the older version's downloads dropped");
+        deleteTree(next(context));
+        deleteTree(root(context));
+        try (FileOutputStream out = new FileOutputStream(mark)) {
+            out.write(now.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) { /* checked again at the next start */ }
     }
 
     /** A committed round takes over; an uncommitted one (the app stopped half-way through a check) is dropped. */
@@ -236,6 +278,7 @@ public class DgSitePlugin extends Plugin {
     /** The downloaded copy of a file the app's own origin is asked for, or null to let Capacitor serve the bundled one. */
     static WebResourceResponse serve(Context context, WebResourceRequest request) {
         if (!"GET".equals(request.getMethod())) return null;
+        dropOlderVersions(context);   // done in load() already; here too, should a request ever come first
         Uri uri = request.getUrl();
         if (!"localhost".equals(uri.getHost())) return null;
         String path = uri.getPath();

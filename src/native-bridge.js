@@ -1928,8 +1928,9 @@
         ],
         // up = the page's router and one global of each bundle (the router is an inline script, there even when a bundle throws)
         ready: function () { return typeof window.dgNavigateInternal === 'function' && !!window.DgHome && typeof window.removeAllHighlights === 'function'; },
-        // The site's scripts were written against the site's page. If its home page has an element the bundled page does not,
-        // a new script may reach for it: leave the bundled files until a new build.
+        // The site's scripts were written against the site's page. Asked only when the phone could not make the page from the site's
+        // source (site-updater.js mainKept): then, if the site's home page has an element the app's page does not, a new script may
+        // reach for it, and the files wait for a new build. A page made from the site carries its new ids itself.
         gate: function (manifest) {
             if (!manifest.ids) return false;
             return fetch(SITE_CONFIG.site + '/', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {

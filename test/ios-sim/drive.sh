@@ -122,6 +122,16 @@ fi
 # --console-pty keeps the app's stdout/stderr in the job log, which is where NSString NSLog lines
 # and WebKit's own complaints show up. Backgrounded: the run below waits on a file, not on the
 # process (simctl launch stays in the foreground for as long as the app lives).
+# A new version of the app starts on its own bundle (owner 2026-11-17: the first start after an update ran on the older version's
+# downloads until a restart): a file "an older version" downloaded, under a mark of another version, must be gone after the
+# start (DgSitePlugin.swift dropOlderVersions, in load(), before the page), the mark now this build's version.build.
+SUPPORT="$DATA_DIR/Library/Application Support"
+mkdir -p "$SUPPORT/site/assets/js"
+echo "window.__probe='older download';" > "$SUPPORT/site/assets/js/dg-version-probe.js"
+echo -n "0.0.older" > "$SUPPORT/site-app-version"
+PLIST="$APP/Info.plist"
+APP_STAMP="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST").$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")"
+
 xcrun simctl launch --console-pty "$UDID" "$BUNDLE" > "$OUT/app-console.log" 2>&1 &
 
 REPORT=""
@@ -144,6 +154,13 @@ fi
 
 cp "$REPORT" "$OUT/selftest.json"
 echo "drive: self-test report at $REPORT"
+MARK_NOW="$(cat "$SUPPORT/site-app-version" 2>/dev/null || true)"
+if [ ! -e "$SUPPORT/site/assets/js/dg-version-probe.js" ] && [ "$MARK_NOW" = "$APP_STAMP" ]; then
+    echo "drive: PASS new-version-drops-old-downloads (mark $MARK_NOW)" | tee "$OUT/version-drop.txt"
+else
+    echo "drive: FAIL new-version-drops-old-downloads: file left $([ -e "$SUPPORT/site/assets/js/dg-version-probe.js" ] && echo yes || echo no), mark '$MARK_NOW', app $APP_STAMP" | tee "$OUT/version-drop.txt" >&2
+    VERSION_DROP_FAILED=1
+fi
 
 # The deep link, opened by the page itself (selftest.js, dhammagift://route/toc). NOT through
 # `simctl openurl`: that is an open from OUTSIDE the app, and iOS answers it with SpringBoard's
@@ -180,3 +197,5 @@ echo "drive: screenshots in $OUT"
 # open until the runner kills the process group.
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
 ls -la "$OUT"
+# The version-drop check fails the run at the end, after the screenshots (they show what the app looked like either way).
+if [ -n "${VERSION_DROP_FAILED:-}" ]; then echo "drive: the older version's downloads were not dropped at the start" >&2; exit 1; fi

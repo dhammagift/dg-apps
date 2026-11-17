@@ -349,12 +349,14 @@
       // The app may refuse an update that its own pages cannot take (Dhamma.Gift: the site's page has elements the bundled page lacks).
       // A refusal is said as such, not as «Актуально»: the site is newer and the app did not take it (owner 2026-11-13: «Актуально.
       // Оно не актуально» - every update had been refused for an id only the server's page had).
-      if (SITE_CONFIG.gate) return Promise.resolve(SITE_CONFIG.gate(bundle)).then(function (open) { if (open) return run(bundle, site); res.state = 'needsApp'; return null; });
+      // An app that makes its page from the site's source (SITE_CONFIG.pages) asks only when it could not make it (run, mainKept):
+      // a new id arrives with the new page then (owner 2026-11-17: only what is truly native may wait for a build).
+      if (SITE_CONFIG.gate && !(SITE_CONFIG.pages && SITE_CONFIG.pages.length)) return Promise.resolve(SITE_CONFIG.gate(bundle)).then(function (open) { if (open) return run(bundle, site); res.state = 'needsApp'; return null; });
       return run(bundle, site);
     });
     function run(bundle, site) {
       var ok = SITE_CONFIG.updatable || function () { return true; };
-      var queue = bundle.files.filter(ok), seen = {}, changes = [], written = [], shown = 0, fetched = 0, failed = 0;
+      var queue = bundle.files.filter(ok), seen = {}, changes = [], written = [], shown = 0, fetched = 0, failed = 0, mainKept = false, refused = false;
       bundle.files.forEach(function (f) { seen[f] = 1; });
       function urlOf(path) { var from = SITE_CONFIG.urlFor(path); return /^https?:\/\//.test(from) ? from : SITE + from; }
       // The list names the site's own files by path and anything elsewhere (Dict's icons from dhamma.gift) by full URL.
@@ -407,12 +409,12 @@
         return order.reduce(function (p, g) { return p.then(function () { return group(groups[g].slice()); }); }, Promise.resolve());
       }
       function group(list) {
-        var made = [], broken = false, due = false;
+        var made = [], broken = false, due = false, main = (list[0].group || 'main') === 'main';
         // Taken together or not at all: the page and the bundles it calls are one piece (any of them changed = all are made again)
         list.forEach(function (pg) {
           (pg.sources || [pg.source]).forEach(function (src) { var w = listed(urlOf(src)); if (!w) broken = true; });
         });
-        if (broken) return Promise.resolve();   // the site does not vouch for a source: the app's own copies stay
+        if (broken) { if (main) mainKept = true; return Promise.resolve(); }   // the site does not vouch for a source: the app's own copies stay
         function keyOf(pg) { return (pg.sources || [pg.source]).map(function (src) { return listed(urlOf(src)); }).join(','); }
         list.forEach(function (pg) { if (keyOf(pg) !== hashes['page:' + pg.path]) due = true; });
         if (!due) return Promise.resolve();
@@ -439,9 +441,15 @@
           });
         }
         return one().then(function () { Array.prototype.push.apply(changes, made); },
-          function (e) { console.log('[dg-site] the page and its bundles are kept as they are: ' + ((e && e.message) || e)); });
+          function (e) { if (main) mainKept = true; console.log('[dg-site] the page and its bundles are kept as they are: ' + ((e && e.message) || e)); });
       }
-      return next().then(pages).then(function () {
+      // The app's own page stays (it could not be made from the site's source) while the site's scripts change: the gate decides.
+      function gated() {
+        if (!mainKept || !SITE_CONFIG.gate || failed || !changes.length) return Promise.resolve(true);
+        return Promise.resolve(SITE_CONFIG.gate(bundle)).then(function (open) { refused = !open; return open; }, function () { refused = true; return false; });
+      }
+      return next().then(pages).then(gated).then(function (open) {
+        if (!open) return null;
         // All or nothing: a half-fetched update would leave a page next to the old files it was written against, and a
         // check that could not finish is not a check (it used to be stamped as done, and nothing was tried again for 12 hours).
         if (failed || !changes.length) return null;
@@ -457,6 +465,7 @@
           } catch (e) { /* no storage: it is checked again next time */ }
         }, rollback);
       }).then(function () {
+        if (refused) { res.state = 'needsApp'; console.log('[dg-site] the app could not make its page from the site\'s and the site\'s page is newer: no update'); return; }
         if (!failed) stamp();
         console.log('[dg-site] the site is at ' + String(site.commit || '').slice(0, 8) + ': ' + fetched + ' files fetched, ' + (failed ? 'nothing applied' : written.length + ' stored'));
         if (failed) res.state = 'failed'; else if (shown) res.state = 'new';

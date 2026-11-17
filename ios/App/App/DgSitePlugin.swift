@@ -25,6 +25,30 @@ enum DgSiteStore {
         return (dir ?? root).appendingPathComponent(String(path.dropFirst()))
     }
 
+    private static var versionChecked = false
+    private static let versionLock = NSLock()
+
+    /// A new version of the app brings a new bundle: what an older version downloaded (both rounds) goes here, before the first page
+    /// is served. The page's own versionGuard (site-updater.js) dropped it only after that first page had loaded on the old files:
+    /// crooked quick settings and «Запомнить» without text until a restart (owner 2026-11-17). Same as Android's dropOlderVersions;
+    /// the mark is version.build, the stamp the page's guard compares (build-assets.js appStamp).
+    static func dropOlderVersions() {
+        versionLock.lock(); defer { versionLock.unlock() }
+        if versionChecked { return }
+        versionChecked = true
+        let info = Bundle.main.infoDictionary ?? [:]
+        guard let name = info["CFBundleShortVersionString"] as? String, let build = info["CFBundleVersion"] as? String else { return }
+        let now = name + "." + build
+        let mark = base.appendingPathComponent("site-app-version")
+        if (try? String(contentsOf: mark, encoding: .utf8)) == now { return }
+        let fm = FileManager.default
+        if fm.fileExists(atPath: root.path) || fm.fileExists(atPath: next.path) { NSLog("[DgSite] app version now \(now): the older version's downloads dropped") }
+        try? fm.removeItem(at: next)
+        try? fm.removeItem(at: root)
+        try? fm.createDirectory(at: base, withIntermediateDirectories: true)
+        try? now.write(to: mark, atomically: true, encoding: .utf8)
+    }
+
     /// A committed round takes over; an uncommitted one (the app stopped half-way through a check) is dropped.
     static func promote() {
         let fm = FileManager.default
@@ -58,6 +82,7 @@ enum DgSiteStore {
 
     /// A downloaded file for a request to the app's own origin, answered; false = not ours, let Capacitor serve it.
     static func answer(_ task: WKURLSchemeTask) -> Bool {
+        dropOlderVersions()   // done in load() already; here too, should a request ever come first
         guard let url = task.request.url, task.request.httpMethod == "GET", url.host == "localhost", !url.path.hasPrefix("/_capacitor") else { return false }
         // A page itself (the site's html made into the app's page by site-updater.js): a directory is its index.html, and a route
         // of the app's single page (/mn10, /ru/kacchapa) is the main page, as Capacitor answers it from the bundle.
@@ -94,6 +119,7 @@ public class DgSitePlugin: CAPPlugin, CAPBridgedPlugin {
     private static let maxBytes = 8 * 1024 * 1024
 
     override public func load() {
+        DgSiteStore.dropOlderVersions()
         DgSiteStore.promote()
     }
 

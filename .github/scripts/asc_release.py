@@ -14,6 +14,8 @@ ASC key from the GitHub secrets; every step prints what it found and what it did
                                                     each downloaded into dir (default screens/) to be looked at
   asc_release.py <bundle id> beta "<n>|<text>"     TestFlight build n to the external groups and to Apple's beta review, with
                                                     <text> as its "What to Test" (en-US)
+  asc_release.py <bundle id> drop-territory <ISO3>   take the app off sale in one country (CHN: Apple 2026-11-19, no CAC
+                                                    filing for the AI search and voices)
   asc_release.py <bundle id> testflight             (read only) the TestFlight groups: public link, its limit, testers,
                                                     which builds each group has and whether Apple let them out to testers
 """
@@ -281,6 +283,22 @@ def testflight(bundle):
                   f"betaReview={(r.get('attributes') or {}).get('betaReviewState')}")
 
 
+def drop_territory(bundle, code):
+    avail = call("GET", f"/v1/apps/{app_id(bundle)}/appAvailabilityV2")["data"]["id"]
+    path = f"/v2/appAvailabilities/{avail}/territoryAvailabilities?include=territory&limit=200"
+    while path:
+        page = call("GET", path)
+        for t in page["data"]:
+            if t["relationships"]["territory"]["data"]["id"] == code:
+                print(f"{code} before: available={t['attributes'].get('available')}")
+                a = call("PATCH", f"/v1/territoryAvailabilities/{t['id']}", {"data": {"type": "territoryAvailabilities",
+                         "id": t["id"], "attributes": {"available": False}}})["data"]["attributes"]
+                print(f"{code} after: available={a.get('available')}")
+                return
+        path = (page.get("links") or {}).get("next", "").replace(API, "")
+    sys.exit(f"{code}: no such territory in the app's availability")
+
+
 if __name__ == "__main__":
     bundle, action, *rest = sys.argv[1:]
     {"status": lambda: status(bundle), "cancel": lambda: cancel(bundle), "set-build": lambda: set_build(bundle, rest[0]),
@@ -288,4 +306,5 @@ if __name__ == "__main__":
      "set-text": lambda: set_text(bundle, rest[0]), "delete-locale": lambda: delete_locale(bundle, rest[0]),
      "testflight": lambda: testflight(bundle), "beta": lambda: beta(bundle, rest[0]),
      "submit": lambda: submit(bundle), "testflight": lambda: testflight(bundle),
-     "screens": lambda: screens(bundle, *rest), "certs": certs}[action]()
+     "screens": lambda: screens(bundle, *rest), "certs": certs,
+     "drop-territory": lambda: drop_territory(bundle, rest[0])}[action]()
